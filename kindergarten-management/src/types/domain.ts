@@ -1,0 +1,199 @@
+export type AppRole = 'Admin' | 'Teacher' | 'Accountant' | 'Parent';
+
+export interface AppError {
+  code: string;
+  message: string;
+  field?: string;
+}
+
+export interface ListEnvelope<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export type SortDirection = 'asc' | 'desc';
+
+export interface UserProfile {
+  id: string;
+  full_name: string;
+  phone: string | null;
+  role: AppRole;
+  avatar: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GradeRecord {
+  id: number;
+  name: string;
+  sort_order: number;
+}
+
+export interface ClassRecord {
+  id: number;
+  name: string;
+  grade_id: number;
+  grade_name: string;
+  teacher_id: string | null;
+  teacher_name: string | null;
+  room: string | null;
+  max_students: number;
+  student_count: number;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ClassListQuery {
+  page: number;
+  pageSize: number;
+  search?: string;
+  gradeId?: number;
+  sortBy?: 'name' | 'created_at' | 'max_students';
+  sortDirection?: SortDirection;
+}
+
+export interface CreateClassInput {
+  name: string;
+  grade_id: number;
+  teacher_id: string | null;
+  room: string | null;
+  max_students: number;
+  description: string | null;
+}
+
+export type UpdateClassInput = Partial<CreateClassInput>;
+
+export interface StudentRecord {
+  id: string;
+  class_id: number;
+  class_name: string;
+  grade_name: string;
+  student_code: string;
+  full_name: string;
+  date_of_birth: string | null;
+  gender: 'Male' | 'Female' | null;
+  ethnicity: string | null;
+  nationality: string | null;
+  address: string | null;
+  enrolled_date: string | null;
+  health_info: Record<string, unknown>;
+  avatar: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StudentListQuery {
+  page: number;
+  pageSize: number;
+  search?: string;
+  classId?: number;
+  gradeId?: number;
+  sortBy?: 'full_name' | 'student_code' | 'created_at';
+  sortDirection?: SortDirection;
+}
+
+export interface CreateStudentInput {
+  class_id: number;
+  student_code?: string;
+  full_name: string;
+  date_of_birth: string | null;
+  gender: 'Male' | 'Female' | null;
+  ethnicity: string | null;
+  nationality: string | null;
+  address: string | null;
+  enrolled_date: string | null;
+  health_info: Record<string, unknown>;
+  avatar: string | null;
+}
+
+export type UpdateStudentInput = Partial<CreateStudentInput>;
+
+export type AttendanceStatusValue = 'present' | 'absent' | 'late';
+
+export interface AttendanceRecord {
+  id: string;
+  student_id: string;
+  student_name: string;
+  class_id: number;
+  class_name: string;
+  attendance_date: string;
+  status: AttendanceStatusValue;
+  check_in_time: string | null;
+  check_out_time: string | null;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AttendanceListQuery {
+  classId: number;
+  attendanceDate: string;
+}
+
+export interface UpsertAttendanceInput {
+  student_id: string;
+  class_id: number;
+  attendance_date: string;
+  status: AttendanceStatusValue;
+  check_in_time?: string | null;
+  check_out_time?: string | null;
+  note?: string | null;
+  created_by?: string | null;
+}
+
+export interface FeeTypeRecordP2 {
+  id: number;
+  name: string;
+  amount_vnd: number;
+  grade_id: number | null;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type FeeStatusValue = 'unpaid' | 'partial' | 'paid';
+
+export interface FeeRecordP2 {
+  id: string;
+  student_id: string;
+  student_name: string;
+  class_id: number;
+  class_name: string;
+  fee_type_id: number;
+  fee_type_name: string;
+  school_year: string;
+  month: number | null;
+  amount_vnd: number;
+  paid_amount_vnd: number;
+  paid_date: string | null;
+  due_date: string | null;
+  payment_method: 'cash' | 'bank_transfer' | null;
+  status: FeeStatusValue;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FeeListQuery {
+  page: number;
+  pageSize: number;
+  search?: string;
+  status?: FeeStatusValue;
+}
+
+export interface CreateFeeInput {
+  student_id: string;
+  class_id: number;
+  fee_type_id: number;
+  school_year: string;
+  month: number;
+  amount_vnd: number;
+  paid_amount_vnd: number;
+  paid_date: string | null;
+  due_date: string | null;
+  payment_method: 'cash' | 'bank_transfer' | null;
+  status: FeeStatusValue;
+}

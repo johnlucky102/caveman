@@ -1,0 +1,10 @@
+/* KidGarden — global resets & utilities */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+#root {
+  min-height: 100vh;
+}

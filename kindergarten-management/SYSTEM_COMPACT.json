@@ -1,0 +1,336 @@
+{
+  "meta": {
+    "project_name": "KidGarden",
+    "workspace_root": "C:\\AI\\project\\package\\caveman\\kindergarten-management",
+    "compact_version": "v2",
+    "generated_at_local": "2026-04-27",
+    "intent": "Low-token but high-signal system snapshot for handoff/continuation"
+  },
+  "business_context": {
+    "source_spec": "C:\\AI\\project\\package\\caveman\\SPEC.md",
+    "locked_priorities": [
+      "P1: Auth + Students + Classes",
+      "P2: Attendance + Fees",
+      "P3: Notifications + Reports + Settings"
+    ],
+    "current_phase_read": "P1 shipped; P2 core wired but not fully hardened",
+    "status_label": "MVP transition from UI-demo to real Supabase data underway"
+  },
+  "tech_stack": {
+    "frontend": "React 18 + TypeScript + Vite 6",
+    "routing": "react-router-dom v6",
+    "state": "Zustand",
+    "ui": "Tailwind CSS + custom components + lucide-react + recharts",
+    "backend": "Supabase Auth + Postgres + RLS",
+    "package_manager_expected": "pnpm (scripts), but local workaround runs Vite via node"
+  },
+  "environment": {
+    "required_env": [
+      "VITE_SUPABASE_URL",
+      "VITE_SUPABASE_ANON_KEY"
+    ],
+    "env_file": "C:\\AI\\project\\package\\caveman\\kindergarten-management\\.env",
+    "supabase_client_behavior": "Hard fail on missing env vars (no fallback URL/key)"
+  },
+  "runbook": {
+    "dev_primary": "node .\\node_modules\\vite\\bin\\vite.js --host 0.0.0.0 --port 5173",
+    "dev_fallback_port": "node .\\node_modules\\vite\\bin\\vite.js --host 0.0.0.0 --port 5174",
+    "typecheck": "node .\\node_modules\\typescript\\bin\\tsc -b",
+    "notes": [
+      "Browserslist warning (caniuse-lite old) is non-blocking",
+      "Package scripts call pnpm install; direct node-vite start avoids shell policy issues"
+    ]
+  },
+  "code_map": {
+    "router": "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\App.tsx",
+    "auth_store": "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\stores\\authStore.ts",
+    "supabase_client": "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\lib\\supabase.ts",
+    "rbac": "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\lib\\rbac.ts",
+    "role_guard": "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\components\\auth\\RoleGuard.tsx",
+    "layout_main": "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\components\\layout\\MainLayout.tsx",
+    "layout_sidebar": "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\components\\layout\\Sidebar.tsx",
+    "service_files": [
+      "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\services\\usersService.ts",
+      "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\services\\classesService.ts",
+      "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\services\\studentsService.ts",
+      "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\services\\attendanceService.ts",
+      "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\services\\feesService.ts",
+      "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\services\\supabaseErrors.ts"
+    ],
+    "domain_types": "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\types\\domain.ts"
+  },
+  "auth_and_rbac": {
+    "canonical_roles": [
+      "Admin",
+      "Teacher",
+      "Accountant",
+      "Parent"
+    ],
+    "auth_flow": {
+      "login": "Supabase password sign-in + profile hydrate from users table",
+      "restore_session": "initializeAuth() reads session + profile",
+      "logout": "Supabase signOut + local reset",
+      "persisted_store": "kidgarden-auth (partialized user/session/profile/role/isAuthenticated)"
+    },
+    "loading_stability": {
+      "added_guards": [
+        "withTimeout wrappers in login and initializeAuth",
+        "onAuthStateChange defensive catch",
+        "MainLayout fail-safe timeout (8s) to release loading"
+      ],
+      "related_files": [
+        "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\stores\\authStore.ts",
+        "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\components\\layout\\MainLayout.tsx"
+      ]
+    },
+    "route_access_matrix": {
+      "/": [
+        "Admin",
+        "Teacher",
+        "Accountant",
+        "Parent"
+      ],
+      "/students": [
+        "Admin",
+        "Teacher",
+        "Accountant"
+      ],
+      "/students/new": [
+        "Admin",
+        "Teacher"
+      ],
+      "/students/:id": [
+        "Admin",
+        "Teacher",
+        "Accountant"
+      ],
+      "/students/:id/edit": [
+        "Admin",
+        "Teacher"
+      ],
+      "/classes": [
+        "Admin",
+        "Teacher",
+        "Accountant"
+      ],
+      "/classes/new": [
+        "Admin",
+        "Teacher"
+      ],
+      "/classes/:id": [
+        "Admin",
+        "Teacher",
+        "Accountant"
+      ],
+      "/classes/:id/edit": [
+        "Admin",
+        "Teacher"
+      ],
+      "/teachers": [
+        "Admin"
+      ],
+      "/parents": [
+        "Admin",
+        "Teacher"
+      ],
+      "/attendance": [
+        "Admin",
+        "Teacher"
+      ],
+      "/fees": [
+        "Admin",
+        "Accountant"
+      ],
+      "/fees/new": [
+        "Admin",
+        "Accountant"
+      ],
+      "/notifications": [
+        "Admin",
+        "Teacher",
+        "Accountant",
+        "Parent"
+      ],
+      "/reports": [
+        "Admin",
+        "Teacher",
+        "Accountant"
+      ],
+      "/settings": [
+        "Admin"
+      ]
+    }
+  },
+  "database_alignment": {
+    "schema_file": "C:\\AI\\project\\package\\caveman\\kindergarten-management\\supabase\\schema.sql",
+    "rls_patch_file": "C:\\AI\\project\\package\\caveman\\kindergarten-management\\supabase\\rls_p1_alignment.sql",
+    "applied_note": "User confirmed rls_p1_alignment.sql applied",
+    "core_tables": [
+      "users",
+      "grades",
+      "classes",
+      "students",
+      "attendance",
+      "fee_types",
+      "fee_records"
+    ],
+    "key_constraints": {
+      "users_role_check": "role IN ('Admin','Teacher','Accountant','Parent')",
+      "students_student_code_unique": true,
+      "attendance_unique": [
+        "student_id",
+        "attendance_date"
+      ],
+      "fee_records_unique": [
+        "student_id",
+        "fee_type_id",
+        "school_year",
+        "month"
+      ],
+      "fee_status_check": "status IN ('unpaid','partial','paid')",
+      "attendance_status_check": "status IN ('present','absent','late')"
+    },
+    "rls_current_read": {
+      "p1_adjusted": [
+        "Staff reads classes: Admin/Accountant full read, Teacher only own classes",
+        "Staff reads students: Admin/Accountant full read, Teacher only students in own classes",
+        "Teacher updates classes/students only in own scope"
+      ],
+      "still_broad_from_base_schema": [
+        "Attendance policy still allows Staff manages attendance with role-only check (Teacher not yet class-scoped by policy)",
+        "Fee records policy allows Admin/Accountant full CRUD; Teacher has no fee read route currently"
+      ]
+    }
+  },
+  "implementation_status": {
+    "p1_auth_students_classes": {
+      "status": "done",
+      "notes": [
+        "Students and Classes are backed by Supabase services, not page-level mock constants",
+        "List endpoints use typed query contracts and list envelope {items,total,page,pageSize}",
+        "Create/Update forms are wired and validated"
+      ]
+    },
+    "p2_attendance_fees": {
+      "status": "in_progress_core_done",
+      "attendance": {
+        "done": [
+          "Daily roll-call by class/date",
+          "Bulk upsert attendance rows with conflict key (student_id,attendance_date)",
+          "History query with class/student/date filters"
+        ],
+        "pending_or_weak": [
+          "Dedicated AttendanceHistory page in router still unused and contains mock implementation",
+          "Teacher attendance RLS scope should be tightened in DB policy"
+        ]
+      },
+      "fees": {
+        "done": [
+          "Fee type load from fee_types",
+          "Fee record create to fee_records",
+          "Fee list + status filter + mark-paid update",
+          "Status recompute unpaid/partial/paid from paid amount"
+        ],
+        "pending_or_weak": [
+          "Search currently filtered in-memory after paged query, not true server-side search",
+          "Dashboard debt cards aggregate from current page only, not global aggregate query",
+          "Unique conflict UX for (student_id,fee_type_id,school_year,month) not explicitly mapped to field-level message"
+        ]
+      }
+    },
+    "out_of_scope_or_mock_modules": [
+      "Dashboard: mock charts/stats",
+      "Teachers: mock",
+      "TeacherForm: mock",
+      "Parents: mock",
+      "Notifications/NotificationForm: mock",
+      "Reports: mock",
+      "Settings: mock",
+      "AttendanceHistory page: mock and not routed"
+    ]
+  },
+  "page_wiring_inventory": {
+    "real_data_pages": [
+      "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\pages\\Students.tsx",
+      "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\pages\\StudentForm.tsx",
+      "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\pages\\StudentDetail.tsx",
+      "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\pages\\Classes.tsx",
+      "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\pages\\ClassForm.tsx",
+      "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\pages\\ClassDetail.tsx",
+      "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\pages\\Attendance.tsx",
+      "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\pages\\Fees.tsx",
+      "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\pages\\FeeForm.tsx",
+      "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\pages\\Login.tsx",
+      "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\pages\\SignUp.tsx"
+    ],
+    "partially_real_pages": [
+      "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\pages\\ClassDetail.tsx (students real, attendance tab still placeholder)",
+      "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\pages\\StudentDetail.tsx (profile real, fees/attendance tabs still placeholder)"
+    ],
+    "dev_only_page": [
+      "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\pages\\TestAuth.tsx"
+    ]
+  },
+  "known_issues_and_risks": {
+    "preview_gate_blockers": [
+      {
+        "id": "P2-FEES-SEARCH-PAGING",
+        "severity": "major",
+        "area": "Fees",
+        "issue": "Search not truly server-side; filtering happens after page query, causing mismatch with total and missing results across pages."
+      },
+      {
+        "id": "P2-RLS-ATTENDANCE-SCOPE",
+        "severity": "major",
+        "area": "Security/RLS",
+        "issue": "Teacher attendance write/read still role-wide per base policy, not strictly class-owner scoped."
+      }
+    ],
+    "non_blocking_gaps": [
+      "Delete actions in Students/StudentDetail are placeholders",
+      "Export action in Students is placeholder",
+      "ClassDetail attendance tab still synthetic",
+      "Forgot-password in Login uses alert placeholder",
+      "Potential encoding artifacts in Vietnamese strings from file encoding mismatch"
+    ],
+    "loading_spinner_incident_context": {
+      "symptom": "App stuck at loading screen ('Đang tải...') reported during local preview",
+      "code_hardening_done": "Timeout + fail-safe already added",
+      "remaining_runtime_checks": [
+        "Verify .env values point to same Supabase project where RLS patch was applied",
+        "Open network tab for /auth/v1/session and users profile query latency/failure",
+        "Check if RLS on users table blocks own-profile read unexpectedly for active role"
+      ]
+    }
+  },
+  "verification_state": {
+    "static_checks": {
+      "typecheck": "pass (command available in runbook)",
+      "lint": "not re-run in this pass"
+    },
+    "manual_checks_required": [
+      "Login/logout/session restore after hard refresh",
+      "Sidebar/menu visibility per role",
+      "Students: create/edit, unique student_code conflict UX",
+      "Classes: create/edit/detail reflects latest data",
+      "Attendance: save roll-call, then verify history filter",
+      "Fees: create record, mark paid, validate totals and status transitions"
+    ]
+  },
+  "next_actions": {
+    "immediate": [
+      "Close preview gate: resolve any blocker found in Auth/RBAC/Students/Classes",
+      "Fix fees server-side search + consistent total/pagination semantics",
+      "Add clear conflict error mapping for fee unique key and student_code unique"
+    ],
+    "p2_hardening": [
+      "Tighten attendance RLS policy to teacher-owned classes only",
+      "Add aggregate queries for fees dashboard cards (global debt/paid/unpaid)",
+      "Unify/retire duplicate AttendanceHistory implementation"
+    ],
+    "after_p2": [
+      "Start P3 modules: Notifications + Reports + Settings with real data",
+      "Introduce integration/e2e smoke tests for critical flows"
+    ]
+  }
+}
