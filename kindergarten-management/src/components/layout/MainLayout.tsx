@@ -12,24 +12,16 @@ import Toast from '../common/Toast';
  * Redirects to /login if user is not authenticated.
  */
 const MainLayout: React.FC = () => {
-  const { isAuthenticated, isLoading, initializeAuth, clearError } = useAuthStore();
+  const { isAuthenticated, isLoading, hasInitialized, initializeAuth } = useAuthStore();
   const { sidebarCollapsed } = useAppStore();
 
   // On mount, hydrate auth from persisted session / Supabase session
   useEffect(() => {
-    void initializeAuth();
-
-    const failSafeTimer = setTimeout(() => {
-      const state = useAuthStore.getState();
-      if (state.isLoading) {
-        useAuthStore.setState({ isLoading: false, isAuthenticated: false });
-        clearError();
-      }
-    }, 8000);
-
-    return () => clearTimeout(failSafeTimer);
+    if (!hasInitialized) {
+      void initializeAuth();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [hasInitialized]);
 
   // While checking auth, show a loading screen
   if (isLoading) {

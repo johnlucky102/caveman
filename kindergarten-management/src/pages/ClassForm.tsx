@@ -6,13 +6,13 @@ import Button from '@/components/common/Button';
 import Input from '@/components/common/Input';
 import Select from '@/components/common/Select';
 import { useToast } from '@/components/common/Toast';
-import { createClass, getClassById, listGrades, updateClass } from '@/services/classesService';
+import { createClass, getClassById, updateClass } from '@/services/classesService';
 import { listTeachers } from '@/services/usersService';
 import type { SelectOption } from '@/types';
 
 interface FormState {
+  class_code: string;
   name: string;
-  grade_id: string;
   teacher_id: string;
   max_students: string;
   room: string;
@@ -21,17 +21,17 @@ interface FormState {
 
 interface FormErrors {
   name?: string;
-  grade_id?: string;
   room?: string;
   max_students?: string;
 }
 
-function validate(form: FormState): FormErrors {
+function validate(form: FormState, studentCount: number): FormErrors {
   const errors: FormErrors = {};
+  const maxStudents = Number(form.max_students);
   if (!form.name.trim()) errors.name = 'Tên lớp học không được để trống';
-  if (!form.grade_id) errors.grade_id = 'Vui lòng chọn khối lớp';
   if (!form.room.trim()) errors.room = 'Số phòng không được để trống';
-  if (!form.max_students || Number(form.max_students) < 1) errors.max_students = 'Sĩ số tối đa phải lớn hơn 0';
+  if (!form.max_students || maxStudents < 1) errors.max_students = 'Sĩ số tối đa phải lớn hơn 0';
+  if (maxStudents < studentCount) errors.max_students = `Sĩ số tối đa không được nhỏ hơn số học sinh hiện tại (${studentCount})`;
   return errors;
 }
 
@@ -42,26 +42,23 @@ export default function ClassForm() {
   const isEditMode = Boolean(id && id !== 'new');
 
   const [form, setForm] = useState<FormState>({
+    class_code: 'Tự động tạo',
     name: '',
-    grade_id: '',
     teacher_id: '',
     max_students: '30',
     room: '',
     description: '',
   });
+  const [studentCount, setStudentCount] = useState(0);
   const [errors, setErrors] = useState<FormErrors>({});
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [gradeOptions, setGradeOptions] = useState<SelectOption[]>([]);
   const [teacherOptions, setTeacherOptions] = useState<SelectOption[]>([{ label: 'Chưa phân công', value: '' }]);
 
   useEffect(() => {
     const loadOptions = async () => {
-      const [gradesResult, teachersResult] = await Promise.all([listGrades(), listTeachers()]);
-      if (gradesResult.error) toast.error('Không tải được danh sách khối', gradesResult.error.message);
+      const teachersResult = await listTeachers();
       if (teachersResult.error) toast.error('Không tải được giáo viên', teachersResult.error.message);
-
-      setGradeOptions(gradesResult.items.map((item) => ({ value: String(item.id), label: item.name })));
       setTeacherOptions([
         { label: 'Chưa phân công', value: '' },
         ...teachersResult.items.map((item) => ({ value: item.id, label: item.full_name })),
@@ -83,9 +80,10 @@ export default function ClassForm() {
         return;
       }
 
+      setStudentCount(result.item.student_count);
       setForm({
+        class_code: result.item.class_code || String(result.item.id),
         name: result.item.name,
-        grade_id: String(result.item.grade_id),
         teacher_id: result.item.teacher_id || '',
         max_students: String(result.item.max_students),
         room: result.item.room || '',
@@ -104,14 +102,13 @@ export default function ClassForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const nextErrors = validate(form);
+    const nextErrors = validate(form, studentCount);
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
     setSaving(true);
     const payload = {
       name: form.name.trim(),
-      grade_id: Number(form.grade_id),
       teacher_id: form.teacher_id || null,
       max_students: Number(form.max_students),
       room: form.room.trim(),
@@ -123,6 +120,7 @@ export default function ClassForm() {
 
     if (result.error) {
       toast.error(isEditMode ? 'Cập nhật lớp học thất bại' : 'Tạo lớp học thất bại', result.error.message);
+      if (result.error.field === 'max_students') setErrors((prev) => ({ ...prev, max_students: result.error?.message }));
       return;
     }
 
@@ -141,17 +139,8 @@ export default function ClassForm() {
 
       <form onSubmit={handleSubmit}>
         <Card className="space-y-5">
+          <Input label="Mã lớp" value={form.class_code} disabled hint="Mã tạo tự động khi lưu" fullWidth />
           <Input label="Tên lớp học" value={form.name} onChange={(e) => setField('name', e.target.value)} error={errors.name} required fullWidth />
-
-          <Select
-            label="Khối lớp"
-            options={gradeOptions}
-            value={form.grade_id}
-            onChange={(value) => setField('grade_id', value)}
-            error={errors.grade_id}
-            required
-            placeholder="Chọn khối lớp"
-          />
 
           <Select
             label="Giáo viên chủ nhiệm"
@@ -165,11 +154,12 @@ export default function ClassForm() {
             <Input
               label="Sĩ số tối đa"
               type="number"
-              min={1}
+              min={Math.max(1, studentCount)}
               max={50}
               value={form.max_students}
               onChange={(e) => setField('max_students', e.target.value)}
               error={errors.max_students}
+              hint={isEditMode ? `Hiện có ${studentCount} học sinh` : undefined}
               required
               fullWidth
             />

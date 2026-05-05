@@ -96,7 +96,7 @@ export default function StudentDetail() {
           <div className="flex-1 text-center sm:text-left">
             <h1 className="text-xl font-bold text-[#1E293B]">{student.full_name}</h1>
             <p className="text-sm text-[#64748B] mt-1">
-              {student.class_name} · {student.grade_name} · {getAge(student.date_of_birth)} tuổi
+            {student.class_name} · {getAge(student.date_of_birth)} tuổi
             </p>
             <p className="text-sm text-[#64748B] mt-1">Mã HS: {student.student_code}</p>
           </div>
@@ -138,7 +138,6 @@ export default function StudentDetail() {
                       ['Họ tên', student.full_name],
                       ['Mã học sinh', student.student_code],
                       ['Lớp', student.class_name],
-                      ['Khối', student.grade_name],
                       ['Giới tính', student.gender === 'Male' ? 'Nam' : student.gender === 'Female' ? 'Nữ' : '—'],
                       ['Ngày sinh', formatDate(student.date_of_birth)],
                       ['Địa chỉ', student.address || '—'],

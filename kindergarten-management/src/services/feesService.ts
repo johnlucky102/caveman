@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { withSupabaseTimeout } from '@/lib/timeout';
 import type {
   AppError,
   CreateFeeInput,
@@ -52,15 +53,53 @@ function mapFeeRow(row: FeeRow): FeeRecordP2 {
   };
 }
 
-export async function listFeeTypes(): Promise<{ items: FeeTypeRecordP2[]; error: AppError | null }> {
-  const { data, error } = await supabase
-    .from('fee_types')
-    .select('id, name, amount_vnd, grade_id, description, is_active, created_at, updated_at')
-    .eq('is_active', true)
-    .order('name', { ascending: true });
+function validatePaidAmount(paidAmount: number, amount: number): AppError | null {
+  if (!Number.isFinite(paidAmount) || paidAmount < 0) {
+    return { code: 'VALIDATION', message: 'Paid amount must be greater than or equal to 0.' };
+  }
+  if (paidAmount > amount) {
+    return { code: 'VALIDATION', message: 'Paid amount cannot exceed fee amount.' };
+  }
+  return null;
+}
 
-  if (error) return { items: [], error: toAppError(error, 'Không tải được loại phí.') };
-  return { items: (data || []) as FeeTypeRow[], error: null };
+async function getFeeSearchFilters(term: string): Promise<{ studentIds: string[]; feeTypeIds: number[]; error: AppError | null }> {
+  const [studentsResult, feeTypesResult] = await Promise.all([
+    withSupabaseTimeout(
+      supabase.from('students').select('id').ilike('full_name', `%${term}%`),
+      5000,
+      { data: null, error: { message: 'Timeout searching students', details: '', hint: '', code: 'TIMEOUT' } } as any
+    ),
+    withSupabaseTimeout(
+      supabase.from('fee_types').select('id').ilike('name', `%${term}%`),
+      5000,
+      { data: null, error: { message: 'Timeout searching fee types', details: '', hint: '', code: 'TIMEOUT' } } as any
+    ),
+  ]);
+
+  if (studentsResult.error) return { studentIds: [], feeTypeIds: [], error: toAppError(studentsResult.error, 'Cannot search students.') };
+  if (feeTypesResult.error) return { studentIds: [], feeTypeIds: [], error: toAppError(feeTypesResult.error, 'Cannot search fee types.') };
+
+  return {
+    studentIds: (studentsResult.data || []).map((row) => row.id),
+    feeTypeIds: (feeTypesResult.data || []).map((row) => Number(row.id)),
+    error: null,
+  };
+}
+
+export async function listFeeTypes(): Promise<{ items: FeeTypeRecordP2[]; error: AppError | null }> {
+  const result = await withSupabaseTimeout(
+    supabase
+      .from('fee_types')
+      .select('id, name, amount_vnd, grade_id, description, is_active, created_at, updated_at')
+      .eq('is_active', true)
+      .order('name', { ascending: true }),
+    8000,
+    { data: null, error: { message: 'Timeout loading fee types', details: '', hint: '', code: 'TIMEOUT' } } as any
+  );
+
+  if (result.error) return { items: [], error: toAppError(result.error, 'Cannot load fee types.') };
+  return { items: (result.data || []) as FeeTypeRow[], error: null };
 }
 
 export async function listFees(query: FeeListQuery): Promise<{ data: ListEnvelope<FeeRecordP2>; error: AppError | null }> {
@@ -76,24 +115,40 @@ export async function listFees(query: FeeListQuery): Promise<{ data: ListEnvelop
 
   if (query.status) statement = statement.eq('status', query.status);
 
-  const { data, count, error } = await statement.range(from, to);
-  if (error) {
-    return {
-      data: { items: [], total: 0, page, pageSize },
-      error: toAppError(error, 'Không tải được danh sách học phí.'),
-    };
+  if (query.search?.trim()) {
+    const filters = await getFeeSearchFilters(query.search.trim());
+    if (filters.error) {
+      return { data: { items: [], total: 0, page, pageSize }, error: filters.error };
+    }
+    if (filters.studentIds.length === 0 && filters.feeTypeIds.length === 0) {
+      return { data: { items: [], total: 0, page, pageSize }, error: null };
+    }
+    if (filters.studentIds.length > 0 && filters.feeTypeIds.length > 0) {
+      statement = statement.or(`student_id.in.(${filters.studentIds.join(',')}),fee_type_id.in.(${filters.feeTypeIds.join(',')})`);
+    } else if (filters.studentIds.length > 0) {
+      statement = statement.in('student_id', filters.studentIds);
+    } else {
+      statement = statement.in('fee_type_id', filters.feeTypeIds);
+    }
   }
 
-  let items = ((data || []) as unknown as FeeRow[]).map(mapFeeRow);
-  if (query.search?.trim()) {
-    const term = query.search.trim().toLowerCase();
-    items = items.filter((row) => row.student_name.toLowerCase().includes(term) || row.fee_type_name.toLowerCase().includes(term));
+  const result = await withSupabaseTimeout(
+    statement.range(from, to),
+    8000,
+    { data: null, count: null, error: { message: 'Timeout loading fees', details: '', hint: '', code: 'TIMEOUT' } } as any
+  );
+
+  if (result.error) {
+    return {
+      data: { items: [], total: 0, page, pageSize },
+      error: toAppError(result.error, 'Cannot load fees.'),
+    };
   }
 
   return {
     data: {
-      items,
-      total: count || 0,
+      items: ((result.data || []) as unknown as FeeRow[]).map(mapFeeRow),
+      total: result.count || 0,
       page,
       pageSize,
     },
@@ -102,14 +157,21 @@ export async function listFees(query: FeeListQuery): Promise<{ data: ListEnvelop
 }
 
 export async function createFeeRecord(input: CreateFeeInput): Promise<{ item: FeeRecordP2 | null; error: AppError | null }> {
-  const { data, error } = await supabase
-    .from('fee_records')
-    .insert(input)
-    .select('id, student_id, class_id, fee_type_id, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, created_at, updated_at, students(id, full_name, classes(id, name)), fee_types(id, name)')
-    .single();
+  const validationError = validatePaidAmount(input.paid_amount_vnd, input.amount_vnd);
+  if (validationError) return { item: null, error: validationError };
 
-  if (error) return { item: null, error: toAppError(error, 'Tạo bản ghi học phí thất bại.') };
-  return { item: mapFeeRow(data as unknown as FeeRow), error: null };
+  const result = await withSupabaseTimeout(
+    supabase
+      .from('fee_records')
+      .insert(input)
+      .select('id, student_id, class_id, fee_type_id, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, created_at, updated_at, students(id, full_name, classes(id, name)), fee_types(id, name)')
+      .single(),
+    8000,
+    { data: null, error: { message: 'Timeout creating fee record', details: '', hint: '', code: 'TIMEOUT' } } as any
+  );
+
+  if (result.error) return { item: null, error: toAppError(result.error, 'Cannot create fee record.') };
+  return { item: mapFeeRow(result.data as unknown as FeeRow), error: null };
 }
 
 export async function updateFeeRecordStatus(
@@ -118,27 +180,33 @@ export async function updateFeeRecordStatus(
   paidDate: string | null,
   paymentMethod: 'cash' | 'bank_transfer' | null
 ): Promise<{ error: AppError | null }> {
-  const { data: existing, error: existingError } = await supabase
-    .from('fee_records')
-    .select('amount_vnd')
-    .eq('id', id)
-    .single();
+  const existingResult = await withSupabaseTimeout(
+    supabase.from('fee_records').select('amount_vnd').eq('id', id).single(),
+    8000,
+    { data: null, error: { message: 'Timeout loading fee record', details: '', hint: '', code: 'TIMEOUT' } } as any
+  );
 
-  if (existingError) return { error: toAppError(existingError, 'Không tải được bản ghi học phí.') };
+  if (existingResult.error) return { error: toAppError(existingResult.error, 'Cannot load fee record.') };
 
-  const amount = Number(existing.amount_vnd || 0);
+  const amount = Number(existingResult.data?.amount_vnd || 0);
+  const validationError = validatePaidAmount(paidAmount, amount);
+  if (validationError) return { error: validationError };
+
   const status = paidAmount <= 0 ? 'unpaid' : paidAmount >= amount ? 'paid' : 'partial';
+  const updateResult = await withSupabaseTimeout(
+    supabase
+      .from('fee_records')
+      .update({
+        paid_amount_vnd: paidAmount,
+        paid_date: paidDate,
+        payment_method: paymentMethod,
+        status,
+      })
+      .eq('id', id),
+    8000,
+    { data: null, error: { message: 'Timeout updating fee record', details: '', hint: '', code: 'TIMEOUT' } } as any
+  );
 
-  const { error } = await supabase
-    .from('fee_records')
-    .update({
-      paid_amount_vnd: paidAmount,
-      paid_date: paidDate,
-      payment_method: paymentMethod,
-      status,
-    })
-    .eq('id', id);
-
-  if (error) return { error: toAppError(error, 'Cập nhật trạng thái học phí thất bại.') };
+  if (updateResult.error) return { error: toAppError(updateResult.error, 'Cannot update fee status.') };
   return { error: null };
 }

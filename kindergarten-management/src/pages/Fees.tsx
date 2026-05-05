@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertCircle, Plus, Search, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
 import Card, { CardHeader, StatCard } from '@/components/common/Card';
@@ -38,7 +38,7 @@ export default function Fees() {
     { value: 'paid', label: 'Đã thanh toán' },
   ];
 
-  const loadFees = async () => {
+  const loadFees = useCallback(async () => {
     setLoading(true);
     const result = await listFees({ page, pageSize, search, status: status || undefined });
     setLoading(false);
@@ -50,11 +50,11 @@ export default function Fees() {
     }
     setItems(result.data.items);
     setTotal(result.data.total);
-  };
+  }, [page, pageSize, search, status, toast]);
 
   useEffect(() => {
     void loadFees();
-  }, [page, search, status]);
+  }, [loadFees]);
 
   const summary = useMemo(() => {
     const totalAmount = items.reduce((sum, item) => sum + item.amount_vnd, 0);

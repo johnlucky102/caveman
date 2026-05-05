@@ -4,8 +4,7 @@ import { ArrowLeft, Edit, Info, Users } from 'lucide-react';
 import Card, { CardHeader } from '@/components/common/Card';
 import Button from '@/components/common/Button';
 import Avatar from '@/components/common/Avatar';
-import Badge from '@/components/common/Badge';
-import { StudentStatusBadge } from '@/components/common/Badge';
+import Badge, { StudentStatusBadge } from '@/components/common/Badge';
 import { useToast } from '@/components/common/Toast';
 import { listStudents } from '@/services/studentsService';
 import { getClassById } from '@/services/classesService';
@@ -43,9 +42,7 @@ export default function ClassDetail() {
         return;
       }
 
-      if (studentsResult.error) {
-        toast.error('Không tải được danh sách học sinh', studentsResult.error.message);
-      }
+      if (studentsResult.error) toast.error('Không tải được danh sách học sinh', studentsResult.error.message);
 
       setClassItem(classResult.item);
       setStudents(studentsResult.data.items);
@@ -95,7 +92,7 @@ export default function ClassDetail() {
         <div className="flex-1 min-w-0">
           <h2 className="text-xl font-bold text-[#1E293B]">{classItem.name}</h2>
           <p className="text-sm text-[#64748B]">
-            {classItem.grade_name} · {classItem.room || 'Chưa có phòng'}
+            Mã: {classItem.class_code || classItem.id} · {classItem.room || 'Chưa có phòng'}
           </p>
         </div>
         <Badge variant={classItem.student_count >= classItem.max_students ? 'warning' : 'success'} size="md">
@@ -124,10 +121,10 @@ export default function ClassDetail() {
         <Card header={<CardHeader title="Thông tin lớp học" />}>
           <div className="grid grid-cols-2 gap-4 text-sm">
             {[
+              ['Mã lớp', classItem.class_code || String(classItem.id)],
               ['Giáo viên chủ nhiệm', classItem.teacher_name || 'Chưa phân công'],
               ['Phòng học', classItem.room || '—'],
               ['Sĩ số', `${classItem.student_count}/${classItem.max_students} học sinh`],
-              ['Khối lớp', classItem.grade_name],
               ['Ngày tạo', new Date(classItem.created_at).toLocaleDateString('vi-VN')],
               ['Trạng thái', classItem.student_count >= classItem.max_students ? 'Đầy lớp' : 'Hoạt động'],
             ].map(([label, value]) => (

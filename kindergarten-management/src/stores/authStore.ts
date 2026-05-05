@@ -19,6 +19,7 @@ interface AuthState {
   role: AppRole | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  hasInitialized: boolean;
   error: string | null;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
@@ -49,6 +50,42 @@ async function hydrateProfile(user: AuthUser | null): Promise<UserProfile | null
   }
 }
 
+function applySession(session: AuthSession | null): void {
+  if (!session) {
+    useAuthStore.setState({
+      user: null,
+      session: null,
+      profile: null,
+      role: null,
+      isAuthenticated: false,
+      isLoading: false,
+      error: null,
+    });
+    return;
+  }
+
+  const user = session.user;
+  const role = mapSessionToRole(user, null);
+
+  useAuthStore.setState({
+    session,
+    user,
+    role,
+    isAuthenticated: true,
+    isLoading: false,
+    error: null,
+  });
+
+  // Background profile hydration
+  hydrateProfile(user).then((profile) => {
+    const currentState = useAuthStore.getState();
+    if (currentState.user?.id === user.id) {
+      const updatedRole = mapSessionToRole(user, profile);
+      useAuthStore.setState({ profile, role: updatedRole });
+    }
+  });
+}
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
@@ -58,6 +95,7 @@ export const useAuthStore = create<AuthState>()(
       role: null,
       isAuthenticated: false,
       isLoading: false,
+      hasInitialized: false,
       error: null,
 
       login: async (email: string, password: string): Promise<boolean> => {
@@ -82,19 +120,7 @@ export const useAuthStore = create<AuthState>()(
             return false;
           }
 
-          const user = session.user;
-          const profile = await withTimeout(hydrateProfile(user), 7000, null);
-          const role = mapSessionToRole(user, profile);
-
-          set({
-            isLoading: false,
-            session,
-            user,
-            profile,
-            role,
-            isAuthenticated: true,
-            error: null,
-          });
+          applySession(session);
           return true;
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Đăng nhập thất bại.';
@@ -134,35 +160,13 @@ export const useAuthStore = create<AuthState>()(
 
       initializeAuth: async () => {
         const state = get();
-        if (state.isLoading) return;
+        if (state.hasInitialized) return;
 
         set({ isLoading: true, error: null });
         try {
           const session = await withTimeout(getSession(), 7000, null);
-          const user = getCurrentUserFromSession(session);
-
-          if (!session || !user) {
-            set({
-              user: null,
-              session: null,
-              profile: null,
-              role: null,
-              isAuthenticated: false,
-              isLoading: false,
-            });
-            return;
-          }
-
-          const profile = await withTimeout(hydrateProfile(user), 7000, null);
-          const role = mapSessionToRole(user, profile);
-          set({
-            user,
-            session,
-            profile,
-            role,
-            isAuthenticated: true,
-            isLoading: false,
-          });
+          applySession(session);
+          set({ hasInitialized: true });
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Không thể khởi tạo phiên đăng nhập.';
           set({
@@ -173,6 +177,7 @@ export const useAuthStore = create<AuthState>()(
             session: null,
             role: null,
             profile: null,
+            hasInitialized: true,
           });
         }
       },
@@ -225,19 +230,7 @@ supabase.auth.onAuthStateChange(async (event, session) => {
       },
     };
 
-    const user = authSession.user;
-    const profile = await withTimeout(hydrateProfile(user), 7000, null);
-    const role = mapSessionToRole(user, profile);
-
-    useAuthStore.setState({
-      session: authSession,
-      user,
-      profile,
-      role,
-      isAuthenticated: true,
-      isLoading: false,
-      error: null,
-    });
+    applySession(authSession);
   } catch {
     useAuthStore.setState({
       isLoading: false,

@@ -73,19 +73,31 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // ─── Global loading ──────────────────────────────────────────────────────────
   globalLoading: false,
-  setGlobalLoading: (loading) => set({ globalLoading: loading }),
+  setGlobalLoading: (loading) => set((state) => {
+    if (state.globalLoading === loading) return state;
+    return { globalLoading: loading };
+  }),
 
   // ─── Page title ──────────────────────────────────────────────────────────────
   pageTitle: 'KidGarden',
-  setPageTitle: (title) => set({ pageTitle: title }),
+  setPageTitle: (title) => set((state) => {
+    if (state.pageTitle === title) return state;
+    return { pageTitle: title };
+  }),
 
   // ─── Search ──────────────────────────────────────────────────────────────────
   searchQuery: '',
-  setSearchQuery: (query) => set({ searchQuery: query }),
+  setSearchQuery: (query) => set((state) => {
+    if (state.searchQuery === query) return state;
+    return { searchQuery: query };
+  }),
 
   // ─── Notifications ───────────────────────────────────────────────────────────
   unreadNotifications: 0,
-  setUnreadNotifications: (count) => set({ unreadNotifications: count }),
+  setUnreadNotifications: (count) => set((state) => {
+    if (state.unreadNotifications === count) return state;
+    return { unreadNotifications: count };
+  }),
   decrementUnreadNotifications: () =>
     set((state) => ({
       unreadNotifications: Math.max(0, state.unreadNotifications - 1),

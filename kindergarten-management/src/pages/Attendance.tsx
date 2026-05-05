@@ -48,7 +48,7 @@ export default function Attendance() {
         toast.error('Không tải được lớp học', result.error.message);
         return;
       }
-      const options = result.data.items.map((item) => ({ value: String(item.id), label: `${item.name} (${item.grade_name})` }));
+      const options = result.data.items.map((item) => ({ value: String(item.id), label: item.name }));
       setClassOptions(options);
       if (options.length > 0) setSelectedClass(options[0].value);
     };

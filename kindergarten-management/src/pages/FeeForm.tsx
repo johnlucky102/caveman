@@ -29,6 +29,7 @@ interface FormErrors {
   amount?: string;
   month?: string;
   schoolYear?: string;
+  paidAmount?: string;
   dueDate?: string;
 }
 
@@ -120,6 +121,7 @@ export default function FeeForm() {
 
   const validate = (): boolean => {
     const nextErrors: FormErrors = {};
+    if (Number(formData.paidAmount || '0') > Number(formData.amount || '0')) nextErrors.paidAmount = 'So tien da thu khong duoc vuot qua so tien phai thu';
     if (!formData.studentId) nextErrors.studentId = 'Vui lòng chọn học sinh';
     if (!formData.feeTypeId) nextErrors.feeTypeId = 'Vui lòng chọn loại phí';
     if (!formData.amount || Number(formData.amount) <= 0) nextErrors.amount = 'Số tiền không hợp lệ';
@@ -233,6 +235,7 @@ export default function FeeForm() {
                   type="number"
                   value={formData.paidAmount}
                   onChange={(event) => updateField('paidAmount', event.target.value)}
+                  error={errors.paidAmount}
                   hint="0 nếu chưa thu"
                 />
                 <Select label="Phương thức" options={paymentOptions} value={formData.paymentMethod} onChange={(value) => updateField('paymentMethod', value)} />

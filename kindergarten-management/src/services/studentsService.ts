@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { withSupabaseTimeout } from '@/lib/timeout';
 import type {
   AppError,
   CreateStudentInput,
@@ -27,7 +28,6 @@ type StudentRow = {
   classes: {
     id: number;
     name: string;
-    grades: { id: number; name: string } | null;
   } | null;
 };
 
@@ -36,7 +36,6 @@ function mapStudentRow(row: StudentRow): StudentRecord {
     id: row.id,
     class_id: row.class_id,
     class_name: row.classes?.name || 'N/A',
-    grade_name: row.classes?.grades?.name || 'N/A',
     student_code: row.student_code,
     full_name: row.full_name,
     date_of_birth: row.date_of_birth,
@@ -57,6 +56,13 @@ function generateStudentCode(): string {
   return `HS${value}`;
 }
 
+function isStudentCodeConflict(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const maybe = error as { code?: unknown; message?: unknown; details?: unknown };
+  const text = `${String(maybe.message || '')} ${String(maybe.details || '')}`.toLowerCase();
+  return maybe.code === '23505' || (text.includes('student_code') && (text.includes('duplicate') || text.includes('unique')));
+}
+
 export async function listStudents(query: StudentListQuery): Promise<{ data: ListEnvelope<StudentRecord>; error: AppError | null }> {
   const page = Math.max(1, query.page);
   const pageSize = Math.max(1, query.pageSize);
@@ -65,7 +71,7 @@ export async function listStudents(query: StudentListQuery): Promise<{ data: Lis
 
   let statement = supabase
     .from('students')
-    .select('id, class_id, student_code, full_name, date_of_birth, gender, ethnicity, nationality, address, enrolled_date, health_info, avatar, created_at, updated_at, classes(id, name, grades(id, name))', { count: 'exact' });
+    .select('id, class_id, student_code, full_name, date_of_birth, gender, ethnicity, nationality, address, enrolled_date, health_info, avatar, created_at, updated_at, classes(id, name)', { count: 'exact' });
 
   if (query.search?.trim()) {
     const term = query.search.trim();
@@ -74,43 +80,28 @@ export async function listStudents(query: StudentListQuery): Promise<{ data: Lis
   if (query.classId) {
     statement = statement.eq('class_id', query.classId);
   }
-  if (query.gradeId) {
-    const { data: classesByGrade, error: gradeFilterError } = await supabase
-      .from('classes')
-      .select('id')
-      .eq('grade_id', query.gradeId);
-    if (gradeFilterError) {
-      return {
-        data: { items: [], total: 0, page, pageSize },
-        error: toAppError(gradeFilterError, 'Không lọc được theo khối.'),
-      };
-    }
-    const classIds = (classesByGrade || []).map((item) => item.id);
-    if (classIds.length === 0) {
-      return {
-        data: { items: [], total: 0, page, pageSize },
-        error: null,
-      };
-    }
-    statement = statement.in('class_id', classIds);
-  }
 
   const sortBy = query.sortBy || 'created_at';
   const ascending = (query.sortDirection || 'desc') === 'asc';
   statement = statement.order(sortBy, { ascending });
 
-  const { data, count, error } = await statement.range(from, to);
-  if (error) {
+  const result = await withSupabaseTimeout(
+    statement.range(from, to),
+    8000,
+    { data: null, count: null, error: { message: 'Timeout loading students', details: '', hint: '', code: 'TIMEOUT' } } as any
+  );
+
+  if (result.error) {
     return {
       data: { items: [], total: 0, page, pageSize },
-      error: toAppError(error, 'Không lấy được danh sách học sinh.'),
+      error: toAppError(result.error, 'Cannot load students.'),
     };
   }
 
   return {
     data: {
-      items: ((data || []) as unknown as StudentRow[]).map(mapStudentRow),
-      total: count || 0,
+      items: ((result.data || []) as unknown as StudentRow[]).map(mapStudentRow),
+      total: result.count || 0,
       page,
       pageSize,
     },
@@ -119,41 +110,74 @@ export async function listStudents(query: StudentListQuery): Promise<{ data: Lis
 }
 
 export async function getStudentById(id: string): Promise<{ item: StudentRecord | null; error: AppError | null }> {
-  const { data, error } = await supabase
-    .from('students')
-    .select('id, class_id, student_code, full_name, date_of_birth, gender, ethnicity, nationality, address, enrolled_date, health_info, avatar, created_at, updated_at, classes(id, name, grades(id, name))')
-    .eq('id', id)
-    .maybeSingle();
+  const result = await withSupabaseTimeout(
+    supabase
+      .from('students')
+      .select('id, class_id, student_code, full_name, date_of_birth, gender, ethnicity, nationality, address, enrolled_date, health_info, avatar, created_at, updated_at, classes(id, name)')
+      .eq('id', id)
+      .maybeSingle(),
+    8000,
+    { data: null, error: { message: 'Timeout loading student profile', details: '', hint: '', code: 'TIMEOUT' } } as any
+  );
 
-  if (error) return { item: null, error: toAppError(error, 'Không lấy được thông tin học sinh.') };
-  if (!data) return { item: null, error: null };
-  return { item: mapStudentRow(data as unknown as StudentRow), error: null };
+  if (result.error) return { item: null, error: toAppError(result.error, 'Cannot load student profile.') };
+  if (!result.data) return { item: null, error: null };
+  return { item: mapStudentRow(result.data as unknown as StudentRow), error: null };
 }
 
 export async function createStudent(payload: CreateStudentInput): Promise<{ item: StudentRecord | null; error: AppError | null }> {
-  const insertPayload = {
-    ...payload,
-    student_code: payload.student_code?.trim() || generateStudentCode(),
-  };
+  const shouldGenerateCode = !payload.student_code?.trim();
+  const maxAttempts = shouldGenerateCode ? 5 : 1;
 
-  const { data, error } = await supabase
-    .from('students')
-    .insert(insertPayload)
-    .select('id, class_id, student_code, full_name, date_of_birth, gender, ethnicity, nationality, address, enrolled_date, health_info, avatar, created_at, updated_at, classes(id, name, grades(id, name))')
-    .single();
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const insertPayload = {
+      ...payload,
+      student_code: shouldGenerateCode ? generateStudentCode() : payload.student_code?.trim(),
+    };
 
-  if (error) return { item: null, error: toAppError(error, 'Tạo học sinh thất bại.') };
-  return { item: mapStudentRow(data as unknown as StudentRow), error: null };
+    const result = await withSupabaseTimeout(
+      supabase
+        .from('students')
+        .insert(insertPayload)
+        .select('id, class_id, student_code, full_name, date_of_birth, gender, ethnicity, nationality, address, enrolled_date, health_info, avatar, created_at, updated_at, classes(id, name)')
+        .single(),
+      8000,
+      { data: null, error: { message: 'Timeout creating student', details: '', hint: '', code: 'TIMEOUT' } } as any
+    );
+
+    if (!result.error && result.data) return { item: mapStudentRow(result.data as unknown as StudentRow), error: null };
+    if (!shouldGenerateCode || !isStudentCodeConflict(result.error) || attempt === maxAttempts) {
+      return { item: null, error: toAppError(result.error, 'Cannot create student.') };
+    }
+  }
+
+  return { item: null, error: { code: 'CONFLICT', message: 'Cannot generate unique student code.' } };
 }
 
 export async function updateStudent(id: string, payload: UpdateStudentInput): Promise<{ item: StudentRecord | null; error: AppError | null }> {
-  const { data, error } = await supabase
-    .from('students')
-    .update(payload)
-    .eq('id', id)
-    .select('id, class_id, student_code, full_name, date_of_birth, gender, ethnicity, nationality, address, enrolled_date, health_info, avatar, created_at, updated_at, classes(id, name, grades(id, name))')
-    .single();
+  const { student_code: _studentCode, ...safePayload } = payload;
+  const result = await withSupabaseTimeout(
+    supabase
+      .from('students')
+      .update(safePayload)
+      .eq('id', id)
+      .select('id, class_id, student_code, full_name, date_of_birth, gender, ethnicity, nationality, address, enrolled_date, health_info, avatar, created_at, updated_at, classes(id, name)')
+      .single(),
+    8000,
+    { data: null, error: { message: 'Timeout updating student', details: '', hint: '', code: 'TIMEOUT' } } as any
+  );
 
-  if (error) return { item: null, error: toAppError(error, 'Cập nhật học sinh thất bại.') };
-  return { item: mapStudentRow(data as unknown as StudentRow), error: null };
+  if (result.error) return { item: null, error: toAppError(result.error, 'Cannot update student.') };
+  return { item: mapStudentRow(result.data as unknown as StudentRow), error: null };
+}
+
+export async function deleteStudent(id: string): Promise<{ error: AppError | null }> {
+  const result = await withSupabaseTimeout(
+    supabase.from('students').delete().eq('id', id),
+    8000,
+    { data: null, error: { message: 'Timeout deleting student', details: '', hint: '', code: 'TIMEOUT' } } as any
+  );
+
+  if (result.error) return { error: toAppError(result.error, 'Cannot delete student.') };
+  return { error: null };
 }

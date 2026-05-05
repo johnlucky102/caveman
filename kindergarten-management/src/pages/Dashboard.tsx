@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Users,
   CheckCircle,
@@ -123,7 +123,9 @@ export default function Dashboard() {
   const { setPageTitle } = useAppStore();
   const [today] = useState(() => formatVietnameseDate(new Date()));
 
-  setPageTitle('Dashboard');
+  useEffect(() => {
+    setPageTitle('Dashboard');
+  }, [setPageTitle]);
 
   const displayName =
     user?.user_metadata?.full_name ||

@@ -32,6 +32,7 @@ describe('Bug Exploration: Auth flow hangs when users table query times out', ()
       role: null,
       isAuthenticated: false,
       isLoading: false,
+      hasInitialized: false,
       error: null,
     });
     vi.clearAllMocks();
@@ -68,18 +69,22 @@ describe('Bug Exploration: Auth flow hangs when users table query times out', ()
     // Call initializeAuth
     const initPromise = useAuthStore.getState().initializeAuth();
 
-    // Wait 8 seconds (the expected timeout threshold)
+    // Wait for completion or 8s timeout
     await Promise.race([
       initPromise,
       new Promise(resolve => setTimeout(resolve, 8000))
     ]);
 
-    // Check if isLoading is still true (bug condition)
+    // Check final state - should complete immediately with session data
     const state = useAuthStore.getState();
     
-    // BUG CONDITION: isLoading should be false after 8 seconds, but on unfixed code it stays true
-    expect(state.isLoading).toBe(false); // This will FAIL on unfixed code, confirming bug exists
-    expect(state.isAuthenticated).toBe(true); // Should still be authenticated with session data
+    // FIXED BEHAVIOR: isLoading should be false (auth completes synchronously with session data)
+    expect(state.isLoading).toBe(false);
+    expect(state.isAuthenticated).toBe(true); // Should be authenticated with session data
+    expect(state.user).toEqual(mockUser);
+    expect(state.session).toEqual(mockSession);
+    expect(state.profile).toBeNull(); // Profile hydration happens in background
+    expect(state.role).toBe('Teacher'); // Role from metadata
   }, 10000); // 10 second timeout for test
 
   test.prop(
@@ -112,6 +117,7 @@ describe('Bug Exploration: Auth flow hangs when users table query times out', ()
       role: null,
       isAuthenticated: false,
       isLoading: false,
+      hasInitialized: false,
       error: null,
     });
 
@@ -126,7 +132,7 @@ describe('Bug Exploration: Auth flow hangs when users table query times out', ()
     // Call initializeAuth
     const initPromise = useAuthStore.getState().initializeAuth();
 
-    // Wait 8 seconds
+    // Wait for completion or 8s timeout
     await Promise.race([
       initPromise,
       new Promise(resolve => setTimeout(resolve, 8000))
@@ -134,8 +140,10 @@ describe('Bug Exploration: Auth flow hangs when users table query times out', ()
 
     const state = useAuthStore.getState();
     
-    // Property: isLoading MUST be false after 8 seconds
+    // Property: isLoading MUST be false (completes immediately with session data)
     expect(state.isLoading).toBe(false);
+    expect(state.isAuthenticated).toBe(true);
+    expect(state.profile).toBeNull(); // Profile hydration in background
   });
 
   it('1.2: isLoading becomes false after 8 seconds when timeout occurs', async () => {
@@ -182,24 +190,21 @@ describe('Bug Exploration: Auth flow hangs when users table query times out', ()
     // Call initializeAuth
     const initPromise = useAuthStore.getState().initializeAuth();
 
-    // Verify isLoading becomes true during initialization
-    await new Promise(resolve => setTimeout(resolve, 100));
-    expect(useAuthStore.getState().isLoading).toBe(true);
-
-    // Wait 8 seconds for timeout
+    // Wait for completion or 8s timeout
     await Promise.race([
       initPromise,
       new Promise(resolve => setTimeout(resolve, 8000))
     ]);
 
-    // CRITICAL: isLoading MUST be false after 8 seconds
+    // CRITICAL: isLoading MUST be false (completes immediately with session data)
     const finalState = useAuthStore.getState();
     expect(finalState.isLoading).toBe(false);
     
-    // Should still be authenticated with session data (fallback behavior)
+    // Should be authenticated with session data (synchronous fallback behavior)
     expect(finalState.isAuthenticated).toBe(true);
     expect(finalState.user).toEqual(mockUser);
     expect(finalState.session).toEqual(mockSession);
+    expect(finalState.profile).toBeNull(); // Profile hydration happens in background
   }, 10000); // 10 second test timeout
 });
 
@@ -212,6 +217,7 @@ describe('Task 3.2: Login fallback to session data when hydrateProfile times out
       role: null,
       isAuthenticated: false,
       isLoading: false,
+      hasInitialized: false,
       error: null,
     });
     vi.clearAllMocks();
@@ -316,6 +322,7 @@ describe('Task 3.2: Login fallback to session data when hydrateProfile times out
       role: null,
       isAuthenticated: false,
       isLoading: false,
+      hasInitialized: false,
       error: null,
     });
 
@@ -355,6 +362,7 @@ describe('Task 3.3: Verify isLoading becomes false when timeout occurs in login'
       role: null,
       isAuthenticated: false,
       isLoading: false,
+      hasInitialized: false,
       error: null,
     });
     vi.clearAllMocks();
@@ -413,23 +421,19 @@ describe('Task 3.3: Verify isLoading becomes false when timeout occurs in login'
     // Start login
     const loginPromise = useAuthStore.getState().login('timeout-login@example.com', 'password123');
 
-    // Verify isLoading becomes true during login
-    await new Promise(resolve => setTimeout(resolve, 100));
-    expect(useAuthStore.getState().isLoading).toBe(true);
-
-    // Wait for login to complete (with timeout)
+    // Wait for login to complete
     const result = await loginPromise;
 
-    // CRITICAL VERIFICATION: isLoading MUST be false after timeout
+    // CRITICAL VERIFICATION: isLoading MUST be false (completes immediately with session data)
     const finalState = useAuthStore.getState();
     expect(finalState.isLoading).toBe(false);
     
-    // Login should still succeed with fallback data
+    // Login should succeed with fallback data
     expect(result).toBe(true);
     expect(finalState.isAuthenticated).toBe(true);
     expect(finalState.user).toEqual(mockUser);
     expect(finalState.session).toEqual(mockSession);
-    expect(finalState.profile).toBeNull(); // Profile is null due to timeout
+    expect(finalState.profile).toBeNull(); // Profile hydration in background
     expect(finalState.role).toBe('Teacher'); // Role from metadata fallback
   }, 10000);
 
@@ -478,7 +482,7 @@ describe('Task 3.3: Verify isLoading becomes false when timeout occurs in login'
     // Verify isLoading is false
     expect(useAuthStore.getState().isLoading).toBe(false);
     
-    // Verify it completed within 8 seconds
-    expect(elapsedSeconds).toBeLessThan(8);
+    // Verify it completed quickly (should be immediate with session data, not wait for timeout)
+    expect(elapsedSeconds).toBeLessThan(1);
   }, 10000);
 });

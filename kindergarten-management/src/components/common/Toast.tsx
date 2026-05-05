@@ -113,16 +113,19 @@ const Toast: React.FC = () => {
  */
 export function useToast() {
   const { addToast } = useAppStore();
-  return {
-    success: (title: string, message?: string, duration?: number) =>
-      addToast('success', title, message, duration),
-    error: (title: string, message?: string, duration?: number) =>
-      addToast('error', title, message, duration),
-    warning: (title: string, message?: string, duration?: number) =>
-      addToast('warning', title, message, duration),
-    info: (title: string, message?: string, duration?: number) =>
-      addToast('info', title, message, duration),
-  };
+  return React.useMemo(
+    () => ({
+      success: (title: string, message?: string, duration?: number) =>
+        addToast('success', title, message, duration),
+      error: (title: string, message?: string, duration?: number) =>
+        addToast('error', title, message, duration),
+      warning: (title: string, message?: string, duration?: number) =>
+        addToast('warning', title, message, duration),
+      info: (title: string, message?: string, duration?: number) =>
+        addToast('info', title, message, duration),
+    }),
+    [addToast]
+  );
 }
 
 export default Toast;

@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { withSupabaseTimeout } from '@/lib/timeout';
 import type {
   AppError,
   AttendanceListQuery,
@@ -56,28 +57,40 @@ export interface AttendanceStudentItem {
 }
 
 export async function listAttendanceByClassAndDate(query: AttendanceListQuery): Promise<{ items: AttendanceStudentItem[]; error: AppError | null }> {
-  const { data: students, error: studentsError } = await supabase
+  const studentsPromise = supabase
     .from('students')
     .select('id, full_name, class_id, classes(id, name)')
     .eq('class_id', query.classId)
     .order('full_name', { ascending: true });
 
-  if (studentsError) return { items: [], error: toAppError(studentsError, 'Không tải được danh sách học sinh để điểm danh.') };
+  const studentsResult = await withSupabaseTimeout(
+    studentsPromise,
+    8000,
+    { data: null, error: { message: 'Timeout tải học sinh', details: '', hint: '', code: 'TIMEOUT' } } as any
+  );
 
-  const { data: attendance, error: attendanceError } = await supabase
+  if (studentsResult.error) return { items: [], error: toAppError(studentsResult.error, 'Không tải được danh sách học sinh để điểm danh.') };
+
+  const attendancePromise = supabase
     .from('attendance')
     .select('id, student_id, class_id, attendance_date, status, check_in_time, check_out_time, note, created_at, updated_at, students(id, full_name, classes(id, name))')
     .eq('class_id', query.classId)
     .eq('attendance_date', query.attendanceDate);
 
-  if (attendanceError) return { items: [], error: toAppError(attendanceError, 'Không tải được dữ liệu điểm danh.') };
+  const attendanceResult = await withSupabaseTimeout(
+    attendancePromise,
+    8000,
+    { data: null, error: { message: 'Timeout tải điểm danh', details: '', hint: '', code: 'TIMEOUT' } } as any
+  );
+
+  if (attendanceResult.error) return { items: [], error: toAppError(attendanceResult.error, 'Không tải được dữ liệu điểm danh.') };
 
   const map = new Map<string, AttendanceRow>();
-  ((attendance || []) as unknown as AttendanceRow[]).forEach((row) => {
+  ((attendanceResult.data || []) as unknown as AttendanceRow[]).forEach((row) => {
     map.set(row.student_id, row);
   });
 
-  const items = (students || []).map((student) => {
+  const items = (studentsResult.data || []).map((student) => {
     const existing = map.get(student.id);
     const classObj = Array.isArray(student.classes) ? student.classes[0] : student.classes;
     return {
@@ -110,10 +123,15 @@ export async function upsertAttendanceBulk(rows: UpsertAttendanceInput[]): Promi
     created_by: row.created_by || null,
   }));
 
-  const { error } = await supabase
+  const result = await withSupabaseTimeout(
+    supabase
     .from('attendance')
-    .upsert(payload, { onConflict: 'student_id,attendance_date' });
+    .upsert(payload, { onConflict: 'student_id,attendance_date' }),
+    8000,
+    { data: null, error: { message: 'Timeout saving attendance', details: '', hint: '', code: 'TIMEOUT' } } as any
+  );
 
+  const error = result.error;
   if (error) return { error: toAppError(error, 'Lưu điểm danh thất bại.') };
   return { error: null };
 }
@@ -134,8 +152,14 @@ export async function listAttendanceHistory(
   if (dateFrom) statement = statement.gte('attendance_date', dateFrom);
   if (dateTo) statement = statement.lte('attendance_date', dateTo);
 
-  const { data, error } = await statement.limit(500);
-  if (error) return { items: [], error: toAppError(error, 'Không tải được lịch sử điểm danh.') };
+  const queryPromise = statement.limit(500);
+  const result = await withSupabaseTimeout(
+    queryPromise,
+    8000,
+    { data: null, error: { message: 'Timeout tải lịch sử điểm danh', details: '', hint: '', code: 'TIMEOUT' } } as any
+  );
 
-  return { items: ((data || []) as unknown as AttendanceRow[]).map(mapAttendance), error: null };
+  if (result.error) return { items: [], error: toAppError(result.error, 'Không tải được lịch sử điểm danh.') };
+
+  return { items: ((result.data || []) as unknown as AttendanceRow[]).map(mapAttendance), error: null };
 }

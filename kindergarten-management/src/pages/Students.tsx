@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Download, Eye, Pencil, Search, Trash2, UserPlus } from 'lucide-react';
 import Card, { CardHeader } from '@/components/common/Card';
@@ -7,13 +7,14 @@ import Input from '@/components/common/Input';
 import Select from '@/components/common/Select';
 import Table, { type SortState } from '@/components/common/Table';
 import Avatar from '@/components/common/Avatar';
+import { ConfirmModal } from '@/components/common/Modal';
 import { useToast } from '@/components/common/Toast';
 import { useAuthStore } from '@/stores/authStore';
 import { canManageStudentOrClass } from '@/lib/rbac';
-import { listClasses, listGrades } from '@/services/classesService';
-import { listStudents } from '@/services/studentsService';
+import { listClasses } from '@/services/classesService';
+import { deleteStudent, listStudents } from '@/services/studentsService';
 import type { PaginationMeta, SelectOption, TableColumn } from '@/types';
-import type { GradeRecord, StudentRecord } from '@/types/domain';
+import type { StudentRecord } from '@/types/domain';
 
 function calculatePagination(page: number, pageSize: number, total: number): PaginationMeta {
   return {
@@ -32,68 +33,76 @@ export default function Students() {
 
   const [students, setStudents] = useState<StudentRecord[]>([]);
   const [classOptions, setClassOptions] = useState<SelectOption[]>([{ label: 'Tất cả lớp', value: '' }]);
-  const [gradeOptions, setGradeOptions] = useState<SelectOption[]>([{ label: 'Tất cả khối', value: '' }]);
   const [search, setSearch] = useState('');
   const [filterClass, setFilterClass] = useState('');
-  const [filterGrade, setFilterGrade] = useState('');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<StudentRecord | null>(null);
   const [sortState, setSortState] = useState<SortState>({ key: 'created_at', direction: 'desc' });
 
   const pageSize = 10;
 
   useEffect(() => {
     const loadOptions = async () => {
-      const [classesResult, gradesResult] = await Promise.all([listClasses({ page: 1, pageSize: 200 }), listGrades()]);
+      const classesResult = await listClasses({ page: 1, pageSize: 200 });
 
       if (classesResult.error) toast.error('Không tải được lớp học', classesResult.error.message);
-      if (gradesResult.error) toast.error('Không tải được khối lớp', gradesResult.error.message);
 
       const classItems = classesResult.data.items.map((item) => ({
-        label: `${item.name} (${item.grade_name})`,
-        value: String(item.id),
-      }));
-      const gradeItems = (gradesResult.items as GradeRecord[]).map((item) => ({
         label: item.name,
         value: String(item.id),
       }));
 
       setClassOptions([{ label: 'Tất cả lớp', value: '' }, ...classItems]);
-      setGradeOptions([{ label: 'Tất cả khối', value: '' }, ...gradeItems]);
     };
     void loadOptions();
   }, [toast]);
 
+  const loadStudents = useCallback(async () => {
+    setLoading(true);
+    const result = await listStudents({
+      page,
+      pageSize,
+      search,
+      classId: filterClass ? Number(filterClass) : undefined,
+      sortBy: sortState.key as 'full_name' | 'student_code' | 'created_at',
+      sortDirection: sortState.direction,
+    });
+    setLoading(false);
+
+    if (result.error) {
+      toast.error('Không tải được danh sách học sinh', result.error.message);
+      setStudents([]);
+      setTotal(0);
+      return;
+    }
+
+    setStudents(result.data.items);
+    setTotal(result.data.total);
+  }, [filterClass, page, pageSize, search, sortState.direction, sortState.key, toast]);
+
   useEffect(() => {
-    const loadStudents = async () => {
-      setLoading(true);
-      const result = await listStudents({
-        page,
-        pageSize,
-        search,
-        classId: filterClass ? Number(filterClass) : undefined,
-        gradeId: filterGrade ? Number(filterGrade) : undefined,
-        sortBy: sortState.key as 'full_name' | 'student_code' | 'created_at',
-        sortDirection: sortState.direction,
-      });
-      setLoading(false);
-
-      if (result.error) {
-        toast.error('Không tải được danh sách học sinh', result.error.message);
-        setStudents([]);
-        setTotal(0);
-        return;
-      }
-
-      setStudents(result.data.items);
-      setTotal(result.data.total);
-    };
-
     void loadStudents();
-  }, [filterClass, filterGrade, page, pageSize, search, sortState.direction, sortState.key, toast]);
+  }, [loadStudents]);
 
   const paginationMeta = useMemo(() => calculatePagination(page, pageSize, total), [page, pageSize, total]);
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    const result = await deleteStudent(deleteTarget.id);
+    setDeleting(false);
+    if (result.error) {
+      toast.error('Xóa học sinh thất bại', result.error.message);
+      return;
+    }
+    toast.success('Xóa học sinh thành công');
+    setDeleteTarget(null);
+    if (students.length === 1 && page > 1) setPage((prev) => prev - 1);
+    else void loadStudents();
+  };
 
   const columns: TableColumn<StudentRecord>[] = [
     {
@@ -118,11 +127,6 @@ export default function Students() {
       label: 'Mã HS',
       sortable: true,
       render: (value) => <span className="font-mono text-xs text-[#64748B]">{String(value)}</span>,
-    },
-    {
-      key: 'grade_name',
-      label: 'Khối',
-      render: (value) => <span className="text-[#64748B]">{String(value || 'N/A')}</span>,
     },
     {
       key: 'date_of_birth',
@@ -160,7 +164,7 @@ export default function Students() {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  toast.info('Chưa hỗ trợ xóa trong phase này');
+                  setDeleteTarget(row);
                 }}
                 className="p-1.5 rounded-lg text-[#94A3B8] hover:text-red-500 hover:bg-red-50 transition-colors"
                 title="Xóa"
@@ -216,23 +220,10 @@ export default function Students() {
               options={classOptions}
             />
           </div>
-          <div className="w-full sm:w-48">
-            <Select
-              value={filterGrade}
-              onChange={(v) => {
-                setFilterGrade(v);
-                setPage(1);
-              }}
-              options={gradeOptions}
-            />
-          </div>
         </div>
       </Card>
 
-      <Card
-        noPadding
-        header={<CardHeader title="Danh sách học sinh" subtitle={`${students.length} kết quả / trang`} />}
-      >
+      <Card noPadding header={<CardHeader title="Danh sách học sinh" subtitle={`${students.length} kết quả / trang`} />}>
         <Table
           columns={columns}
           data={students}
@@ -252,6 +243,16 @@ export default function Students() {
           emptyMessage="Không tìm thấy học sinh nào"
         />
       </Card>
+
+      <ConfirmModal
+        open={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        title="Xóa học sinh"
+        message={deleteTarget ? `Xóa học sinh "${deleteTarget.full_name}"?` : undefined}
+        confirmLabel="Xóa"
+        loading={deleting}
+      />
     </div>
   );
 }

@@ -21,6 +21,8 @@ export interface UserProfile {
   phone: string | null;
   role: AppRole;
   avatar: string | null;
+  teacher_code?: string | null;
+  email?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -34,8 +36,7 @@ export interface GradeRecord {
 export interface ClassRecord {
   id: number;
   name: string;
-  grade_id: number;
-  grade_name: string;
+  class_code: string | null;
   teacher_id: string | null;
   teacher_name: string | null;
   room: string | null;
@@ -50,14 +51,13 @@ export interface ClassListQuery {
   page: number;
   pageSize: number;
   search?: string;
-  gradeId?: number;
   sortBy?: 'name' | 'created_at' | 'max_students';
   sortDirection?: SortDirection;
 }
 
 export interface CreateClassInput {
   name: string;
-  grade_id: number;
+  class_code?: string;
   teacher_id: string | null;
   room: string | null;
   max_students: number;
@@ -70,7 +70,6 @@ export interface StudentRecord {
   id: string;
   class_id: number;
   class_name: string;
-  grade_name: string;
   student_code: string;
   full_name: string;
   date_of_birth: string | null;
@@ -90,7 +89,6 @@ export interface StudentListQuery {
   pageSize: number;
   search?: string;
   classId?: number;
-  gradeId?: number;
   sortBy?: 'full_name' | 'student_code' | 'created_at';
   sortDirection?: SortDirection;
 }

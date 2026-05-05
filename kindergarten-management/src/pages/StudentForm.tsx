@@ -14,6 +14,7 @@ import type { CreateStudentInput } from '@/types/domain';
 
 interface StudentFormData {
   avatar: string | null;
+  student_code: string;
   full_name: string;
   date_of_birth: string;
   gender: 'Male' | 'Female' | '';
@@ -38,6 +39,7 @@ interface FormErrors {
 function defaultForm(): StudentFormData {
   return {
     avatar: null,
+    student_code: '',
     full_name: '',
     date_of_birth: '',
     gender: '',
@@ -97,7 +99,7 @@ export default function StudentForm() {
       }
       setClassOptions([
         { label: 'Chọn lớp học', value: '' },
-        ...result.data.items.map((item) => ({ value: String(item.id), label: `${item.name} (${item.grade_name})` })),
+        ...result.data.items.map((item) => ({ value: String(item.id), label: item.name })),
       ]);
     };
     void loadOptions();
@@ -118,6 +120,7 @@ export default function StudentForm() {
       const health = result.item.health_info || {};
       setFormData({
         avatar: result.item.avatar,
+        student_code: result.item.student_code,
         full_name: result.item.full_name,
         date_of_birth: result.item.date_of_birth || '',
         gender: result.item.gender || '',
@@ -135,9 +138,9 @@ export default function StudentForm() {
   }, [id, isEditMode, navigate, toast]);
 
   const studentCodePreview = useMemo(() => {
-    if (isEditMode && id) return id.slice(0, 8).toUpperCase();
+    if (isEditMode) return formData.student_code || 'Đang tải...';
     return 'Tự động tạo';
-  }, [id, isEditMode]);
+  }, [formData.student_code, isEditMode]);
 
   function handleChange<K extends keyof StudentFormData>(field: K, value: StudentFormData[K]) {
     setFormData((prev) => ({ ...prev, [field]: value }));

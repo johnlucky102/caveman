@@ -1,18 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, Plus, Search, Users } from 'lucide-react';
+import { Building2, Pencil, Plus, Search, Trash2, Users } from 'lucide-react';
 import Card, { CardHeader, StatCard } from '@/components/common/Card';
 import Button from '@/components/common/Button';
 import Input from '@/components/common/Input';
-import Select from '@/components/common/Select';
 import Table, { type SortState } from '@/components/common/Table';
 import Badge from '@/components/common/Badge';
 import Avatar from '@/components/common/Avatar';
+import { ConfirmModal } from '@/components/common/Modal';
 import { useToast } from '@/components/common/Toast';
-import { listClasses, listGrades } from '@/services/classesService';
+import { deleteClass, listClasses } from '@/services/classesService';
 import { useAuthStore } from '@/stores/authStore';
 import { canManageStudentOrClass } from '@/lib/rbac';
-import type { PaginationMeta, SelectOption, TableColumn } from '@/types';
+import type { PaginationMeta, TableColumn } from '@/types';
 import type { ClassRecord } from '@/types/domain';
 
 function paginate(page: number, pageSize: number, total: number): PaginationMeta {
@@ -31,54 +31,57 @@ export default function Classes() {
   const canManage = canManageStudentOrClass(role);
 
   const [items, setItems] = useState<ClassRecord[]>([]);
-  const [grades, setGrades] = useState<SelectOption[]>([{ label: 'Tất cả khối', value: '' }]);
   const [search, setSearch] = useState('');
-  const [gradeId, setGradeId] = useState('');
   const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ClassRecord | null>(null);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [sortState, setSortState] = useState<SortState>({ key: 'name', direction: 'asc' });
   const pageSize = 10;
 
-  useEffect(() => {
-    const loadGrades = async () => {
-      const result = await listGrades();
-      if (result.error) {
-        toast.error('Không tải được danh sách khối', result.error.message);
-        return;
-      }
-      setGrades([{ label: 'Tất cả khối', value: '' }, ...result.items.map((g) => ({ value: String(g.id), label: g.name }))]);
-    };
-    void loadGrades();
-  }, [toast]);
+  const loadClasses = useCallback(async () => {
+    setLoading(true);
+    const result = await listClasses({
+      page,
+      pageSize,
+      search,
+      sortBy: sortState.key as 'name' | 'created_at' | 'max_students',
+      sortDirection: sortState.direction,
+    });
+    setLoading(false);
+    if (result.error) {
+      toast.error('Không tải được danh sách lớp', result.error.message);
+      setItems([]);
+      setTotal(0);
+      return;
+    }
+    setItems(result.data.items);
+    setTotal(result.data.total);
+  }, [page, pageSize, search, sortState.direction, sortState.key, toast]);
 
   useEffect(() => {
-    const loadClasses = async () => {
-      setLoading(true);
-      const result = await listClasses({
-        page,
-        pageSize,
-        search,
-        gradeId: gradeId ? Number(gradeId) : undefined,
-        sortBy: sortState.key as 'name' | 'created_at' | 'max_students',
-        sortDirection: sortState.direction,
-      });
-      setLoading(false);
-      if (result.error) {
-        toast.error('Không tải được danh sách lớp', result.error.message);
-        setItems([]);
-        setTotal(0);
-        return;
-      }
-      setItems(result.data.items);
-      setTotal(result.data.total);
-    };
     void loadClasses();
-  }, [gradeId, page, pageSize, search, sortState.direction, sortState.key, toast]);
+  }, [loadClasses]);
 
   const meta = useMemo(() => paginate(page, pageSize, total), [page, pageSize, total]);
   const totalStudents = useMemo(() => items.reduce((sum, item) => sum + item.student_count, 0), [items]);
   const fullClasses = useMemo(() => items.filter((item) => item.student_count >= item.max_students).length, [items]);
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    const result = await deleteClass(deleteTarget.id);
+    setDeleting(false);
+    if (result.error) {
+      toast.error('Xóa lớp học thất bại', result.error.message);
+      return;
+    }
+    toast.success('Xóa lớp học thành công');
+    setDeleteTarget(null);
+    if (items.length === 1 && page > 1) setPage((prev) => prev - 1);
+    else void loadClasses();
+  };
 
   const columns: TableColumn<ClassRecord>[] = [
     {
@@ -92,7 +95,7 @@ export default function Classes() {
           </div>
           <div>
             <p className="font-medium text-[#1E293B]">{row.name}</p>
-            <p className="text-xs text-[#64748B]">{row.grade_name}</p>
+            <p className="text-xs text-[#64748B]">Mã: {row.class_code || row.id}</p>
           </div>
         </div>
       ),
@@ -134,6 +137,43 @@ export default function Classes() {
         </Badge>
       ),
     },
+    {
+      key: 'actions',
+      label: 'Hành động',
+      width: '120px',
+      render: (_value, row) => (
+        <div className="flex items-center gap-1">
+          {canManage && (
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(`/classes/${row.id}/edit`);
+                }}
+                className="p-1.5 rounded-lg text-[#94A3B8] hover:text-primary hover:bg-primary/10 transition-colors"
+                title="Chỉnh sửa"
+              >
+                <Pencil className="w-4 h-4" />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (row.student_count > 0) {
+                    toast.warning('Không thể xóa lớp đang có học sinh');
+                    return;
+                  }
+                  setDeleteTarget(row);
+                }}
+                className="p-1.5 rounded-lg text-[#94A3B8] hover:text-red-500 hover:bg-red-50 transition-colors"
+                title="Xóa"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </>
+          )}
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -169,16 +209,6 @@ export default function Classes() {
               leftAddon={<Search className="w-4 h-4" />}
             />
           </div>
-          <div className="w-full sm:w-56">
-            <Select
-              value={gradeId}
-              onChange={(v) => {
-                setGradeId(v);
-                setPage(1);
-              }}
-              options={grades}
-            />
-          </div>
         </div>
       </Card>
 
@@ -202,6 +232,16 @@ export default function Classes() {
           emptyMessage="Không tìm thấy lớp học nào"
         />
       </Card>
+
+      <ConfirmModal
+        open={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        title="Xóa lớp học"
+        message={deleteTarget ? `Xóa lớp "${deleteTarget.name}"?` : undefined}
+        confirmLabel="Xóa"
+        loading={deleting}
+      />
     </div>
   );
 }
