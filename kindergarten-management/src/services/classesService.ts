@@ -13,7 +13,6 @@ import { toAppError } from './supabaseErrors';
 type ClassRow = {
   id: number;
   name: string;
-  class_code: string | null;
   teacher_id: string | null;
   room: string | null;
   max_students: number;
@@ -27,7 +26,6 @@ function mapClassRow(row: ClassRow, studentCount: number): ClassRecord {
   return {
     id: row.id,
     name: row.name,
-    class_code: row.class_code,
     teacher_id: row.teacher_id,
     teacher_name: row.users?.full_name || null,
     room: row.room,
@@ -43,7 +41,7 @@ async function getStudentCounts(classIds: number[]): Promise<Map<number, number>
   if (classIds.length === 0) return new Map();
 
   const result = await withSupabaseTimeout(
-    supabase.from('students').select('class_id').in('class_id', classIds),
+    supabase.from('students').select('class_id').in('class_id', classIds).eq('del_yn', false),
     5000,
     { data: null, error: { message: 'Timeout counting students', details: '', hint: '', code: 'TIMEOUT' } } as any
   );
@@ -59,17 +57,7 @@ async function getStudentCounts(classIds: number[]): Promise<Map<number, number>
   return map;
 }
 
-function generateClassCode(): string {
-  const value = Math.floor(Math.random() * 900000) + 100000;
-  return `LH${value}`;
-}
 
-function isClassCodeConflict(error: unknown): boolean {
-  if (typeof error !== 'object' || error === null) return false;
-  const maybe = error as { code?: unknown; message?: unknown; details?: unknown };
-  const text = `${String(maybe.message || '')} ${String(maybe.details || '')}`.toLowerCase();
-  return maybe.code === '23505' || (text.includes('class_code') && (text.includes('duplicate') || text.includes('unique')));
-}
 
 export async function listClasses(query: ClassListQuery): Promise<{ data: ListEnvelope<ClassRecord>; error: AppError | null }> {
   const page = Math.max(1, query.page);
@@ -79,7 +67,8 @@ export async function listClasses(query: ClassListQuery): Promise<{ data: ListEn
 
   let statement = supabase
     .from('classes')
-    .select('id, name, class_code, teacher_id, room, max_students, description, created_at, updated_at, users(id, full_name)', { count: 'exact' });
+    .select('id, name, teacher_id, room, max_students, description, created_at, updated_at, users(id, full_name)', { count: 'exact' })
+    .eq('del_yn', false);
 
   if (query.search?.trim()) {
     statement = statement.ilike('name', `%${query.search.trim()}%`);
@@ -98,7 +87,7 @@ export async function listClasses(query: ClassListQuery): Promise<{ data: ListEn
   if (result.error) {
     return {
       data: { items: [], total: 0, page, pageSize },
-      error: toAppError(result.error, 'Cannot load classes.'),
+      error: toAppError(result.error, 'Không thể tải danh sách lớp học.'),
     };
   }
 
@@ -121,14 +110,15 @@ export async function getClassById(id: number): Promise<{ item: ClassRecord | nu
   const result = await withSupabaseTimeout(
     supabase
       .from('classes')
-      .select('id, name, class_code, teacher_id, room, max_students, description, created_at, updated_at, users(id, full_name)')
+      .select('id, name, teacher_id, room, max_students, description, created_at, updated_at, users(id, full_name)')
       .eq('id', id)
+      .eq('del_yn', false)
       .maybeSingle(),
     8000,
     { data: null, error: { message: 'Timeout loading class', details: '', hint: '', code: 'TIMEOUT' } } as any
   );
 
-  if (result.error) return { item: null, error: toAppError(result.error, 'Cannot load class.') };
+  if (result.error) return { item: null, error: toAppError(result.error, 'Không thể tải thông tin lớp học.') };
   if (!result.data) return { item: null, error: null };
 
   const counts = await getStudentCounts([id]);
@@ -136,32 +126,18 @@ export async function getClassById(id: number): Promise<{ item: ClassRecord | nu
 }
 
 export async function createClass(payload: CreateClassInput): Promise<{ item: ClassRecord | null; error: AppError | null }> {
-  const shouldGenerateCode = !payload.class_code?.trim();
-  const maxAttempts = shouldGenerateCode ? 5 : 1;
+  const result = await withSupabaseTimeout(
+    supabase
+      .from('classes')
+      .insert(payload)
+      .select('id, name, teacher_id, room, max_students, description, created_at, updated_at, users(id, full_name)')
+      .single(),
+    8000,
+    { data: null, error: { message: 'Timeout creating class', details: '', hint: '', code: 'TIMEOUT' } } as any
+  );
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const insertPayload = {
-      ...payload,
-      class_code: shouldGenerateCode ? generateClassCode() : payload.class_code?.trim(),
-    };
-
-    const result = await withSupabaseTimeout(
-      supabase
-        .from('classes')
-        .insert(insertPayload)
-        .select('id, name, class_code, teacher_id, room, max_students, description, created_at, updated_at, users(id, full_name)')
-        .single(),
-      8000,
-      { data: null, error: { message: 'Timeout creating class', details: '', hint: '', code: 'TIMEOUT' } } as any
-    );
-
-    if (!result.error && result.data) return { item: mapClassRow(result.data as unknown as ClassRow, 0), error: null };
-    if (!shouldGenerateCode || !isClassCodeConflict(result.error) || attempt === maxAttempts) {
-      return { item: null, error: toAppError(result.error, 'Cannot create class.') };
-    }
-  }
-
-  return { item: null, error: { code: 'CONFLICT', message: 'Cannot generate unique class code.' } };
+  if (!result.error && result.data) return { item: mapClassRow(result.data as unknown as ClassRow, 0), error: null };
+  return { item: null, error: toAppError(result.error, 'Không thể tạo lớp học.') };
 }
 
 export async function updateClass(id: number, payload: UpdateClassInput): Promise<{ item: ClassRecord | null; error: AppError | null }> {
@@ -178,19 +154,18 @@ export async function updateClass(id: number, payload: UpdateClassInput): Promis
     };
   }
 
-  const { class_code: _classCode, ...safePayload } = payload;
   const result = await withSupabaseTimeout(
     supabase
       .from('classes')
-      .update(safePayload)
+      .update(payload)
       .eq('id', id)
-      .select('id, name, class_code, teacher_id, room, max_students, description, created_at, updated_at, users(id, full_name)')
+      .select('id, name, teacher_id, room, max_students, description, created_at, updated_at, users(id, full_name)')
       .single(),
     8000,
     { data: null, error: { message: 'Timeout updating class', details: '', hint: '', code: 'TIMEOUT' } } as any
   );
 
-  if (result.error) return { item: null, error: toAppError(result.error, 'Cannot update class.') };
+  if (result.error) return { item: null, error: toAppError(result.error, 'Không thể cập nhật lớp học.') };
   return { item: mapClassRow(result.data as unknown as ClassRow, currentStudentCount), error: null };
 }
 
@@ -202,11 +177,29 @@ export async function deleteClass(id: number): Promise<{ error: AppError | null 
   }
 
   const result = await withSupabaseTimeout(
-    supabase.from('classes').delete().eq('id', id),
+    supabase.from('classes').update({ del_yn: true }).eq('id', id),
     8000,
     { data: null, error: { message: 'Timeout deleting class', details: '', hint: '', code: 'TIMEOUT' } } as any
   );
 
-  if (result.error) return { error: toAppError(result.error, 'Cannot delete class.') };
+  if (result.error) return { error: toAppError(result.error, 'Không thể xóa lớp học.') };
+  return { error: null };
+}
+
+export async function deleteClasses(ids: number[]): Promise<{ error: AppError | null }> {
+  if (!ids.length) return { error: null };
+  const counts = await getStudentCounts(ids);
+  const hasStudents = Array.from(counts.values()).some((count) => count > 0);
+  if (hasStudents) {
+    return { error: { code: 'VALIDATION', message: 'Không thể xóa lớp đang có học sinh. Vui lòng bỏ chọn các lớp có học sinh.' } };
+  }
+
+  const result = await withSupabaseTimeout(
+    supabase.from('classes').update({ del_yn: true }).in('id', ids),
+    8000,
+    { data: null, error: { message: 'Timeout deleting classes', details: '', hint: '', code: 'TIMEOUT' } } as any
+  );
+
+  if (result.error) return { error: toAppError(result.error, 'Không thể xóa danh sách lớp học.') };
   return { error: null };
 }

@@ -12,7 +12,7 @@ import { useToast } from '@/components/common/Toast';
 import { useAuthStore } from '@/stores/authStore';
 import { canManageStudentOrClass } from '@/lib/rbac';
 import { listClasses } from '@/services/classesService';
-import { deleteStudent, listStudents } from '@/services/studentsService';
+import { deleteStudent, deleteStudents, listStudents } from '@/services/studentsService';
 import type { PaginationMeta, SelectOption, TableColumn } from '@/types';
 import type { StudentRecord } from '@/types/domain';
 
@@ -41,6 +41,9 @@ export default function Students() {
   const [deleting, setDeleting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<StudentRecord | null>(null);
   const [sortState, setSortState] = useState<SortState>({ key: 'created_at', direction: 'desc' });
+  const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
 
   const pageSize = 10;
 
@@ -81,6 +84,7 @@ export default function Students() {
 
     setStudents(result.data.items);
     setTotal(result.data.total);
+    setSelectedKeys([]);
   }, [filterClass, page, pageSize, search, sortState.direction, sortState.key, toast]);
 
   useEffect(() => {
@@ -102,6 +106,51 @@ export default function Students() {
     setDeleteTarget(null);
     if (students.length === 1 && page > 1) setPage((prev) => prev - 1);
     else void loadStudents();
+  };
+
+  const handleBulkDelete = async () => {
+    if (!selectedKeys.length) return;
+    setBulkDeleting(true);
+    const result = await deleteStudents(selectedKeys);
+    setBulkDeleting(false);
+    if (result.error) {
+      toast.error('Xóa học sinh thất bại', result.error.message);
+      return;
+    }
+    toast.success(`Đã xóa ${selectedKeys.length} học sinh`);
+    setConfirmBulkDelete(false);
+    setSelectedKeys([]);
+    if (students.length === selectedKeys.length && page > 1) setPage((prev) => prev - 1);
+    else void loadStudents();
+  };
+
+  const handleExport = () => {
+    if (!students.length) return;
+    
+    const headers = ['Mã HS', 'Họ tên', 'Lớp', 'Ngày sinh', 'Giới tính', 'Địa chỉ'];
+    const rows = students.map(s => [
+      s.student_code,
+      s.full_name,
+      s.class_name,
+      s.date_of_birth ? new Date(s.date_of_birth).toLocaleDateString('vi-VN') : '',
+      s.gender === 'Male' ? 'Nam' : 'Nữ',
+      s.address || ''
+    ]);
+    
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(r => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+    
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `danh_sach_hoc_sinh_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('Đã tải xuống danh sách học sinh');
   };
 
   const columns: TableColumn<StudentRecord>[] = [
@@ -186,9 +235,20 @@ export default function Students() {
           <p className="text-sm text-[#64748B]">{total} học sinh tổng cộng</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" leftIcon={<Download className="w-4 h-4" />} onClick={() => toast.info('Xuất dữ liệu sẽ bật ở phase sau')}>
+          <Button variant="outline" size="sm" leftIcon={<Download className="w-4 h-4" />} onClick={handleExport}>
             Xuất dữ liệu
           </Button>
+          {canManage && selectedKeys.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-red-500 hover:text-red-600 hover:bg-red-50 border-red-200 hover:border-red-300"
+              leftIcon={<Trash2 className="w-4 h-4" />}
+              onClick={() => setConfirmBulkDelete(true)}
+            >
+              Xóa {selectedKeys.length} đã chọn
+            </Button>
+          )}
           {canManage && (
             <Button size="sm" leftIcon={<UserPlus className="w-4 h-4" />} onClick={() => navigate('/students/new')}>
               Thêm mới
@@ -240,6 +300,8 @@ export default function Students() {
             }));
           }}
           onRowClick={(row) => navigate(`/students/${(row as unknown as StudentRecord).id}`)}
+          selectedKeys={selectedKeys}
+          onSelectionChange={setSelectedKeys}
           emptyMessage="Không tìm thấy học sinh nào"
         />
       </Card>
@@ -252,6 +314,16 @@ export default function Students() {
         message={deleteTarget ? `Xóa học sinh "${deleteTarget.full_name}"?` : undefined}
         confirmLabel="Xóa"
         loading={deleting}
+      />
+
+      <ConfirmModal
+        open={confirmBulkDelete}
+        onClose={() => setConfirmBulkDelete(false)}
+        onConfirm={handleBulkDelete}
+        title="Xóa hàng loạt"
+        message={`Bạn có chắc chắn muốn xóa ${selectedKeys.length} học sinh đã chọn? Hành động này không thể hoàn tác.`}
+        confirmLabel="Xóa"
+        loading={bulkDeleting}
       />
     </div>
   );

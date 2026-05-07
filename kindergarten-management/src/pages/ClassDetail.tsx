@@ -4,13 +4,15 @@ import { ArrowLeft, Edit, Info, Users } from 'lucide-react';
 import Card, { CardHeader } from '@/components/common/Card';
 import Button from '@/components/common/Button';
 import Avatar from '@/components/common/Avatar';
-import Badge, { StudentStatusBadge } from '@/components/common/Badge';
+import Badge, { StudentStatusBadge, AttendanceStatusBadge } from '@/components/common/Badge';
 import { useToast } from '@/components/common/Toast';
 import { listStudents } from '@/services/studentsService';
 import { getClassById } from '@/services/classesService';
+import { listAttendanceByClassAndDate, AttendanceStudentItem } from '@/services/attendanceService';
 import { useAuthStore } from '@/stores/authStore';
 import { canManageStudentOrClass } from '@/lib/rbac';
 import type { ClassRecord, StudentRecord } from '@/types/domain';
+import Table from '@/components/common/Table';
 
 type Tab = 'info' | 'students' | 'attendance';
 
@@ -25,6 +27,9 @@ export default function ClassDetail() {
   const [classItem, setClassItem] = useState<ClassRecord | null>(null);
   const [students, setStudents] = useState<StudentRecord[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [todayAttendance, setTodayAttendance] = useState<AttendanceStudentItem[]>([]);
+  const [loadingAttendance, setLoadingAttendance] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -50,10 +55,28 @@ export default function ClassDetail() {
     void load();
   }, [id, navigate, toast]);
 
+  useEffect(() => {
+    if (activeTab === 'attendance' && id) {
+      const load = async () => {
+        setLoadingAttendance(true);
+        const today = new Date().toISOString().split('T')[0];
+        const result = await listAttendanceByClassAndDate({ classId: Number(id), attendanceDate: today });
+        setLoadingAttendance(false);
+        if (result.error) {
+          toast.error('Không tải được dữ liệu điểm danh', result.error.message);
+        } else {
+          setTodayAttendance(result.items);
+        }
+      };
+      void load();
+    }
+  }, [activeTab, id, toast]);
+
   const attendanceRate = useMemo(() => {
-    if (!students.length) return 0;
-    return Math.max(85, Math.min(100, Math.round(95 - (students.length % 5))));
-  }, [students.length]);
+    if (!todayAttendance.length) return 0;
+    const present = todayAttendance.filter((i) => i.status === 'present').length;
+    return Math.round((present / todayAttendance.length) * 100);
+  }, [todayAttendance]);
 
   if (loading) {
     return (
@@ -92,7 +115,7 @@ export default function ClassDetail() {
         <div className="flex-1 min-w-0">
           <h2 className="text-xl font-bold text-[#1E293B]">{classItem.name}</h2>
           <p className="text-sm text-[#64748B]">
-            Mã: {classItem.class_code || classItem.id} · {classItem.room || 'Chưa có phòng'}
+            Mã: LOP{classItem.id} · {classItem.room || 'Chưa có phòng'}
           </p>
         </div>
         <Badge variant={classItem.student_count >= classItem.max_students ? 'warning' : 'success'} size="md">
@@ -121,7 +144,7 @@ export default function ClassDetail() {
         <Card header={<CardHeader title="Thông tin lớp học" />}>
           <div className="grid grid-cols-2 gap-4 text-sm">
             {[
-              ['Mã lớp', classItem.class_code || String(classItem.id)],
+              ['Mã lớp', `LOP${classItem.id}`],
               ['Giáo viên chủ nhiệm', classItem.teacher_name || 'Chưa phân công'],
               ['Phòng học', classItem.room || '—'],
               ['Sĩ số', `${classItem.student_count}/${classItem.max_students} học sinh`],
@@ -173,14 +196,62 @@ export default function ClassDetail() {
       )}
 
       {activeTab === 'attendance' && (
-        <Card header={<CardHeader title="Điểm danh" subtitle="Phase P2 sẽ thay bằng dữ liệu attendance thật" />}>
-          <div className="space-y-2">
-            <p className="text-sm text-[#64748B]">Tỷ lệ chuyên cần tạm tính: {attendanceRate}%</p>
-            <div className="h-2 bg-[#F1F5F9] rounded-full overflow-hidden">
-              <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${attendanceRate}%` }} />
+        <div className="space-y-4">
+          <Card header={<CardHeader title="Thống kê hôm nay" />}>
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm mb-1">
+                <span className="text-[#64748B]">Tỷ lệ hiện diện hôm nay</span>
+                <span className="font-bold text-primary">{attendanceRate}%</span>
+              </div>
+              <div className="h-2 bg-[#F1F5F9] rounded-full overflow-hidden">
+                <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${attendanceRate}%` }} />
+              </div>
+              <p className="text-xs text-[#94A3B8] mt-2">
+                Dựa trên {todayAttendance.length} học sinh trong lớp.
+              </p>
             </div>
-          </div>
-        </Card>
+          </Card>
+
+          <Card noPadding header={<CardHeader title="Danh sách điểm danh hôm nay" />}>
+            <Table
+              columns={[
+                {
+                  key: 'student_name',
+                  label: 'Học sinh',
+                  render: (v) => (
+                    <div className="flex items-center gap-3">
+                      <Avatar name={String(v)} size="xs" />
+                      <span className="font-medium">{String(v)}</span>
+                    </div>
+                  )
+                },
+                {
+                  key: 'status',
+                  label: 'Trạng thái',
+                  render: (v) => <AttendanceStatusBadge status={v as any} />
+                },
+                {
+                  key: 'check_in_time',
+                  label: 'Giờ vào',
+                  render: (v) => (v as React.ReactNode) || '—'
+                },
+                {
+                  key: 'note',
+                  label: 'Ghi chú',
+                  render: (v) => <span className="text-xs italic text-[#64748B]">{(v as React.ReactNode) || '—'}</span>
+                }
+              ]}
+              data={todayAttendance as any}
+              loading={loadingAttendance}
+              emptyMessage="Chưa có dữ liệu điểm danh hôm nay"
+            />
+            <div className="p-4 border-t border-[#F1F5F9] flex justify-end">
+              <Button size="sm" onClick={() => navigate('/attendance')}>
+                Đi tới trang điểm danh
+              </Button>
+            </div>
+          </Card>
+        </div>
       )}
     </div>
   );

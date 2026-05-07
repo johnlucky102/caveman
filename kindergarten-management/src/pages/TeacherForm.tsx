@@ -26,7 +26,6 @@ function validate(form: FormState): FormErrors {
   const errors: FormErrors = {};
   if (!form.full_name.trim()) errors.full_name = 'Họ tên không được để trống';
   if (!form.phone.trim()) errors.phone = 'Số điện thoại không được để trống';
-  if (!form.email.trim()) errors.email = 'Email không được để trống';
   if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errors.email = 'Email không hợp lệ';
   return errors;
 }
@@ -88,6 +87,7 @@ export default function TeacherForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const nextErrors = validate(form);
+    if (!isEditMode && !form.email.trim()) nextErrors.email = 'Email không được để trống';
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
@@ -169,16 +169,18 @@ export default function TeacherForm() {
               fullWidth
             />
 
-            <Input
-              label="Email"
-              type="email"
-              placeholder="VD: teacher@kidgarden.vn"
-              value={form.email}
-              onChange={(e) => setField('email', e.target.value)}
-              error={errors.email}
-              required
-              fullWidth
-            />
+            {!isEditMode && (
+              <Input
+                label="Email"
+                type="email"
+                placeholder="VD: teacher@kidgarden.vn"
+                value={form.email}
+                onChange={(e) => setField('email', e.target.value)}
+                error={errors.email}
+                required
+                fullWidth
+              />
+            )}
           </div>
 
           <div className="flex items-center justify-end gap-3 pt-2">

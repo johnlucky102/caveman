@@ -131,6 +131,7 @@ const attendanceStatusMap: Record<string, { label: string; variant: BadgeVariant
 
 const feeStatusMap: Record<string, { label: string; variant: BadgeVariant }> = {
   paid:    { label: 'Đã thanh toán', variant: 'success' },
+  unpaid:  { label: 'Chưa thanh toán', variant: 'warning' },
   pending: { label: 'Chờ thanh toán', variant: 'warning' },
   overdue: { label: 'Quá hạn',       variant: 'danger' },
   waived:  { label: 'Miễn giảm',     variant: 'info' },

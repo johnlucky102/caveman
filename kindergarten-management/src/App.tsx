@@ -4,7 +4,6 @@ import RoleGuard from '@/components/auth/RoleGuard';
 
 import Login from '@/pages/Login';
 import SignUp from '@/pages/SignUp';
-import TestAuth from '@/pages/TestAuth';
 import Dashboard from '@/pages/Dashboard';
 import Students from '@/pages/Students';
 import StudentDetail from '@/pages/StudentDetail';
@@ -15,10 +14,10 @@ import ClassForm from '@/pages/ClassForm';
 import Teachers from '@/pages/Teachers';
 import TeacherForm from '@/pages/TeacherForm';
 import Parents from '@/pages/Parents';
+import ParentForm from '@/pages/ParentForm';
 import Attendance from '@/pages/Attendance';
 import Fees from '@/pages/Fees';
 import FeeForm from '@/pages/FeeForm';
-import Notifications from '@/pages/Notifications';
 import Reports from '@/pages/Reports';
 import Settings from '@/pages/Settings';
 
@@ -32,7 +31,6 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<SignUp />} />
-        <Route path="/test-auth" element={<TestAuth />} />
 
         <Route element={<MainLayout />}>
           <Route path="/" element={allow(['Admin', 'Teacher', 'Accountant', 'Parent'], <Dashboard />)} />
@@ -52,10 +50,11 @@ export default function App() {
           <Route path="/teachers/:id/edit" element={allow(['Admin'], <TeacherForm />)} />
 
           <Route path="/parents" element={allow(['Admin', 'Teacher'], <Parents />)} />
+          <Route path="/parents/new" element={allow(['Admin', 'Teacher'], <ParentForm />)} />
+          <Route path="/parents/:id/edit" element={allow(['Admin', 'Teacher'], <ParentForm />)} />
           <Route path="/attendance" element={allow(['Admin', 'Teacher'], <Attendance />)} />
           <Route path="/fees" element={allow(['Admin', 'Accountant'], <Fees />)} />
           <Route path="/fees/new" element={allow(['Admin', 'Accountant'], <FeeForm />)} />
-          <Route path="/notifications" element={allow(['Admin', 'Teacher', 'Accountant', 'Parent'], <Notifications />)} />
           <Route path="/reports" element={allow(['Admin', 'Teacher', 'Accountant'], <Reports />)} />
           <Route path="/settings" element={allow(['Admin'], <Settings />)} />
         </Route>

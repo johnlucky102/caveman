@@ -5,6 +5,8 @@ import { z } from 'zod';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
+import { supabase } from '@/lib/supabase';
+import { useToast } from '@/components/common/Toast';
 
 // ---------------------------------------------------------------------------
 // Validation schema
@@ -30,10 +32,13 @@ export default function Login() {
   const { login } = useAuthStore();
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [resetting, setResetting] = useState(false);
+  const toast = useToast();
 
   const {
     register,
     handleSubmit,
+    getValues,
     formState: { errors, isSubmitting },
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -49,6 +54,26 @@ export default function Login() {
     }
 
     navigate('/', { replace: true });
+  };
+
+  const handleForgotPassword = async () => {
+    const email = getValues('email');
+    if (!email || errors.email) {
+      toast.error('Lỗi', 'Vui lòng nhập địa chỉ email hợp lệ trước khi đặt lại mật khẩu.');
+      return;
+    }
+    
+    setResetting(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    setResetting(false);
+    
+    if (error) {
+      toast.error('Lỗi', error.message);
+    } else {
+      toast.success('Thành công', 'Email hướng dẫn đặt lại mật khẩu đã được gửi.');
+    }
   };
 
   return (
@@ -251,14 +276,12 @@ export default function Login() {
                 </label>
                 <button
                   type="button"
-                  className="text-xs font-medium transition-colors hover:underline"
+                  disabled={resetting}
+                  className="text-xs font-medium transition-colors hover:underline disabled:opacity-50"
                   style={{ color: '#FF6B6B' }}
-                  onClick={() => {
-                    // Forgot password placeholder
-                    alert('Chức năng đặt lại mật khẩu sẽ được cập nhật sớm.');
-                  }}
+                  onClick={handleForgotPassword}
                 >
-                  Quên mật khẩu?
+                  {resetting ? 'Đang gửi...' : 'Quên mật khẩu?'}
                 </button>
               </div>
               <div className="relative">

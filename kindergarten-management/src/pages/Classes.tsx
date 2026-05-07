@@ -9,7 +9,7 @@ import Badge from '@/components/common/Badge';
 import Avatar from '@/components/common/Avatar';
 import { ConfirmModal } from '@/components/common/Modal';
 import { useToast } from '@/components/common/Toast';
-import { deleteClass, listClasses } from '@/services/classesService';
+import { deleteClass, deleteClasses, listClasses } from '@/services/classesService';
 import { useAuthStore } from '@/stores/authStore';
 import { canManageStudentOrClass } from '@/lib/rbac';
 import type { PaginationMeta, TableColumn } from '@/types';
@@ -38,6 +38,9 @@ export default function Classes() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [sortState, setSortState] = useState<SortState>({ key: 'name', direction: 'asc' });
+  const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const pageSize = 10;
 
   const loadClasses = useCallback(async () => {
@@ -58,6 +61,7 @@ export default function Classes() {
     }
     setItems(result.data.items);
     setTotal(result.data.total);
+    setSelectedKeys([]);
   }, [page, pageSize, search, sortState.direction, sortState.key, toast]);
 
   useEffect(() => {
@@ -83,6 +87,22 @@ export default function Classes() {
     else void loadClasses();
   };
 
+  const handleBulkDelete = async () => {
+    if (!selectedKeys.length) return;
+    setBulkDeleting(true);
+    const result = await deleteClasses(selectedKeys.map(Number));
+    setBulkDeleting(false);
+    if (result.error) {
+      toast.error('Xóa lớp học thất bại', result.error.message);
+      return;
+    }
+    toast.success(`Đã xóa ${selectedKeys.length} lớp học`);
+    setConfirmBulkDelete(false);
+    setSelectedKeys([]);
+    if (items.length === selectedKeys.length && page > 1) setPage((prev) => prev - 1);
+    else void loadClasses();
+  };
+
   const columns: TableColumn<ClassRecord>[] = [
     {
       key: 'name',
@@ -95,7 +115,6 @@ export default function Classes() {
           </div>
           <div>
             <p className="font-medium text-[#1E293B]">{row.name}</p>
-            <p className="text-xs text-[#64748B]">Mã: {row.class_code || row.id}</p>
           </div>
         </div>
       ),
@@ -183,11 +202,24 @@ export default function Classes() {
           <h1 className="text-xl font-bold text-[#1E293B]">Quản lý lớp học</h1>
           <p className="text-sm text-[#64748B]">{total} lớp học</p>
         </div>
-        {canManage && (
-          <Button size="sm" leftIcon={<Plus className="w-4 h-4" />} onClick={() => navigate('/classes/new')}>
-            Thêm lớp
-          </Button>
-        )}
+        <div className="flex gap-2">
+          {canManage && selectedKeys.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-red-500 hover:text-red-600 hover:bg-red-50 border-red-200 hover:border-red-300"
+              leftIcon={<Trash2 className="w-4 h-4" />}
+              onClick={() => setConfirmBulkDelete(true)}
+            >
+              Xóa {selectedKeys.length} đã chọn
+            </Button>
+          )}
+          {canManage && (
+            <Button size="sm" leftIcon={<Plus className="w-4 h-4" />} onClick={() => navigate('/classes/new')}>
+              Thêm lớp
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -229,6 +261,8 @@ export default function Classes() {
             }));
           }}
           onRowClick={(row) => navigate(`/classes/${(row as unknown as ClassRecord).id}`)}
+          selectedKeys={selectedKeys}
+          onSelectionChange={setSelectedKeys}
           emptyMessage="Không tìm thấy lớp học nào"
         />
       </Card>
@@ -241,6 +275,16 @@ export default function Classes() {
         message={deleteTarget ? `Xóa lớp "${deleteTarget.name}"?` : undefined}
         confirmLabel="Xóa"
         loading={deleting}
+      />
+
+      <ConfirmModal
+        open={confirmBulkDelete}
+        onClose={() => setConfirmBulkDelete(false)}
+        onConfirm={handleBulkDelete}
+        title="Xóa hàng loạt"
+        message={`Bạn có chắc chắn muốn xóa ${selectedKeys.length} lớp học đã chọn? Lớp có học sinh sẽ không thể bị xóa.`}
+        confirmLabel="Xóa"
+        loading={bulkDeleting}
       />
     </div>
   );

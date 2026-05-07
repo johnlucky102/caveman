@@ -3,12 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { Edit2, Mail, Phone, Search, Trash2, UserPlus } from 'lucide-react';
 import Card from '@/components/common/Card';
 import Button from '@/components/common/Button';
-import Input from '@/components/common/Input';
 import Avatar from '@/components/common/Avatar';
+import Input from '@/components/common/Input';
+import Table, { type SortState } from '@/components/common/Table';
 import Badge from '@/components/common/Badge';
 import { ConfirmModal } from '@/components/common/Modal';
 import { useToast } from '@/components/common/Toast';
-import { deleteTeacherProfile, listTeachers } from '@/services/usersService';
+import { deleteTeacherProfile, deleteTeacherProfiles, listTeachers } from '@/services/usersService';
+import type { TableColumn, PaginationMeta } from '@/types';
 import type { UserProfile } from '@/types/domain';
 
 export default function Teachers() {
@@ -19,6 +21,11 @@ export default function Teachers() {
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<UserProfile | null>(null);
+  const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
 
   const loadTeachers = useCallback(async () => {
     setLoading(true);
@@ -30,6 +37,7 @@ export default function Teachers() {
       return;
     }
     setTeachers(result.items);
+    setSelectedKeys([]);
   }, [toast]);
 
   useEffect(() => {
@@ -49,6 +57,19 @@ export default function Teachers() {
     });
   }, [search, teachers]);
 
+  const total = filtered.length;
+  const paginated = useMemo(() => {
+    const from = (page - 1) * pageSize;
+    return filtered.slice(from, from + pageSize);
+  }, [filtered, page, pageSize]);
+
+  const paginationMeta: PaginationMeta = {
+    page,
+    pageSize,
+    total,
+    totalPages: Math.max(1, Math.ceil(total / pageSize)),
+  };
+
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
@@ -63,6 +84,86 @@ export default function Teachers() {
     void loadTeachers();
   };
 
+  const handleBulkDelete = async () => {
+    if (!selectedKeys.length) return;
+    setBulkDeleting(true);
+    const result = await deleteTeacherProfiles(selectedKeys);
+    setBulkDeleting(false);
+    if (result.error) {
+      toast.error('Xóa giáo viên thất bại', result.error.message);
+      return;
+    }
+    toast.success(`Đã xóa ${selectedKeys.length} giáo viên`);
+    setConfirmBulkDelete(false);
+    setSelectedKeys([]);
+    void loadTeachers();
+  };
+
+  const columns: TableColumn<UserProfile>[] = [
+    {
+      key: 'full_name',
+      label: 'Giáo viên',
+      render: (_value, row) => (
+        <div className="flex items-center gap-3">
+          <Avatar src={row.avatar} name={row.full_name} size="sm" />
+          <div>
+            <p className="font-medium text-[#1E293B]">{row.full_name}</p>
+            <p className="text-xs text-[#64748B]">Giáo viên</p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'teacher_code',
+      label: 'Mã GV',
+      render: (value) => <span className="font-mono text-xs text-[#64748B]">{String(value || '—')}</span>,
+    },
+    {
+      key: 'phone',
+      label: 'Điện thoại',
+      render: (value) => (
+        <div className="flex items-center gap-2 text-[#64748B]">
+          <Phone className="w-3.5 h-3.5 shrink-0" />
+          <span>{String(value || '—')}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'status',
+      label: 'Trạng thái',
+      render: () => <Badge variant="success" size="sm">Đang làm việc</Badge>,
+    },
+    {
+      key: 'actions',
+      label: 'Thao tác',
+      width: '100px',
+      render: (_value, row) => (
+        <div className="flex items-center justify-end gap-1">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/teachers/${row.id}/edit`);
+            }}
+            className="p-2 rounded-lg text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#1E293B] transition-colors"
+            title="Sửa"
+          >
+            <Edit2 className="w-4 h-4" />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setDeleteTarget(row);
+            }}
+            className="p-2 rounded-lg text-[#64748B] hover:bg-red-50 hover:text-red-500 transition-colors"
+            title="Xóa"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -70,9 +171,22 @@ export default function Teachers() {
           <h1 className="text-xl font-bold text-[#1E293B]">Quản lý giáo viên</h1>
           <p className="text-sm text-[#64748B]">{teachers.length} giáo viên</p>
         </div>
-        <Button size="sm" leftIcon={<UserPlus className="w-4 h-4" />} onClick={() => navigate('/teachers/new')}>
-          Thêm giáo viên
-        </Button>
+        <div className="flex gap-2">
+          {selectedKeys.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-red-500 hover:text-red-600 hover:bg-red-50 border-red-200 hover:border-red-300"
+              leftIcon={<Trash2 className="w-4 h-4" />}
+              onClick={() => setConfirmBulkDelete(true)}
+            >
+              Xóa {selectedKeys.length} đã chọn
+            </Button>
+          )}
+          <Button size="sm" leftIcon={<UserPlus className="w-4 h-4" />} onClick={() => navigate('/teachers/new')}>
+            Thêm giáo viên
+          </Button>
+        </div>
       </div>
 
       <Card noPadding>
@@ -87,80 +201,17 @@ export default function Teachers() {
       </Card>
 
       <Card noPadding>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
-                <th className="px-4 py-3 text-left text-xs font-semibold text-[#64748B] uppercase tracking-wide">Giáo viên</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-[#64748B] uppercase tracking-wide">Mã GV</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-[#64748B] uppercase tracking-wide">Email</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-[#64748B] uppercase tracking-wide">Điện thoại</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-[#64748B] uppercase tracking-wide">Trạng thái</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-[#64748B] uppercase tracking-wide">Thao tác</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#F1F5F9]">
-              {loading
-                ? Array.from({ length: 5 }).map((_, index) => (
-                    <tr key={index}>
-                      <td className="px-4 py-3" colSpan={6}>
-                        <div className="h-4 bg-[#F1F5F9] rounded animate-pulse" />
-                      </td>
-                    </tr>
-                  ))
-                : filtered.map((teacher) => (
-                    <tr key={teacher.id} className="hover:bg-[#F8FAFC] transition-colors">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <Avatar src={teacher.avatar} name={teacher.full_name} size="sm" />
-                          <div>
-                            <p className="font-medium text-[#1E293B]">{teacher.full_name}</p>
-                            <p className="text-xs text-[#64748B]">Giáo viên</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 font-mono text-xs text-[#64748B]">{teacher.teacher_code || '—'}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2 text-[#64748B]">
-                          <Mail className="w-3.5 h-3.5 shrink-0" />
-                          <span className="truncate">{teacher.email || '—'}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2 text-[#64748B]">
-                          <Phone className="w-3.5 h-3.5 shrink-0" />
-                          <span>{teacher.phone || '—'}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge variant="success" size="sm">Đang làm việc</Badge>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => navigate(`/teachers/${teacher.id}/edit`)}
-                            className="p-2 rounded-lg text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#1E293B] transition-colors"
-                            aria-label="Sửa"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => setDeleteTarget(teacher)}
-                            className="p-2 rounded-lg text-[#64748B] hover:bg-red-50 hover:text-red-500 transition-colors"
-                            aria-label="Xóa"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-            </tbody>
-          </table>
-        </div>
-        {!loading && filtered.length === 0 && (
-          <div className="py-12 text-center text-sm text-[#94A3B8]">Không tìm thấy giáo viên nào</div>
-        )}
+        <Table
+          columns={columns}
+          data={paginated}
+          rowKey="id"
+          loading={loading}
+          pagination={paginationMeta}
+          onPageChange={setPage}
+          selectedKeys={selectedKeys}
+          onSelectionChange={setSelectedKeys}
+          emptyMessage="Không tìm thấy giáo viên nào"
+        />
       </Card>
 
       <ConfirmModal
@@ -171,6 +222,16 @@ export default function Teachers() {
         message={deleteTarget ? `Xóa giáo viên "${deleteTarget.full_name}"?` : undefined}
         confirmLabel="Xóa"
         loading={deleting}
+      />
+
+      <ConfirmModal
+        open={confirmBulkDelete}
+        onClose={() => setConfirmBulkDelete(false)}
+        onConfirm={handleBulkDelete}
+        title="Xóa hàng loạt"
+        message={`Bạn có chắc chắn muốn xóa ${selectedKeys.length} giáo viên đã chọn? Hành động này không thể hoàn tác.`}
+        confirmLabel="Xóa"
+        loading={bulkDeleting}
       />
     </div>
   );

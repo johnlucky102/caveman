@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarCheck, Check, ChevronLeft, ChevronRight, Clock, Filter, History, Search, X } from 'lucide-react';
+import { CalendarCheck, Check, ChevronLeft, ChevronRight, Clock, Filter, History, Search, X, AlertTriangle } from 'lucide-react';
 import Card, { CardHeader } from '@/components/common/Card';
 import Button from '@/components/common/Button';
 import Input from '@/components/common/Input';
@@ -37,7 +37,8 @@ export default function Attendance() {
   const [loading, setLoading] = useState(false);
   const [students, setStudents] = useState<AttendanceStudentItem[]>([]);
   const [history, setHistory] = useState<AttendanceRecord[]>([]);
-  const [historyStudentFilter, setHistoryStudentFilter] = useState('');
+  const [historySearch, setHistorySearch] = useState('');
+  const [historyStatus, setHistoryStatus] = useState<AttendanceStatusValue | ''>('');
   const [historyFrom, setHistoryFrom] = useState('');
   const [historyTo, setHistoryTo] = useState('');
 
@@ -75,7 +76,12 @@ export default function Attendance() {
     if (viewMode !== 'history' || !selectedClass) return;
     const loadHistory = async () => {
       setLoading(true);
-      const result = await listAttendanceHistory(Number(selectedClass), historyStudentFilter || undefined, historyFrom || undefined, historyTo || undefined);
+      const result = await listAttendanceHistory(
+        Number(selectedClass),
+        undefined, // We filter student name client-side for simplicity since we get all for the class
+        historyFrom || undefined,
+        historyTo || undefined
+      );
       setLoading(false);
       if (result.error) {
         toast.error('Không tải được lịch sử điểm danh', result.error.message);
@@ -85,7 +91,7 @@ export default function Attendance() {
       setHistory(result.items);
     };
     void loadHistory();
-  }, [historyFrom, historyStudentFilter, historyTo, selectedClass, toast, viewMode]);
+  }, [historyFrom, historyTo, selectedClass, toast, viewMode]);
 
   const setStatus = (studentId: string, status: AttendanceStatusValue) => {
     setStudents((prev) =>
@@ -107,9 +113,18 @@ export default function Attendance() {
     const present = students.filter((item) => item.status === 'present').length;
     const absent = students.filter((item) => item.status === 'absent').length;
     const late = students.filter((item) => item.status === 'late').length;
-    const rate = total === 0 ? 0 : Math.round((present / total) * 100);
-    return { total, present, absent, late, rate };
+    const excused = students.filter((item) => item.status === 'excused').length;
+    const rate = total === 0 ? 0 : Math.round(((present + late) / total) * 100);
+    return { total, present, absent, late, excused, rate };
   }, [students]);
+
+  const filteredHistory = useMemo(() => {
+    return history.filter((item) => {
+      const matchSearch = !historySearch || item.student_name.toLowerCase().includes(historySearch.toLowerCase());
+      const matchStatus = !historyStatus || item.status === historyStatus;
+      return matchSearch && matchStatus;
+    });
+  }, [history, historySearch, historyStatus]);
 
   const historyColumns: TableColumn<AttendanceRecord>[] = [
     {
@@ -166,7 +181,7 @@ export default function Attendance() {
     }
     toast.success('Lưu điểm danh thành công');
     if (viewMode === 'history') {
-      const historyResult = await listAttendanceHistory(Number(selectedClass), historyStudentFilter || undefined, historyFrom || undefined, historyTo || undefined);
+      const historyResult = await listAttendanceHistory(Number(selectedClass), undefined, historyFrom || undefined, historyTo || undefined);
       if (!historyResult.error) setHistory(historyResult.items);
     }
   };
@@ -209,19 +224,23 @@ export default function Attendance() {
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
-          <div className="flex items-center gap-1 border border-[#E2E8F0] rounded-xl p-1 lg:ml-auto">
+          <div className="flex border-b border-[#E2E8F0] lg:ml-auto">
             <button
               onClick={() => setViewMode('rollcall')}
-              className={`px-3 py-1.5 rounded-lg text-sm ${viewMode === 'rollcall' ? 'bg-primary text-white' : 'text-[#64748B]'}`}
+              className={`px-5 py-2.5 text-sm font-medium transition-colors border-b-2 ${
+                viewMode === 'rollcall' ? 'border-primary text-primary' : 'border-transparent text-[#64748B] hover:text-[#1E293B]'
+              }`}
             >
-              Roll call
+              Điểm danh hôm nay
             </button>
             <button
               onClick={() => setViewMode('history')}
-              className={`px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 ${viewMode === 'history' ? 'bg-primary text-white' : 'text-[#64748B]'}`}
+              className={`px-5 py-2.5 text-sm font-medium transition-colors border-b-2 flex items-center gap-2 ${
+                viewMode === 'history' ? 'border-primary text-primary' : 'border-transparent text-[#64748B] hover:text-[#1E293B]'
+              }`}
             >
               <History className="w-4 h-4" />
-              History
+              Lịch sử điểm danh
             </button>
           </div>
         </div>
@@ -295,6 +314,15 @@ export default function Attendance() {
                       >
                         <Clock className="w-4 h-4" />
                       </button>
+                      <button
+                        onClick={() => setStatus(student.student_id, 'excused')}
+                        className={`p-2 rounded-lg transition-colors ${
+                          student.status === 'excused' ? 'bg-blue-100 text-blue-500' : 'bg-[#F1F5F9] text-[#64748B] hover:bg-blue-50 hover:text-blue-500'
+                        }`}
+                        title="Nghỉ có phép"
+                      >
+                        <AlertTriangle className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -307,23 +335,35 @@ export default function Attendance() {
 
       {viewMode === 'history' && (
         <Card noPadding>
-          <div className="p-4 grid grid-cols-1 md:grid-cols-4 gap-3">
-            <Input
-              placeholder="Lọc theo student id"
-              value={historyStudentFilter}
-              onChange={(e) => setHistoryStudentFilter(e.target.value)}
-              leftAddon={<Search className="w-4 h-4" />}
-            />
-            <Input type="date" value={historyFrom} onChange={(e) => setHistoryFrom(e.target.value)} />
-            <Input type="date" value={historyTo} onChange={(e) => setHistoryTo(e.target.value)} />
-            <div className="flex items-end">
-              <Button variant="outline" leftIcon={<Filter className="w-4 h-4" />} onClick={() => setViewMode('history')}>
-                Áp dụng
-              </Button>
+          <div className="p-4 flex flex-col md:flex-row gap-3">
+            <div className="flex-1">
+              <Input
+                placeholder="Tìm học sinh..."
+                value={historySearch}
+                onChange={(e) => setHistorySearch(e.target.value)}
+                leftAddon={<Search className="w-4 h-4" />}
+              />
+            </div>
+            <div className="w-full md:w-48">
+              <Select
+                value={historyStatus}
+                onChange={(v) => setHistoryStatus(v as any)}
+                options={[
+                  { value: '', label: 'Tất cả trạng thái' },
+                  { value: 'present', label: 'Có mặt' },
+                  { value: 'absent', label: 'Vắng' },
+                  { value: 'late', label: 'Muộn' },
+                  { value: 'excused', label: 'Có phép' },
+                ]}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Input type="date" value={historyFrom} onChange={(e) => setHistoryFrom(e.target.value)} />
+              <span className="text-[#94A3B8]">—</span>
+              <Input type="date" value={historyTo} onChange={(e) => setHistoryTo(e.target.value)} />
             </div>
           </div>
-
-          <Table columns={historyColumns} data={history} rowKey="id" loading={loading} emptyMessage="Không có lịch sử điểm danh" />
+          <Table columns={historyColumns} data={filteredHistory} rowKey="id" loading={loading} emptyMessage="Không có lịch sử điểm danh" />
         </Card>
       )}
     </div>

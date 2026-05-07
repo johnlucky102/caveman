@@ -34,6 +34,10 @@ interface TableProps<T extends object> {
   onRowClick?: (row: T) => void;
   /** Additional class for the table container */
   className?: string;
+  /** Array of selected row keys */
+  selectedKeys?: string[];
+  /** Called when row selection changes */
+  onSelectionChange?: (keys: string[]) => void;
 }
 
 // ─── Sort Icon ────────────────────────────────────────────────────────────────
@@ -136,7 +140,29 @@ function Table<T extends object>({
   onSort,
   onRowClick,
   className,
+  selectedKeys = [],
+  onSelectionChange,
 }: TableProps<T>) {
+  const isAllSelected = data.length > 0 && selectedKeys.length === data.length;
+  const isIndeterminate = selectedKeys.length > 0 && selectedKeys.length < data.length;
+
+  const handleSelectAll = () => {
+    if (isAllSelected) {
+      onSelectionChange?.([]);
+    } else {
+      const allKeys = data.map((row) => String((row as Record<string, unknown>)[rowKey as string]));
+      onSelectionChange?.(allKeys);
+    }
+  };
+
+  const handleSelectRow = (e: React.MouseEvent, key: string) => {
+    e.stopPropagation();
+    const newSelected = selectedKeys.includes(key)
+      ? selectedKeys.filter((k) => k !== key)
+      : [...selectedKeys, key];
+    onSelectionChange?.(newSelected);
+  };
+
   return (
     <div className={cn('bg-white border border-[#E2E8F0] rounded-xl overflow-hidden', className)}>
       <div className="overflow-x-auto">
@@ -144,6 +170,19 @@ function Table<T extends object>({
           {/* Head */}
           <thead>
             <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
+              {onSelectionChange && (
+                <th className="px-4 py-3 w-10">
+                  <input
+                    type="checkbox"
+                    className="rounded border-[#CBD5E1] text-primary focus:ring-primary cursor-pointer w-4 h-4"
+                    checked={isAllSelected}
+                    ref={(input) => {
+                      if (input) input.indeterminate = isIndeterminate;
+                    }}
+                    onChange={handleSelectAll}
+                  />
+                </th>
+              )}
               {columns.map((col) => (
                 <th
                   key={String(col.key)}
@@ -169,6 +208,7 @@ function Table<T extends object>({
               // Loading skeleton rows
               Array.from({ length: 5 }).map((_, idx) => (
                 <tr key={idx}>
+                  {onSelectionChange && <td className="px-4 py-3" />}
                   {columns.map((col) => (
                     <td key={String(col.key)} className="px-4 py-3">
                       <div className="h-4 bg-[#F1F5F9] rounded animate-pulse" />
@@ -178,7 +218,7 @@ function Table<T extends object>({
               ))
             ) : data.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} className="px-4 py-12 text-center">
+                <td colSpan={columns.length + (onSelectionChange ? 1 : 0)} className="px-4 py-12 text-center">
                   <div className="flex flex-col items-center gap-2">
                     <Loading size="md" variant="spinner" className="text-[#94A3B8]" />
                     <p className="text-sm text-[#94A3B8]">{emptyMessage}</p>
@@ -186,16 +226,31 @@ function Table<T extends object>({
                 </td>
               </tr>
             ) : (
-              data.map((row, idx) => (
-                <tr
-                  key={String((row as Record<string, unknown>)[rowKey as string]) || idx}
-                  onClick={() => onRowClick?.(row)}
-                  className={cn(
-                    'hover:bg-[#F8FAFC] transition-colors',
-                    onRowClick && 'cursor-pointer'
-                  )}
-                >
-                  {columns.map((col) => {
+              data.map((row, idx) => {
+                const rowId = String((row as Record<string, unknown>)[rowKey as string]) || String(idx);
+                const isSelected = selectedKeys.includes(rowId);
+                
+                return (
+                  <tr
+                    key={rowId}
+                    onClick={() => onRowClick?.(row)}
+                    className={cn(
+                      'transition-colors',
+                      isSelected ? 'bg-primary/5' : 'hover:bg-[#F8FAFC]',
+                      onRowClick && 'cursor-pointer'
+                    )}
+                  >
+                    {onSelectionChange && (
+                      <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          className="rounded border-[#CBD5E1] text-primary focus:ring-primary cursor-pointer w-4 h-4"
+                          checked={isSelected}
+                          onChange={(e) => handleSelectRow(e as unknown as React.MouseEvent, rowId)}
+                        />
+                      </td>
+                    )}
+                    {columns.map((col) => {
                     const value = (row as Record<string, unknown>)[col.key as string];
                     return (
                       <td key={String(col.key)} className="px-4 py-3 text-[#1E293B] whitespace-nowrap">
@@ -207,8 +262,9 @@ function Table<T extends object>({
                       </td>
                     );
                   })}
-                </tr>
-              ))
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>

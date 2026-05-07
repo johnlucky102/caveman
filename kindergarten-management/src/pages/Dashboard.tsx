@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Users,
   CheckCircle,
@@ -25,6 +26,8 @@ import {
 import { useAuthStore } from '../stores/authStore';
 import { useAppStore } from '../stores/appStore';
 import { StatCard } from '../components/common/Card';
+import { getDashboardStats, getDashboardNotifications, getAttendanceTrend, getFeeStatusSummary, DashboardStats, DashboardNotification, AttendanceTrendPoint, FeeStatusSummary } from '@/services/dashboardService';
+import { getSchoolSettings } from '@/services/settingsService';
 
 // ─── Recharts wrappers (React 18 + recharts 2.x compat) ──────────────────────
 const RXAxis = XAxis as any;
@@ -53,49 +56,6 @@ const COLORS = {
 };
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
-const attendanceData = [
-  { class: 'Mầm A', total: 25, present: 23, absent: 2 },
-  { class: 'Mầm B', total: 24, present: 22, absent: 2 },
-  { class: 'Chồi A', total: 28, present: 26, absent: 2 },
-  { class: 'Chồi B', total: 27, present: 24, absent: 3 },
-  { class: 'Lá A',   total: 30, present: 28, absent: 2 },
-  { class: 'Lá B',   total: 29, present: 25, absent: 4 },
-  { class: 'Lá C',   total: 28, present: 26, absent: 2 },
-  { class: 'Búp Sen', total: 27, present: 23, absent: 4 },
-];
-
-const recentNotifications = [
-  { id: 1, title: 'Phụ huynh Nguyễn Thị Lan đã đóng học phí tháng 4', time: '5 phút trước', type: 'success' },
-  { id: 2, title: 'Học sinh Trần Minh Khoa (Lớp Lá A) nghỉ ốm hôm nay', time: '18 phút trước', type: 'warning' },
-  { id: 3, title: 'Nhắc nhở: Cuộc họp phụ huynh lớp Chồi B lúc 17:00 hôm nay', time: '1 giờ trước', type: 'info' },
-  { id: 4, title: 'Giáo viên Phạm Thu Hương đã cập nhật sổ liên lạc lớp Mầm A', time: '2 giờ trước', type: 'success' },
-  { id: 5, title: '8 học sinh đến muộn trong buổi sáng nay', time: '3 giờ trước', type: 'warning' },
-];
-
-const studentsByGrade = [
-  { grade: 'Mầm',    students: 49 },
-  { grade: 'Chồi',   students: 55 },
-  { grade: 'Lá',     students: 87 },
-  { grade: 'Búp Sen', students: 27 },
-  { grade: 'Nhà trẻ', students: 110 },
-];
-
-const attendanceTrend = [
-  { day: 'T2', rate: 92 },
-  { day: 'T3', rate: 88 },
-  { day: 'T4', rate: 95 },
-  { day: 'T5', rate: 91 },
-  { day: 'T6', rate: 87 },
-  { day: 'T7', rate: 78 },
-  { day: 'CN', rate: 0 },
-];
-
-const feeStatus = [
-  { name: 'Đã đóng đủ',       value: 245, color: COLORS.success },
-  { name: 'Đóng một phần',    value: 48,  color: COLORS.warning },
-  { name: 'Chưa đóng',        value: 35,  color: COLORS.error },
-];
-
 // ─── Custom tooltip ───────────────────────────────────────────────────────────
 function ChartTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
@@ -121,10 +81,38 @@ function formatVietnameseDate(date: Date): string {
 export default function Dashboard() {
   const { user } = useAuthStore();
   const { setPageTitle } = useAppStore();
+  const navigate = useNavigate();
   const [today] = useState(() => formatVietnameseDate(new Date()));
+  
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [notifications, setNotifications] = useState<DashboardNotification[]>([]);
+  const [trendData, setTrendData] = useState<AttendanceTrendPoint[]>([]);
+  const [feeSummary, setFeeSummary] = useState<FeeStatusSummary>({ paid: 0, unpaid: 0, partial: 0 });
+  const [schoolYear, setSchoolYear] = useState('2024 – 2025');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setPageTitle('Dashboard');
+    const load = async () => {
+      setLoading(true);
+      const [statsRes, notifyRes, trendRes, feeRes, settingsRes] = await Promise.all([
+        getDashboardStats(),
+        getDashboardNotifications(),
+        getAttendanceTrend(),
+        getFeeStatusSummary(),
+        getSchoolSettings(),
+      ]);
+      setLoading(false);
+      
+      if (statsRes.stats) setStats(statsRes.stats);
+      if (notifyRes.items) setNotifications(notifyRes.items);
+      if (trendRes.trend) setTrendData(trendRes.trend);
+      if (feeRes.summary) setFeeSummary(feeRes.summary);
+      if (settingsRes.settings?.school_year) {
+        setSchoolYear(settingsRes.settings.school_year.replace('-', ' – '));
+      }
+    };
+    void load();
   }, [setPageTitle]);
 
   const displayName =
@@ -133,8 +121,14 @@ export default function Dashboard() {
     user?.email?.split('@')[0] ||
     'Quản trị viên';
 
-  const totalStudents = attendanceData.reduce((s, r) => s + r.total, 0);
-  const totalPresent  = attendanceData.reduce((s, r) => s + r.present, 0);
+
+  
+  // Chart data from real queries
+  const feeStatus = [
+    { name: 'Đã đóng', value: feeSummary.paid, color: COLORS.success },
+    { name: 'Chưa đóng', value: feeSummary.unpaid, color: COLORS.error },
+    { name: 'Đóng một phần', value: feeSummary.partial, color: COLORS.warning },
+  ].filter(s => s.value > 0);
 
   return (
     <div className="space-y-6">
@@ -148,7 +142,7 @@ export default function Dashboard() {
         </div>
         <div className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium bg-primary/10 text-primary">
           <Users className="w-4 h-4" />
-          Năm học 2024 – 2025
+          Năm học {schoolYear}
         </div>
       </div>
 
@@ -156,34 +150,34 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <StatCard
           label="Tổng học sinh"
-          value="328"
+          value={loading ? '...' : String(stats?.totalStudents || 0)}
           icon={<Users className="w-5 h-5 text-primary" />}
           iconBg="bg-primary/10"
-          trend="+12 tháng này"
+          trend="Hồ sơ chính thức"
           trendDirection="up"
         />
         <StatCard
-          label="Đang đi học"
-          value="297"
+          label="Đang có mặt"
+          value={loading ? '...' : String(stats?.attendanceToday.present || 0)}
           icon={<CheckCircle className="w-5 h-5 text-emerald-500" />}
           iconBg="bg-emerald-50"
-          trend="90.5% tỷ lệ"
+          trend={`${stats?.attendanceToday.total || 0} học sinh điểm danh`}
           trendDirection="up"
         />
         <StatCard
-          label="Nghỉ học hôm nay"
-          value="31"
+          label="Vắng mặt"
+          value={loading ? '...' : String(stats?.attendanceToday.absent || 0)}
           icon={<XCircle className="w-5 h-5 text-amber-500" />}
           iconBg="bg-amber-50"
-          trend="9.5% vắng mặt"
+          trend="Tính theo ngày hôm nay"
           trendDirection="down"
         />
         <StatCard
           label="Công nợ học phí"
-          value="42.5M"
+          value={loading ? '...' : `${((stats?.totalDebt || 0) / 1000000).toFixed(1)}M`}
           icon={<Wallet className="w-5 h-5 text-red-500" />}
           iconBg="bg-red-50"
-          trend="15 hộ chưa đóng"
+          trend={`${(stats?.totalDebt || 0).toLocaleString()} đ`}
           trendDirection="down"
         />
       </div>
@@ -194,13 +188,13 @@ export default function Dashboard() {
         <div className="lg:col-span-2 bg-white rounded-2xl border border-[#E2E8F0] overflow-hidden">
           <div className="flex items-center justify-between px-6 py-4 border-b border-[#E2E8F0]">
             <div>
-              <h2 className="text-base font-semibold text-[#1E293B]">Điểm danh hôm nay</h2>
+              <h2 className="text-base font-semibold text-[#1E293B]">Điểm danh hôm nay (Top 5 lớp)</h2>
               <p className="text-xs text-[#64748B] mt-0.5">
-                {totalPresent}/{totalStudents} học sinh có mặt ({((totalPresent / totalStudents) * 100).toFixed(1)}%)
+                Cập nhật theo thời gian thực từ giáo viên
               </p>
             </div>
             <button className="flex items-center gap-1 text-xs font-medium text-primary">
-              Xem tất cả <ChevronRight className="w-3.5 h-3.5" />
+              Xem chi tiết <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
           <div className="overflow-x-auto">
@@ -218,12 +212,12 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#F1F5F9]">
-                {attendanceData.map((row) => {
-                  const pct = Math.round((row.present / row.total) * 100);
+                {(stats?.attendanceByClass || []).map((row) => {
+                  const pct = row.total > 0 ? Math.round((row.present / row.total) * 100) : 0;
                   const barColor = pct >= 90 ? COLORS.success : pct >= 75 ? COLORS.warning : COLORS.error;
                   return (
-                    <tr key={row.class} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-3 font-medium text-[#1E293B]">{row.class}</td>
+                    <tr key={row.classId} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-3 font-medium text-[#1E293B]">{row.className}</td>
                       <td className="text-center px-4 py-3 text-[#64748B]">{row.total}</td>
                       <td className="text-center px-4 py-3">
                         <span className="inline-flex items-center justify-center w-8 h-6 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-600">
@@ -256,29 +250,34 @@ export default function Dashboard() {
         {/* Notifications */}
         <div className="bg-white rounded-2xl border border-[#E2E8F0] flex flex-col overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-[#E2E8F0]">
-            <h2 className="text-base font-semibold text-[#1E293B]">Thông báo gần đây</h2>
+            <h2 className="text-base font-semibold text-[#1E293B]">Thông báo hệ thống</h2>
             <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary text-white text-xs font-bold">
-              {recentNotifications.length}
+              {notifications.length}
             </span>
           </div>
           <div className="flex-1 divide-y divide-[#F1F5F9] overflow-auto">
-            {recentNotifications.map((n) => {
-              const dotColor = n.type === 'success' ? COLORS.success : n.type === 'warning' ? COLORS.warning : COLORS.secondary;
-              return (
-                <div key={n.id} className="px-5 py-4 hover:bg-gray-50 transition-colors cursor-pointer">
-                  <div className="flex gap-3">
-                    <div className="mt-1.5 w-2 h-2 rounded-full shrink-0" style={{ background: dotColor }} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm leading-snug line-clamp-2 text-[#1E293B]">{n.title}</p>
-                      <p className="text-xs mt-1 text-[#64748B]">{n.time}</p>
+            {notifications.length === 0 ? (
+              <div className="p-10 text-center text-xs text-[#94A3B8]">Không có thông báo mới</div>
+            ) : (
+              notifications.map((n) => {
+                const dotColor = n.type === 'success' ? COLORS.success : n.type === 'warning' ? COLORS.warning : COLORS.secondary;
+                return (
+                  <div key={n.id} className="px-5 py-4 hover:bg-gray-50 transition-colors cursor-pointer">
+                    <div className="flex gap-3">
+                      <div className="mt-1.5 w-2 h-2 rounded-full shrink-0" style={{ background: dotColor }} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm leading-snug line-clamp-2 text-[#1E293B] font-medium">{n.title}</p>
+                        <p className="text-xs mt-1 text-[#64748B] line-clamp-1">{n.content}</p>
+                        <p className="text-[10px] mt-1 text-[#94A3B8] italic">{new Date(n.created_at).toLocaleString('vi-VN')}</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
           <div className="px-5 py-3 border-t border-[#E2E8F0]">
-            <button className="w-full text-xs font-medium text-center py-1.5 rounded-lg hover:bg-gray-50 text-primary transition-colors">
+            <button onClick={() => navigate('/notifications')} className="w-full text-xs font-medium text-center py-1.5 rounded-lg hover:bg-gray-50 text-primary transition-colors">
               Xem tất cả thông báo
             </button>
           </div>
@@ -294,12 +293,12 @@ export default function Dashboard() {
           <div className="bg-white rounded-2xl border border-[#E2E8F0] p-6">
             <h3 className="text-sm font-semibold text-[#1E293B] mb-4">Học sinh theo khối lớp</h3>
             <RResponsiveContainer width="100%" height={220}>
-              <RBarChart data={studentsByGrade} margin={{ top: 5, right: 5, left: -20, bottom: 5 }} barSize={28}>
+              <RBarChart data={stats?.studentsByGrade || []} margin={{ top: 5, right: 5, left: -20, bottom: 5 }} barSize={28}>
                 <RCartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
-                <RXAxis dataKey="grade" tick={{ fontSize: 11, fill: COLORS.textSecondary }} axisLine={false} tickLine={false} />
+                <RXAxis dataKey="gradeName" tick={{ fontSize: 11, fill: COLORS.textSecondary }} axisLine={false} tickLine={false} />
                 <RYAxis tick={{ fontSize: 11, fill: COLORS.textSecondary }} axisLine={false} tickLine={false} />
                 <RTooltip content={<ChartTooltip />} />
-                <RBar dataKey="students" name="Học sinh" fill={COLORS.primary} radius={[6, 6, 0, 0]} />
+                <RBar dataKey="count" name="Học sinh" fill={COLORS.primary} radius={[6, 6, 0, 0]} />
               </RBarChart>
             </RResponsiveContainer>
           </div>
@@ -308,7 +307,7 @@ export default function Dashboard() {
           <div className="bg-white rounded-2xl border border-[#E2E8F0] p-6">
             <h3 className="text-sm font-semibold text-[#1E293B] mb-4">Xu hướng điểm danh (7 ngày)</h3>
             <RResponsiveContainer width="100%" height={220}>
-              <RLineChart data={attendanceTrend} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+              <RLineChart data={trendData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
                 <RCartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
                 <RXAxis dataKey="day" tick={{ fontSize: 11, fill: COLORS.textSecondary }} axisLine={false} tickLine={false} />
                 <RYAxis tick={{ fontSize: 11, fill: COLORS.textSecondary }} axisLine={false} tickLine={false} domain={[0, 100]} tickFormatter={(v: number) => `${v}%`} />

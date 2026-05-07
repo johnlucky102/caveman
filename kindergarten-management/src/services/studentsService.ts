@@ -29,6 +29,15 @@ type StudentRow = {
     id: number;
     name: string;
   } | null;
+  student_parent?: {
+    is_primary: boolean;
+    relation_type: string;
+    parents: {
+      id: string;
+      full_name: string;
+      phone: string;
+    };
+  }[];
 };
 
 function mapStudentRow(row: StudentRow): StudentRecord {
@@ -46,6 +55,13 @@ function mapStudentRow(row: StudentRow): StudentRecord {
     enrolled_date: row.enrolled_date,
     health_info: row.health_info || {},
     avatar: row.avatar,
+    parents: row.student_parent?.map((sp: any) => ({
+      id: sp.parents?.id,
+      full_name: sp.parents?.full_name,
+      phone: sp.parents?.phone,
+      relationship: sp.relation_type,
+      is_primary: sp.is_primary,
+    })),
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -71,7 +87,8 @@ export async function listStudents(query: StudentListQuery): Promise<{ data: Lis
 
   let statement = supabase
     .from('students')
-    .select('id, class_id, student_code, full_name, date_of_birth, gender, ethnicity, nationality, address, enrolled_date, health_info, avatar, created_at, updated_at, classes(id, name)', { count: 'exact' });
+    .select('id, class_id, student_code, full_name, date_of_birth, gender, ethnicity, nationality, address, enrolled_date, health_info, avatar, created_at, updated_at, classes(id, name), student_parent(is_primary, relation_type, parents(id, full_name, phone))', { count: 'exact' })
+    .eq('del_yn', false);
 
   if (query.search?.trim()) {
     const term = query.search.trim();
@@ -94,7 +111,7 @@ export async function listStudents(query: StudentListQuery): Promise<{ data: Lis
   if (result.error) {
     return {
       data: { items: [], total: 0, page, pageSize },
-      error: toAppError(result.error, 'Cannot load students.'),
+      error: toAppError(result.error, 'Không thể tải danh sách học sinh.'),
     };
   }
 
@@ -113,14 +130,15 @@ export async function getStudentById(id: string): Promise<{ item: StudentRecord 
   const result = await withSupabaseTimeout(
     supabase
       .from('students')
-      .select('id, class_id, student_code, full_name, date_of_birth, gender, ethnicity, nationality, address, enrolled_date, health_info, avatar, created_at, updated_at, classes(id, name)')
+      .select('id, class_id, student_code, full_name, date_of_birth, gender, ethnicity, nationality, address, enrolled_date, health_info, avatar, created_at, updated_at, classes(id, name), student_parent(is_primary, relation_type, parents(id, full_name, phone))')
       .eq('id', id)
+      .eq('del_yn', false)
       .maybeSingle(),
     8000,
     { data: null, error: { message: 'Timeout loading student profile', details: '', hint: '', code: 'TIMEOUT' } } as any
   );
 
-  if (result.error) return { item: null, error: toAppError(result.error, 'Cannot load student profile.') };
+  if (result.error) return { item: null, error: toAppError(result.error, 'Không thể tải hồ sơ học sinh.') };
   if (!result.data) return { item: null, error: null };
   return { item: mapStudentRow(result.data as unknown as StudentRow), error: null };
 }
@@ -147,11 +165,11 @@ export async function createStudent(payload: CreateStudentInput): Promise<{ item
 
     if (!result.error && result.data) return { item: mapStudentRow(result.data as unknown as StudentRow), error: null };
     if (!shouldGenerateCode || !isStudentCodeConflict(result.error) || attempt === maxAttempts) {
-      return { item: null, error: toAppError(result.error, 'Cannot create student.') };
+      return { item: null, error: toAppError(result.error, 'Không thể tạo hồ sơ học sinh.') };
     }
   }
 
-  return { item: null, error: { code: 'CONFLICT', message: 'Cannot generate unique student code.' } };
+  return { item: null, error: { code: 'CONFLICT', message: 'Không thể tạo mã học sinh duy nhất.' } };
 }
 
 export async function updateStudent(id: string, payload: UpdateStudentInput): Promise<{ item: StudentRecord | null; error: AppError | null }> {
@@ -167,17 +185,38 @@ export async function updateStudent(id: string, payload: UpdateStudentInput): Pr
     { data: null, error: { message: 'Timeout updating student', details: '', hint: '', code: 'TIMEOUT' } } as any
   );
 
-  if (result.error) return { item: null, error: toAppError(result.error, 'Cannot update student.') };
+  if (result.error) return { item: null, error: toAppError(result.error, 'Không thể cập nhật hồ sơ học sinh.') };
   return { item: mapStudentRow(result.data as unknown as StudentRow), error: null };
 }
 
 export async function deleteStudent(id: string): Promise<{ error: AppError | null }> {
+  // Soft delete related records first
+  await supabase.from('attendance').update({ del_yn: true }).eq('student_id', id);
+  await supabase.from('fee_records').update({ del_yn: true }).eq('student_id', id);
+  await supabase.from('notifications').update({ del_yn: true }).eq('student_id', id);
+
   const result = await withSupabaseTimeout(
-    supabase.from('students').delete().eq('id', id),
+    supabase.from('students').update({ del_yn: true }).eq('id', id),
     8000,
     { data: null, error: { message: 'Timeout deleting student', details: '', hint: '', code: 'TIMEOUT' } } as any
   );
 
-  if (result.error) return { error: toAppError(result.error, 'Cannot delete student.') };
+  if (result.error) return { error: toAppError(result.error, 'Không thể xóa học sinh.') };
+  return { error: null };
+}
+
+export async function deleteStudents(ids: string[]): Promise<{ error: AppError | null }> {
+  if (!ids.length) return { error: null };
+  await supabase.from('attendance').update({ del_yn: true }).in('student_id', ids);
+  await supabase.from('fee_records').update({ del_yn: true }).in('student_id', ids);
+  await supabase.from('notifications').update({ del_yn: true }).in('student_id', ids);
+
+  const result = await withSupabaseTimeout(
+    supabase.from('students').update({ del_yn: true }).in('id', ids),
+    8000,
+    { data: null, error: { message: 'Timeout deleting students', details: '', hint: '', code: 'TIMEOUT' } } as any
+  );
+
+  if (result.error) return { error: toAppError(result.error, 'Không thể xóa danh sách học sinh.') };
   return { error: null };
 }

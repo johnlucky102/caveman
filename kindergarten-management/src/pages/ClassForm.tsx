@@ -11,7 +11,6 @@ import { listTeachers } from '@/services/usersService';
 import type { SelectOption } from '@/types';
 
 interface FormState {
-  class_code: string;
   name: string;
   teacher_id: string;
   max_students: string;
@@ -42,7 +41,6 @@ export default function ClassForm() {
   const isEditMode = Boolean(id && id !== 'new');
 
   const [form, setForm] = useState<FormState>({
-    class_code: 'Tự động tạo',
     name: '',
     teacher_id: '',
     max_students: '30',
@@ -82,7 +80,6 @@ export default function ClassForm() {
 
       setStudentCount(result.item.student_count);
       setForm({
-        class_code: result.item.class_code || String(result.item.id),
         name: result.item.name,
         teacher_id: result.item.teacher_id || '',
         max_students: String(result.item.max_students),
@@ -139,7 +136,6 @@ export default function ClassForm() {
 
       <form onSubmit={handleSubmit}>
         <Card className="space-y-5">
-          <Input label="Mã lớp" value={form.class_code} disabled hint="Mã tạo tự động khi lưu" fullWidth />
           <Input label="Tên lớp học" value={form.name} onChange={(e) => setField('name', e.target.value)} error={errors.name} required fullWidth />
 
           <Select

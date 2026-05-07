@@ -8,6 +8,7 @@ import {
   ChevronLeft,
   ChevronRight,
   GraduationCap,
+  History,
   Home,
   Settings,
   Users,
@@ -32,7 +33,6 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Phụ huynh', path: '/parents', icon: UsersRound, allow: ['Admin', 'Teacher'] },
   { label: 'Điểm danh', path: '/attendance', icon: CalendarCheck, allow: ['Admin', 'Teacher'] },
   { label: 'Học phí', path: '/fees', icon: Wallet, allow: ['Admin', 'Accountant'] },
-  { label: 'Thông báo', path: '/notifications', icon: Bell, allow: ['Admin', 'Teacher', 'Accountant', 'Parent'] },
   { label: 'Báo cáo', path: '/reports', icon: BarChart3, allow: ['Admin', 'Teacher', 'Accountant'] },
   { label: 'Cài đặt', path: '/settings', icon: Settings, allow: ['Admin'] },
 ];

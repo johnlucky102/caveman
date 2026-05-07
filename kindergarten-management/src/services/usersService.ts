@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { withSupabaseTimeout } from '@/lib/timeout';
-import type { AppError, AppRole, UserProfile } from '@/types/domain';
+import type { AppError, AppRole, CreateParentInput, ParentRecord, UpdateParentInput, UserProfile } from '@/types/domain';
 import { toAppError } from './supabaseErrors';
 
 export interface TeacherProfileInput {
@@ -17,8 +17,6 @@ type UserRow = {
   phone: string | null;
   role: string | null;
   avatar: string | null;
-  teacher_code?: string | null;
-  email?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -37,8 +35,8 @@ function mapUserRow(row: UserRow): UserProfile {
     phone: row.phone,
     role: normalizeRole(row.role),
     avatar: row.avatar,
-    teacher_code: row.teacher_code || null,
-    email: row.email || null,
+    teacher_code: null,
+    email: null,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -65,14 +63,14 @@ export async function fetchMyProfile(userId: string): Promise<{ profile: UserPro
   const result = await withSupabaseTimeout(
     supabase
       .from('users')
-      .select('id, full_name, phone, role, avatar, teacher_code, email, created_at, updated_at')
+      .select('id, full_name, phone, role, avatar, created_at, updated_at')
       .eq('id', userId)
       .maybeSingle(),
     8000,
     { data: null, error: { message: 'Timeout loading user profile', details: '', hint: '', code: 'TIMEOUT' } } as any
   );
 
-  if (result.error) return { profile: null, error: toAppError(result.error, 'Cannot load user profile.') };
+  if (result.error) return { profile: null, error: toAppError(result.error, 'Không thể tải thông tin cá nhân.') };
   if (!result.data) return { profile: null, error: null };
   return { profile: mapUserRow(result.data as UserRow), error: null };
 }
@@ -81,14 +79,15 @@ export async function listTeachers(): Promise<{ items: UserProfile[]; error: App
   const result = await withSupabaseTimeout(
     supabase
       .from('users')
-      .select('id, full_name, phone, role, avatar, teacher_code, email, created_at, updated_at')
+      .select('id, full_name, phone, role, avatar, created_at, updated_at')
       .eq('role', 'Teacher')
+      .eq('del_yn', false)
       .order('full_name', { ascending: true }),
     8000,
     { data: null, error: { message: 'Timeout loading teachers', details: '', hint: '', code: 'TIMEOUT' } } as any
   );
 
-  if (result.error) return { items: [], error: toAppError(result.error, 'Cannot load teachers.') };
+  if (result.error) return { items: [], error: toAppError(result.error, 'Không thể tải danh sách giáo viên.') };
   return { items: ((result.data || []) as UserRow[]).map(mapUserRow), error: null };
 }
 
@@ -96,22 +95,23 @@ export async function getTeacherById(id: string): Promise<{ item: UserProfile | 
   const result = await withSupabaseTimeout(
     supabase
       .from('users')
-      .select('id, full_name, phone, role, avatar, teacher_code, email, created_at, updated_at')
+      .select('id, full_name, phone, role, avatar, created_at, updated_at')
       .eq('id', id)
       .eq('role', 'Teacher')
+      .eq('del_yn', false)
       .maybeSingle(),
     8000,
     { data: null, error: { message: 'Timeout loading teacher', details: '', hint: '', code: 'TIMEOUT' } } as any
   );
 
-  if (result.error) return { item: null, error: toAppError(result.error, 'Cannot load teacher.') };
+  if (result.error) return { item: null, error: toAppError(result.error, 'Không thể tải thông tin giáo viên.') };
   if (!result.data) return { item: null, error: null };
   return { item: mapUserRow(result.data as UserRow), error: null };
 }
 
 export async function createTeacherProfile(payload: TeacherProfileInput): Promise<{ item: UserProfile | null; error: AppError | null }> {
   if (!payload.email?.trim()) {
-    return { item: null, error: { code: 'VALIDATION', message: 'Email giao vien la bat buoc.', field: 'email' } };
+    return { item: null, error: { code: 'VALIDATION', message: 'Email giáo viên là bắt buộc.', field: 'email' } };
   }
 
   const shouldGenerateCode = !payload.teacher_code?.trim();
@@ -133,7 +133,7 @@ export async function createTeacherProfile(payload: TeacherProfileInput): Promis
     });
 
     if (signUpResult.error || !signUpResult.data.user) {
-      return { item: null, error: toAppError(signUpResult.error, 'Cannot create teacher account.') };
+      return { item: null, error: toAppError(signUpResult.error, 'Không thể tạo tài khoản giáo viên.') };
     }
 
     if (currentSessionResult.data.session) {
@@ -146,16 +146,14 @@ export async function createTeacherProfile(payload: TeacherProfileInput): Promis
     const updateResult = await withSupabaseTimeout(
       supabase
         .from('users')
-        .update({
+        .insert({
+          id: signUpResult.data.user.id,
           full_name: payload.full_name,
           phone: payload.phone,
           avatar: payload.avatar,
-          email: payload.email.trim(),
-          teacher_code: teacherCode,
           role: 'Teacher',
         })
-        .eq('id', signUpResult.data.user.id)
-        .select('id, full_name, phone, role, avatar, teacher_code, email, created_at, updated_at')
+        .select('id, full_name, phone, role, avatar, created_at, updated_at')
         .single(),
       8000,
       { data: null, error: { message: 'Timeout creating teacher profile', details: '', hint: '', code: 'TIMEOUT' } } as any
@@ -163,11 +161,11 @@ export async function createTeacherProfile(payload: TeacherProfileInput): Promis
 
     if (!updateResult.error && updateResult.data) return { item: mapUserRow(updateResult.data as UserRow), error: null };
     if (!shouldGenerateCode || !isTeacherCodeConflict(updateResult.error) || attempt === maxAttempts) {
-      return { item: null, error: toAppError(updateResult.error, 'Cannot create teacher profile.') };
+      return { item: null, error: toAppError(updateResult.error, 'Không thể tạo hồ sơ giáo viên.') };
     }
   }
 
-  return { item: null, error: { code: 'CONFLICT', message: 'Cannot generate unique teacher code.' } };
+  return { item: null, error: { code: 'CONFLICT', message: 'Không thể tạo mã giáo viên duy nhất.' } };
 }
 
 export async function updateTeacherProfile(id: string, payload: TeacherProfileInput): Promise<{ item: UserProfile | null; error: AppError | null }> {
@@ -178,28 +176,152 @@ export async function updateTeacherProfile(id: string, payload: TeacherProfileIn
         full_name: payload.full_name,
         phone: payload.phone,
         avatar: payload.avatar,
-        email: payload.email?.trim() || null,
         role: 'Teacher',
       })
       .eq('id', id)
       .eq('role', 'Teacher')
-      .select('id, full_name, phone, role, avatar, teacher_code, email, created_at, updated_at')
+      .select('id, full_name, phone, role, avatar, created_at, updated_at')
       .single(),
     8000,
     { data: null, error: { message: 'Timeout updating teacher', details: '', hint: '', code: 'TIMEOUT' } } as any
   );
 
-  if (result.error) return { item: null, error: toAppError(result.error, 'Cannot update teacher.') };
+  if (result.error) return { item: null, error: toAppError(result.error, 'Không thể cập nhật giáo viên.') };
   return { item: mapUserRow(result.data as UserRow), error: null };
 }
 
 export async function deleteTeacherProfile(id: string): Promise<{ error: AppError | null }> {
   const result = await withSupabaseTimeout(
-    supabase.from('users').delete().eq('id', id).eq('role', 'Teacher'),
+    supabase.from('users').update({ del_yn: true }).eq('id', id).eq('role', 'Teacher'),
     8000,
     { data: null, error: { message: 'Timeout deleting teacher', details: '', hint: '', code: 'TIMEOUT' } } as any
   );
 
-  if (result.error) return { error: toAppError(result.error, 'Cannot delete teacher.') };
+  if (result.error) return { error: toAppError(result.error, 'Không thể xóa giáo viên.') };
+  return { error: null };
+}
+
+export async function deleteTeacherProfiles(ids: string[]): Promise<{ error: AppError | null }> {
+  if (!ids.length) return { error: null };
+  const result = await withSupabaseTimeout(
+    supabase.from('users').update({ del_yn: true }).in('id', ids).eq('role', 'Teacher'),
+    8000,
+    { data: null, error: { message: 'Timeout deleting teachers', details: '', hint: '', code: 'TIMEOUT' } } as any
+  );
+
+  if (result.error) return { error: toAppError(result.error, 'Không thể xóa danh sách giáo viên.') };
+  return { error: null };
+}
+
+export async function listParents(): Promise<{ items: ParentRecord[]; error: AppError | null }> {
+  const result = await withSupabaseTimeout(
+    supabase
+      .from('parents')
+      .select('*, student_parent(student_id, students(full_name, class_id, classes(name)))')
+      .eq('del_yn', false)
+      .order('full_name', { ascending: true }),
+    8000,
+    { data: null, error: { message: 'Timeout loading parents', details: '', hint: '', code: 'TIMEOUT' } } as any
+  );
+
+  if (result.error) return { items: [], error: toAppError(result.error, 'Không thể tải danh sách phụ huynh.') };
+  
+  // Transform to flatten students
+  const items = (result.data || []).map((p: any) => ({
+    ...p,
+    students: p.student_parent?.map((sp: any) => ({
+      id: sp.student_id,
+      full_name: sp.students?.full_name,
+      class_name: sp.students?.classes?.name
+    })) || []
+  }));
+
+  return { items, error: null };
+}
+
+export async function getParentById(id: string): Promise<{ item: ParentRecord | null; error: AppError | null }> {
+  const result = await withSupabaseTimeout(
+    supabase
+      .from('parents')
+      .select('*, student_parent(student_id, students(full_name, class_id, classes(name)))')
+      .eq('id', id)
+      .eq('del_yn', false)
+      .maybeSingle(),
+    8000,
+    { data: null, error: { message: 'Timeout tải thông tin phụ huynh', details: '', hint: '', code: 'TIMEOUT' } } as any
+  );
+
+  if (result.error) return { item: null, error: toAppError(result.error, 'Không thể tải thông tin phụ huynh.') };
+  if (!result.data) return { item: null, error: null };
+
+  const item = {
+    ...result.data,
+    students: result.data.student_parent?.map((sp: any) => ({
+      id: sp.student_id,
+      full_name: sp.students?.full_name,
+      class_name: sp.students?.classes?.name
+    })) || []
+  };
+
+  return { item, error: null };
+}
+
+export async function createParent(payload: CreateParentInput): Promise<{ item: ParentRecord | null; error: AppError | null }> {
+  const result = await withSupabaseTimeout(
+    supabase.from('parents').insert(payload).select().single(),
+    8000,
+    { data: null, error: { message: 'Timeout tạo phụ huynh', details: '', hint: '', code: 'TIMEOUT' } } as any
+  );
+
+  if (result.error) return { item: null, error: toAppError(result.error, 'Không thể tạo hồ sơ phụ huynh.') };
+  return { item: result.data as ParentRecord, error: null };
+}
+
+export async function updateParent(id: string, payload: UpdateParentInput): Promise<{ item: ParentRecord | null; error: AppError | null }> {
+  const result = await withSupabaseTimeout(
+    supabase.from('parents').update(payload).eq('id', id).select().single(),
+    8000,
+    { data: null, error: { message: 'Timeout cập nhật phụ huynh', details: '', hint: '', code: 'TIMEOUT' } } as any
+  );
+
+  if (result.error) return { item: null, error: toAppError(result.error, 'Không thể cập nhật hồ sơ phụ huynh.') };
+  return { item: result.data as ParentRecord, error: null };
+}
+
+export async function deleteParent(id: string): Promise<{ error: AppError | null }> {
+  const result = await withSupabaseTimeout(
+    supabase.from('parents').update({ del_yn: true }).eq('id', id),
+    8000,
+    { data: null, error: { message: 'Timeout xóa phụ huynh', details: '', hint: '', code: 'TIMEOUT' } } as any
+  );
+
+  if (result.error) return { error: toAppError(result.error, 'Không thể xóa phụ huynh.') };
+  return { error: null };
+}
+
+export async function linkParentToStudent(parentId: string, studentId: string, relationship: string, isPrimary = false): Promise<{ error: AppError | null }> {
+  const result = await withSupabaseTimeout(
+    supabase.from('student_parent').upsert({
+      parent_id: parentId,
+      student_id: studentId,
+      relation_type: relationship,
+      is_primary: isPrimary
+    }, { onConflict: 'student_id,parent_id' }),
+    8000,
+    { data: null, error: { message: 'Timeout liên kết phụ huynh - học sinh', details: '', hint: '', code: 'TIMEOUT' } } as any
+  );
+
+  if (result.error) return { error: toAppError(result.error, 'Không thể liên kết phụ huynh và học sinh.') };
+  return { error: null };
+}
+
+export async function unlinkParentFromStudent(parentId: string, studentId: string): Promise<{ error: AppError | null }> {
+  const result = await withSupabaseTimeout(
+    supabase.from('student_parent').delete().match({ parent_id: parentId, student_id: studentId }),
+    8000,
+    { data: null, error: { message: 'Timeout gỡ liên kết phụ huynh - học sinh', details: '', hint: '', code: 'TIMEOUT' } } as any
+  );
+
+  if (result.error) return { error: toAppError(result.error, 'Không thể gỡ liên kết phụ huynh và học sinh.') };
   return { error: null };
 }

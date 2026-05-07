@@ -61,6 +61,7 @@ export async function listAttendanceByClassAndDate(query: AttendanceListQuery): 
     .from('students')
     .select('id, full_name, class_id, classes(id, name)')
     .eq('class_id', query.classId)
+    .eq('del_yn', false)
     .order('full_name', { ascending: true });
 
   const studentsResult = await withSupabaseTimeout(
@@ -75,7 +76,8 @@ export async function listAttendanceByClassAndDate(query: AttendanceListQuery): 
     .from('attendance')
     .select('id, student_id, class_id, attendance_date, status, check_in_time, check_out_time, note, created_at, updated_at, students(id, full_name, classes(id, name))')
     .eq('class_id', query.classId)
-    .eq('attendance_date', query.attendanceDate);
+    .eq('attendance_date', query.attendanceDate)
+    .eq('del_yn', false);
 
   const attendanceResult = await withSupabaseTimeout(
     attendancePromise,
@@ -128,7 +130,7 @@ export async function upsertAttendanceBulk(rows: UpsertAttendanceInput[]): Promi
     .from('attendance')
     .upsert(payload, { onConflict: 'student_id,attendance_date' }),
     8000,
-    { data: null, error: { message: 'Timeout saving attendance', details: '', hint: '', code: 'TIMEOUT' } } as any
+    { data: null, error: { message: 'Timeout lưu điểm danh', details: '', hint: '', code: 'TIMEOUT' } } as any
   );
 
   const error = result.error;
@@ -145,6 +147,7 @@ export async function listAttendanceHistory(
   let statement = supabase
     .from('attendance')
     .select('id, student_id, class_id, attendance_date, status, check_in_time, check_out_time, note, created_at, updated_at, students(id, full_name, classes(id, name))')
+    .eq('del_yn', false)
     .order('attendance_date', { ascending: false });
 
   if (classId) statement = statement.eq('class_id', classId);

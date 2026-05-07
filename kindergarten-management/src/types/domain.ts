@@ -36,7 +36,6 @@ export interface GradeRecord {
 export interface ClassRecord {
   id: number;
   name: string;
-  class_code: string | null;
   teacher_id: string | null;
   teacher_name: string | null;
   room: string | null;
@@ -57,7 +56,6 @@ export interface ClassListQuery {
 
 export interface CreateClassInput {
   name: string;
-  class_code?: string;
   teacher_id: string | null;
   room: string | null;
   max_students: number;
@@ -80,6 +78,7 @@ export interface StudentRecord {
   enrolled_date: string | null;
   health_info: Record<string, unknown>;
   avatar: string | null;
+  parents?: { id: string; full_name: string; phone: string; relationship: string; is_primary: boolean }[];
   created_at: string;
   updated_at: string;
 }
@@ -109,7 +108,7 @@ export interface CreateStudentInput {
 
 export type UpdateStudentInput = Partial<CreateStudentInput>;
 
-export type AttendanceStatusValue = 'present' | 'absent' | 'late';
+export type AttendanceStatusValue = 'present' | 'absent' | 'late' | 'excused';
 
 export interface AttendanceRecord {
   id: string;
@@ -161,8 +160,7 @@ export interface FeeRecordP2 {
   student_name: string;
   class_id: number;
   class_name: string;
-  fee_type_id: number;
-  fee_type_name: string;
+  title: string | null;
   school_year: string;
   month: number | null;
   amount_vnd: number;
@@ -180,12 +178,15 @@ export interface FeeListQuery {
   pageSize: number;
   search?: string;
   status?: FeeStatusValue;
+  studentId?: string;
+  month?: number;
+  schoolYear?: string;
 }
 
 export interface CreateFeeInput {
   student_id: string;
   class_id: number;
-  fee_type_id: number;
+  title?: string;
   school_year: string;
   month: number;
   amount_vnd: number;
@@ -195,3 +196,42 @@ export interface CreateFeeInput {
   payment_method: 'cash' | 'bank_transfer' | null;
   status: FeeStatusValue;
 }
+
+export interface SchoolSettings {
+  id: number;
+  school_name: string;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  school_year: string;
+  academic_year_start: string | null;
+  academic_year_end: string | null;
+  logo_url: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ParentRecord {
+  id: string;
+  user_id: string | null;
+  full_name: string;
+  phone: string;
+  email: string | null;
+  relationship: 'Father' | 'Mother' | 'Guardian';
+  occupation: string | null;
+  address: string | null;
+  students?: { id: string; full_name: string; class_name: string }[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateParentInput {
+  full_name: string;
+  phone: string;
+  email: string | null;
+  relationship: 'Father' | 'Mother' | 'Guardian';
+  occupation?: string | null;
+  address?: string | null;
+}
+
+export type UpdateParentInput = Partial<CreateParentInput>;

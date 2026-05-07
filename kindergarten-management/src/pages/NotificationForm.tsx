@@ -1,25 +1,22 @@
 import { useState } from 'react';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
-import type { NotificationType, UserRole } from '../types';
+import { useToast } from '../components/common/Toast';
+import {
+  createNotification,
+  updateNotification,
+  mapUIToKind,
+  mapKindToUI,
+  type NotificationRecord,
+  type UINotificationType,
+  type NotificationKind,
+} from '@/services/notificationsService';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface NotificationFormProps {
-  notification?: {
-    title: string;
-    message: string;
-    type: NotificationType;
-    target_role?: UserRole;
-    target_user_id?: string;
-  };
-  onSubmit: (data: {
-    title: string;
-    message: string;
-    type: NotificationType;
-    target_role?: UserRole;
-    target_user_id?: string;
-  }) => void;
+  notification?: NotificationRecord | null;
+  onSaved: () => void;
   onCancel: () => void;
 }
 
@@ -29,20 +26,21 @@ type ScheduleType = 'now' | 'schedule';
 
 export default function NotificationForm({
   notification,
-  onSubmit,
+  onSaved,
   onCancel,
 }: NotificationFormProps) {
   const [title, setTitle] = useState(notification?.title || '');
   const [message, setMessage] = useState(notification?.message || '');
-  const [type, setType] = useState<NotificationType>(notification?.type || 'info');
-  const [targetRole, setTargetRole] = useState<UserRole | ''>(notification?.target_role || '');
+  const [type, setType] = useState<UINotificationType>(notification?.type || 'info');
+  const [targetType, setTargetType] = useState<string>(notification?.target_type || 'all');
   const [scheduleType, setScheduleType] = useState<ScheduleType>('now');
   const [scheduledDate, setScheduledDate] = useState('');
   const [scheduledTime, setScheduledTime] = useState('');
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ title?: string; message?: string }>({});
+  const toast = useToast();
 
-  const notificationTypes: { value: NotificationType; label: string }[] = [
+  const notificationTypes: { value: UINotificationType; label: string }[] = [
     { value: 'info', label: 'Thông tin' },
     { value: 'announcement', label: 'Thông báo' },
     { value: 'success', label: 'Thành công' },
@@ -50,11 +48,11 @@ export default function NotificationForm({
     { value: 'error', label: 'Lỗi' },
   ];
 
-  const targetRoles: { value: UserRole; label: string }[] = [
-    { value: 'parent', label: 'Phụ huynh' },
+  const targetTypes: { value: string; label: string }[] = [
+    { value: 'all', label: 'Tất cả' },
     { value: 'teacher', label: 'Giáo viên' },
+    { value: 'parent', label: 'Phụ huynh' },
     { value: 'admin', label: 'Quản trị viên' },
-    { value: 'staff', label: 'Nhân viên' },
   ];
 
   const validate = (): boolean => {
@@ -74,17 +72,47 @@ export default function NotificationForm({
     if (!validate()) return;
 
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 800));
 
-    onSubmit({
-      title: title.trim(),
-      message: message.trim(),
-      type,
-      target_role: targetRole || undefined,
-      target_user_id: undefined,
-    });
+    const kind: NotificationKind = mapUIToKind(type);
 
-    setLoading(false);
+    // Build sent_at
+    let sentAt: string | null = new Date().toISOString();
+    if (scheduleType === 'schedule' && scheduledDate && scheduledTime) {
+      sentAt = new Date(`${scheduledDate}T${scheduledTime}:00`).toISOString();
+    }
+
+    if (notification) {
+      // Update existing
+      const { error } = await updateNotification(notification.id, {
+        title: title.trim(),
+        body: message.trim(),
+        kind,
+        target_type: targetType,
+      });
+      setLoading(false);
+      if (error) {
+        toast.error('Lỗi', error.message);
+      } else {
+        toast.success('Thành công', 'Đã cập nhật thông báo');
+        onSaved();
+      }
+    } else {
+      // Create new
+      const { error } = await createNotification({
+        title: title.trim(),
+        body: message.trim(),
+        kind,
+        target_type: targetType,
+        sent_at: sentAt,
+      });
+      setLoading(false);
+      if (error) {
+        toast.error('Lỗi', error.message);
+      } else {
+        toast.success('Thành công', 'Đã tạo thông báo mới');
+        onSaved();
+      }
+    }
   };
 
   return (
@@ -149,21 +177,21 @@ export default function NotificationForm({
       <div className="flex flex-col gap-1.5">
         <label className="text-sm font-medium text-[#1E293B]">Gửi đến</label>
         <div className="flex flex-wrap gap-2">
-          {targetRoles.map((r) => (
+          {targetTypes.map((r) => (
             <label
               key={r.value}
               className={`flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer transition-colors text-sm font-medium ${
-                targetRole === r.value
+                targetType === r.value
                   ? 'border-secondary bg-secondary/10 text-secondary'
                   : 'border-[#E2E8F0] text-[#64748B] hover:border-[#CBD5E1]'
               }`}
             >
               <input
                 type="radio"
-                name="targetRole"
+                name="targetType"
                 value={r.value}
-                checked={targetRole === r.value}
-                onChange={() => setTargetRole(r.value)}
+                checked={targetType === r.value}
+                onChange={() => setTargetType(r.value)}
                 className="sr-only"
               />
               {r.label}
@@ -172,67 +200,69 @@ export default function NotificationForm({
         </div>
       </div>
 
-      {/* Schedule */}
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-[#1E293B]">Thời gian gửi</label>
-          <div className="flex gap-3">
-            <label
-              className={`flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer transition-colors text-sm font-medium ${
-                scheduleType === 'now'
-                  ? 'border-primary bg-primary/5 text-primary'
-                  : 'border-[#E2E8F0] text-[#64748B] hover:border-[#CBD5E1]'
-              }`}
-            >
-              <input
-                type="radio"
-                name="scheduleType"
-                value="now"
-                checked={scheduleType === 'now'}
-                onChange={() => setScheduleType('now')}
-                className="sr-only"
-              />
-              Gửi ngay
-            </label>
-            <label
-              className={`flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer transition-colors text-sm font-medium ${
-                scheduleType === 'schedule'
-                  ? 'border-primary bg-primary/5 text-primary'
-                  : 'border-[#E2E8F0] text-[#64748B] hover:border-[#CBD5E1]'
-              }`}
-            >
-              <input
-                type="radio"
-                name="scheduleType"
-                value="schedule"
-                checked={scheduleType === 'schedule'}
-                onChange={() => setScheduleType('schedule')}
-                className="sr-only"
-              />
-              Hẹn lịch
-            </label>
+      {/* Schedule (only for new notifications) */}
+      {!notification && (
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-[#1E293B]">Thời gian gửi</label>
+            <div className="flex gap-3">
+              <label
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer transition-colors text-sm font-medium ${
+                  scheduleType === 'now'
+                    ? 'border-primary bg-primary/5 text-primary'
+                    : 'border-[#E2E8F0] text-[#64748B] hover:border-[#CBD5E1]'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="scheduleType"
+                  value="now"
+                  checked={scheduleType === 'now'}
+                  onChange={() => setScheduleType('now')}
+                  className="sr-only"
+                />
+                Gửi ngay
+              </label>
+              <label
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer transition-colors text-sm font-medium ${
+                  scheduleType === 'schedule'
+                    ? 'border-primary bg-primary/5 text-primary'
+                    : 'border-[#E2E8F0] text-[#64748B] hover:border-[#CBD5E1]'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="scheduleType"
+                  value="schedule"
+                  checked={scheduleType === 'schedule'}
+                  onChange={() => setScheduleType('schedule')}
+                  className="sr-only"
+                />
+                Hẹn lịch
+              </label>
+            </div>
           </div>
-        </div>
 
-        {scheduleType === 'schedule' && (
-          <div className="flex gap-3">
-            <Input
-              label="Ngày gửi"
-              type="date"
-              value={scheduledDate}
-              onChange={(e) => setScheduledDate(e.target.value)}
-              required={scheduleType === 'schedule'}
-            />
-            <Input
-              label="Giờ gửi"
-              type="time"
-              value={scheduledTime}
-              onChange={(e) => setScheduledTime(e.target.value)}
-              required={scheduleType === 'schedule'}
-            />
-          </div>
-        )}
-      </div>
+          {scheduleType === 'schedule' && (
+            <div className="flex gap-3">
+              <Input
+                label="Ngày gửi"
+                type="date"
+                value={scheduledDate}
+                onChange={(e) => setScheduledDate(e.target.value)}
+                required={scheduleType === 'schedule'}
+              />
+              <Input
+                label="Giờ gửi"
+                type="time"
+                value={scheduledTime}
+                onChange={(e) => setScheduledTime(e.target.value)}
+                required={scheduleType === 'schedule'}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Actions */}
       <div className="flex items-center justify-end gap-3 pt-2 border-t border-[#E2E8F0]">

@@ -1,145 +1,125 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Bell, Plus, CheckCheck, Search, Filter, Trash2, Edit2 } from 'lucide-react';
 import Card from '../components/common/Card';
 import Button from '../components/common/Button';
 import Badge from '../components/common/Badge';
 import type { BadgeVariant } from '../components/common/Badge';
 import Modal from '../components/common/Modal';
+import { useToast } from '../components/common/Toast';
 import NotificationForm from './NotificationForm';
-import type { Notification, NotificationType, UserRole } from '../types';
+import {
+  listNotifications,
+  deleteNotification as deleteNotificationApi,
+  markAsRead as markAsReadApi,
+  markAllAsRead as markAllAsReadApi,
+  type NotificationRecord,
+  type NotificationKind,
+  type UINotificationType,
+} from '@/services/notificationsService';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-interface NotificationItem extends Omit<Notification, 'type'> {
-  type: NotificationType;
-  target_role?: UserRole;
-  target_user_id?: string;
-}
+type FilterType = NotificationKind | 'all';
 
-type FilterType = NotificationType | 'all';
-
-// ─── Mock Data ───────────────────────────────────────────────────────────────
-
-const mockNotifications: NotificationItem[] = [
-  {
-    id: '1',
-    title: 'Thông báo nghỉ lễ 30/4',
-    message: 'Trường sẽ nghỉ học từ ngày 27/4 đến 1/5/2024. Học sinh quay lại trường vào ngày 2/5/2024.',
-    type: 'announcement',
-    is_read: false,
-    created_at: '2024-04-19T08:00:00',
-  },
-  {
-    id: '2',
-    title: 'Phụ huynh Nguyễn Văn Bình đã đóng học phí',
-    message: 'Học phí tháng 4 của học sinh Nguyễn Minh Khoa đã được thanh toán.',
-    type: 'success',
-    is_read: false,
-    created_at: '2024-04-19T10:30:00',
-  },
-  {
-    id: '3',
-    title: 'Nhắc nhở họp phụ huynh',
-    message: 'Cuộc họp phụ huynh lớp Chồi B sẽ diễn ra vào 17:00 hôm nay tại phòng hội trường.',
-    type: 'warning',
-    is_read: true,
-    created_at: '2024-04-19T07:00:00',
-  },
-  {
-    id: '4',
-    title: 'Học sinh vắng mặt nhiều ngày',
-    message: 'Học sinh Lê Văn An đã vắng mặt 3 ngày liên tiếp. Vui lòng liên hệ phụ huynh.',
-    type: 'warning',
-    is_read: true,
-    created_at: '2024-04-18T09:00:00',
-  },
-  {
-    id: '5',
-    title: 'Cập nhật lịch sinh hoạt tháng 5',
-    message: 'Lịch sinh hoạt ngoại khóa tháng 5 đã được cập nhật. Vui lòng kiểm tra chi tiết.',
-    type: 'info',
-    is_read: true,
-    created_at: '2024-04-17T14:00:00',
-  },
-  {
-    id: '6',
-    title: 'Lỗi kết nối máy chấm công',
-    message: 'Hệ thống máy chấm công lớp Chồi A đang gặp sự cố. Kỹ thuật đang xử lý.',
-    type: 'error',
-    is_read: false,
-    created_at: '2024-04-20T06:30:00',
-  },
-];
+// ─── Config ──────────────────────────────────────────────────────────────────
 
 const typeConfig: Record<string, { label: string; variant: BadgeVariant }> = {
+  info: { label: 'Thông tin', variant: 'neutral' },
   announcement: { label: 'Thông báo', variant: 'info' },
   success: { label: 'Thành công', variant: 'success' },
   warning: { label: 'Cảnh báo', variant: 'warning' },
   error: { label: 'Lỗi', variant: 'danger' },
-  info: { label: 'Thông tin', variant: 'neutral' },
 };
 
-const targetLabels: Record<string, string> = {
-  admin: 'Quản trị viên',
-  teacher: 'Giáo viên',
-  parent: 'Phụ huynh',
-  staff: 'Nhân viên',
-  all: 'Tất cả',
-};
+const kindFilterOptions: { value: FilterType; label: string }[] = [
+  { value: 'all', label: 'Tất cả loại' },
+  { value: 'general', label: 'Chung' },
+  { value: 'event', label: 'Sự kiện' },
+  { value: 'holiday', label: 'Nghỉ lễ' },
+  { value: 'request', label: 'Yêu cầu' },
+  { value: 'absence', label: 'Vắng mặt' },
+];
 
 // ─── Component ─────────────────────────────────────────────────────────────
 
 export default function Notifications() {
-  const [notifications, setNotifications] = useState<NotificationItem[]>(mockNotifications);
+  const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
+  const [total, setTotal] = useState(0);
   const [filterType, setFilterType] = useState<FilterType>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [editingNotification, setEditingNotification] = useState<NotificationItem | null>(null);
+  const [editingNotification, setEditingNotification] = useState<NotificationRecord | null>(null);
+  const toast = useToast();
+
+  const pageSize = 20;
+
+  const loadNotifications = useCallback(async () => {
+    setLoading(true);
+    const { items, total: t, error } = await listNotifications({
+      page,
+      pageSize,
+      search: searchQuery || undefined,
+      kind: filterType === 'all' ? undefined : filterType,
+    });
+    setLoading(false);
+    if (error) {
+      toast.error('Lỗi', error.message);
+    } else {
+      setNotifications(items);
+      setTotal(t);
+    }
+  }, [page, pageSize, searchQuery, filterType, toast]);
+
+  useEffect(() => {
+    void loadNotifications();
+  }, [loadNotifications]);
+
+  // Reset page when filter/search changes
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, filterType]);
 
   const unread = notifications.filter((n) => !n.is_read).length;
 
-  // Filter notifications
-  const filteredNotifications = notifications.filter((n) => {
-    const matchesType = filterType === 'all' || n.type === filterType;
-    const matchesSearch =
-      searchQuery === '' ||
-      n.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      n.message.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesType && matchesSearch;
-  });
-
-  const markAllRead = () =>
-    setNotifications((ns) => ns.map((n) => ({ ...n, is_read: true })));
-
-  const markAsRead = (id: string) =>
-    setNotifications((ns) => ns.map((n) => (n.id === id ? { ...n, is_read: true } : n)));
-
-  const deleteNotification = (id: string) =>
-    setNotifications((ns) => ns.filter((n) => n.id !== id));
-
-  const handleNotificationCreated = (notification: Omit<NotificationItem, 'id' | 'created_at' | 'is_read'>) => {
-    const newNotification: NotificationItem = {
-      ...notification,
-      id: String(Date.now()),
-      is_read: false,
-      created_at: new Date().toISOString(),
-    };
-    setNotifications((ns) => [newNotification, ...ns]);
-    setShowCreateModal(false);
+  const handleMarkAllRead = async () => {
+    const { error } = await markAllAsReadApi();
+    if (error) {
+      toast.error('Lỗi', error.message);
+    } else {
+      setNotifications((ns) => ns.map((n) => ({ ...n, is_read: true })));
+      toast.success('Thành công', 'Đã đánh dấu tất cả đã đọc');
+    }
   };
 
-  const handleNotificationUpdated = (updated: Omit<NotificationItem, 'id' | 'created_at' | 'is_read'>) => {
-    if (!editingNotification) return;
-    setNotifications((ns) =>
-      ns.map((n) =>
-        n.id === editingNotification.id
-          ? { ...n, ...updated }
-          : n
-      )
-    );
+  const handleMarkAsRead = async (id: string) => {
+    const { error } = await markAsReadApi(id);
+    if (error) {
+      toast.error('Lỗi', error.message);
+    } else {
+      setNotifications((ns) => ns.map((n) => (n.id === id ? { ...n, is_read: true } : n)));
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    const { error } = await deleteNotificationApi(id);
+    if (error) {
+      toast.error('Lỗi', error.message);
+    } else {
+      setNotifications((ns) => ns.filter((n) => n.id !== id));
+      setTotal((t) => t - 1);
+      toast.success('Đã xóa', 'Thông báo đã được xóa');
+    }
+  };
+
+  const handleNotificationSaved = () => {
+    setShowCreateModal(false);
     setEditingNotification(null);
-    setShowCreateModal(false);
+    void loadNotifications();
   };
+
+  const totalPages = Math.ceil(total / pageSize);
 
   return (
     <div className="space-y-5 max-w-3xl">
@@ -149,6 +129,7 @@ export default function Notifications() {
           <h1 className="text-xl font-bold text-[#1E293B]">Thông báo</h1>
           <p className="text-sm text-[#64748B]">
             {unread > 0 ? `${unread} thông báo chưa đọc` : 'Không có thông báo mới'}
+            {total > 0 && ` · Tổng ${total}`}
           </p>
         </div>
         <div className="flex gap-2">
@@ -157,7 +138,7 @@ export default function Notifications() {
               variant="outline"
               size="sm"
               leftIcon={<CheckCheck className="w-4 h-4" />}
-              onClick={markAllRead}
+              onClick={handleMarkAllRead}
             >
               Đánh dấu tất cả đã đọc
             </Button>
@@ -191,10 +172,9 @@ export default function Notifications() {
             onChange={(e) => setFilterType(e.target.value as FilterType)}
             className="h-10 pl-9 pr-9 rounded-xl border border-[#E2E8F0] bg-white text-sm text-[#1E293B] outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 appearance-none cursor-pointer transition-colors"
           >
-            <option value="all">Tất cả loại</option>
-            {Object.entries(typeConfig).map(([key, cfg]) => (
-              <option key={key} value={key}>
-                {cfg.label}
+            {kindFilterOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
               </option>
             ))}
           </select>
@@ -203,7 +183,14 @@ export default function Notifications() {
 
       {/* Notification List */}
       <div className="space-y-3">
-        {filteredNotifications.length === 0 ? (
+        {loading ? (
+          <Card className="py-10">
+            <div className="flex flex-col items-center gap-2">
+              <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              <p className="text-sm text-[#64748B]">Đang tải...</p>
+            </div>
+          </Card>
+        ) : notifications.length === 0 ? (
           <Card className="py-10">
             <div className="flex flex-col items-center gap-2">
               <Bell className="w-10 h-10 text-[#CBD5E1]" />
@@ -211,7 +198,7 @@ export default function Notifications() {
             </div>
           </Card>
         ) : (
-          filteredNotifications.map((n) => {
+          notifications.map((n) => {
             const cfg = typeConfig[n.type] || typeConfig.info;
             return (
               <Card
@@ -251,9 +238,9 @@ export default function Notifications() {
                     <div className="flex items-center justify-between mt-2">
                       <div className="flex items-center gap-3 text-xs text-[#94A3B8]">
                         <span>{new Date(n.created_at).toLocaleString('vi-VN')}</span>
-                        {n.target_role && (
+                        {n.target_type && n.target_type !== 'specific' && (
                           <span className="text-[#94A3B8]">
-                            Gửi: {targetLabels[n.target_role] || n.target_role}
+                            Gửi: {n.target_type === 'all' ? 'Tất cả' : n.target_type}
                           </span>
                         )}
                       </div>
@@ -261,7 +248,7 @@ export default function Notifications() {
                       <div className="flex items-center gap-1">
                         {!n.is_read && (
                           <button
-                            onClick={() => markAsRead(n.id)}
+                            onClick={() => handleMarkAsRead(n.id)}
                             className="p-1.5 rounded-lg text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#1E293B] transition-colors"
                             title="Đánh dấu đã đọc"
                           >
@@ -279,7 +266,7 @@ export default function Notifications() {
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
                         <button
-                          onClick={() => deleteNotification(n.id)}
+                          onClick={() => handleDelete(n.id)}
                           className="p-1.5 rounded-lg text-[#64748B] hover:bg-red-50 hover:text-red-500 transition-colors"
                           title="Xóa"
                         >
@@ -294,6 +281,31 @@ export default function Notifications() {
           })
         )}
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={page <= 1}
+            onClick={() => setPage((p) => p - 1)}
+          >
+            ← Trước
+          </Button>
+          <span className="text-sm text-[#64748B]">
+            Trang {page}/{totalPages}
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={page >= totalPages}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            Sau →
+          </Button>
+        </div>
+      )}
 
       {/* Create / Edit Modal */}
       <Modal
@@ -312,7 +324,7 @@ export default function Notifications() {
       >
         <NotificationForm
           notification={editingNotification}
-          onSubmit={editingNotification ? handleNotificationUpdated : handleNotificationCreated}
+          onSaved={handleNotificationSaved}
           onCancel={() => {
             setShowCreateModal(false);
             setEditingNotification(null);
