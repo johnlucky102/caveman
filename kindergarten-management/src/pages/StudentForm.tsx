@@ -241,7 +241,7 @@ export default function StudentForm() {
               />
             </div>
 
-            <Input label="Mã học sinh" value={studentCodePreview} disabled hint="Mã tạo tự động khi lưu" />
+
 
             <Input
               label="Ngày sinh"

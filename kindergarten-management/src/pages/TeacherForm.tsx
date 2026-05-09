@@ -145,7 +145,7 @@ export default function TeacherForm() {
             </label>
           </div>
 
-          <Input label="Mã giáo viên" value={form.teacher_code} disabled hint="Mã tạo tự động khi lưu" fullWidth />
+
 
           <Input
             label="Họ và tên"
