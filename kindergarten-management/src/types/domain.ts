@@ -23,6 +23,12 @@ export interface UserProfile {
   avatar: string | null;
   teacher_code?: string | null;
   email?: string | null;
+  gender?: 'Male' | 'Female' | 'Other' | null;
+  date_of_birth?: string | null;
+  address?: string | null;
+  qualification?: string | null;
+  start_date?: string | null;
+  status?: 'Active' | 'Inactive' | 'Resigned' | null;
   created_at: string;
   updated_at: string;
 }
@@ -220,6 +226,8 @@ export interface ParentRecord {
   relationship: 'Father' | 'Mother' | 'Guardian';
   occupation: string | null;
   address: string | null;
+  gender?: 'Male' | 'Female' | 'Other' | null;
+  date_of_birth?: string | null;
   students?: { id: string; full_name: string; class_name: string }[];
   created_at: string;
   updated_at: string;
@@ -232,6 +240,8 @@ export interface CreateParentInput {
   relationship: 'Father' | 'Mother' | 'Guardian';
   occupation?: string | null;
   address?: string | null;
+  gender?: string | null;
+  date_of_birth?: string | null;
 }
 
 export type UpdateParentInput = Partial<CreateParentInput>;

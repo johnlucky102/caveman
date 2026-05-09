@@ -8,7 +8,12 @@ export interface TeacherProfileInput {
   phone: string | null;
   avatar: string | null;
   email?: string | null;
-  teacher_code?: string | null;
+  gender?: string | null;
+  date_of_birth?: string | null;
+  address?: string | null;
+  qualification?: string | null;
+  start_date?: string | null;
+  status?: string | null;
   password?: string;
 }
 
@@ -19,6 +24,12 @@ type UserRow = {
   phone: string | null;
   role: string | null;
   avatar: string | null;
+  gender: string | null;
+  date_of_birth: string | null;
+  address: string | null;
+  qualification: string | null;
+  start_date: string | null;
+  status: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -38,6 +49,12 @@ function mapUserRow(row: UserRow): UserProfile {
     phone: row.phone,
     role: normalizeRole(row.role),
     avatar: row.avatar,
+    gender: row.gender as any,
+    date_of_birth: row.date_of_birth,
+    address: row.address,
+    qualification: row.qualification,
+    start_date: row.start_date,
+    status: row.status as any,
     teacher_code: null,
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -65,7 +82,7 @@ export async function fetchMyProfile(userId: string): Promise<{ profile: UserPro
   const result = await withSupabaseTimeout(
     supabase
       .from('users')
-      .select('id, full_name, email, phone, role, avatar, created_at, updated_at')
+      .select('id, full_name, email, phone, role, avatar, gender, date_of_birth, address, qualification, start_date, status, created_at, updated_at')
       .eq('id', userId)
       .maybeSingle(),
     8000,
@@ -81,7 +98,7 @@ export async function listTeachers(): Promise<{ items: UserProfile[]; error: App
   const result = await withSupabaseTimeout(
     supabase
       .from('users')
-      .select('id, full_name, email, phone, role, avatar, created_at, updated_at')
+      .select('id, full_name, email, phone, role, avatar, gender, date_of_birth, address, qualification, start_date, status, created_at, updated_at')
       .eq('role', 'Teacher')
       .eq('del_yn', false)
       .order('full_name', { ascending: true }),
@@ -97,7 +114,7 @@ export async function getTeacherById(id: string): Promise<{ item: UserProfile | 
   const result = await withSupabaseTimeout(
     supabase
       .from('users')
-      .select('id, full_name, email, phone, role, avatar, created_at, updated_at')
+      .select('id, full_name, email, phone, role, avatar, gender, date_of_birth, address, qualification, start_date, status, created_at, updated_at')
       .eq('id', id)
       .eq('role', 'Teacher')
       .eq('del_yn', false)
@@ -150,7 +167,7 @@ export async function updateTeacherProfile(id: string, payload: TeacherProfileIn
       })
       .eq('id', id)
       .eq('role', 'Teacher')
-      .select('id, full_name, email, phone, role, avatar, created_at, updated_at')
+      .select('id, full_name, email, phone, role, avatar, gender, date_of_birth, address, qualification, start_date, status, created_at, updated_at')
       .single(),
     8000,
     { data: null, error: { message: 'Timeout updating teacher', details: '', hint: '', code: 'TIMEOUT' } } as any

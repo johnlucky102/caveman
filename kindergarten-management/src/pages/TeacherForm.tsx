@@ -4,24 +4,28 @@ import { ArrowLeft, Save, Upload, X } from 'lucide-react';
 import Card from '@/components/common/Card';
 import Button from '@/components/common/Button';
 import Input from '@/components/common/Input';
+import Select from '@/components/common/Select';
 import Avatar from '@/components/common/Avatar';
 import { useToast } from '@/components/common/Toast';
 import { createTeacherProfile, getTeacherById, updateTeacherProfile } from '@/services/usersService';
 
 interface FormState {
   avatar: string | null;
-  teacher_code: string;
   full_name: string;
   phone: string;
   email: string;
-  password?: string;
+  gender: 'Male' | 'Female' | 'Other';
+  date_of_birth: string;
+  address: string;
+  qualification: string;
+  start_date: string;
+  status: 'Active' | 'Inactive' | 'Resigned';
 }
 
 interface FormErrors {
   full_name?: string;
   phone?: string;
   email?: string;
-  password?: string;
 }
 
 function validate(form: FormState): FormErrors {
@@ -40,11 +44,15 @@ export default function TeacherForm() {
 
   const [form, setForm] = useState<FormState>({
     avatar: null,
-    teacher_code: 'Tự động tạo',
     full_name: '',
     phone: '',
     email: '',
-    password: '',
+    gender: 'Female',
+    date_of_birth: '',
+    address: '',
+    qualification: '',
+    start_date: '',
+    status: 'Active',
   });
   const [errors, setErrors] = useState<FormErrors>({});
   const [saving, setSaving] = useState(false);
@@ -63,10 +71,15 @@ export default function TeacherForm() {
       }
       setForm({
         avatar: result.item.avatar,
-        teacher_code: result.item.teacher_code || result.item.id.slice(0, 8).toUpperCase(),
         full_name: result.item.full_name,
         phone: result.item.phone || '',
         email: result.item.email || '',
+        gender: (result.item.gender as any) || 'Female',
+        date_of_birth: result.item.date_of_birth || '',
+        address: result.item.address || '',
+        qualification: result.item.qualification || '',
+        start_date: result.item.start_date || '',
+        status: (result.item.status as any) || 'Active',
       });
     };
     void loadTeacher();
@@ -90,31 +103,27 @@ export default function TeacherForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const nextErrors = validate(form);
-    if (!isEditMode && !form.email.trim()) nextErrors.email = 'Email không được để trống';
-    if (!isEditMode && (!form.password || form.password.length < 6)) {
-      nextErrors.password = 'Mật khẩu phải có ít nhất 6 ký tự';
-    }
-    setErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) return;
-
     setSaving(true);
     const payload = {
       full_name: form.full_name.trim(),
       phone: form.phone.trim(),
-      email: form.email.trim(),
-      password: form.password?.trim(),
       avatar: form.avatar,
+      gender: form.gender,
+      date_of_birth: form.date_of_birth,
+      address: form.address,
+      qualification: form.qualification,
+      start_date: form.start_date,
+      status: form.status,
     };
-    const result = isEditMode && id ? await updateTeacherProfile(id, payload) : await createTeacherProfile(payload);
+    const result = await updateTeacherProfile(id, payload);
     setSaving(false);
 
     if (result.error) {
-      toast.error(isEditMode ? 'Cập nhật giáo viên thất bại' : 'Tạo giáo viên thất bại', result.error.message);
-      if (result.error.field) setErrors((prev) => ({ ...prev, [result.error!.field!]: result.error!.message }));
+      toast.error('Cập nhật hồ sơ thất bại', result.error.message);
       return;
     }
 
-    toast.success(isEditMode ? 'Cập nhật giáo viên thành công' : 'Tạo giáo viên thành công');
+    toast.success('Cập nhật hồ sơ thành công');
     navigate('/teachers');
   };
 
@@ -124,7 +133,7 @@ export default function TeacherForm() {
         <Button variant="ghost" size="sm" leftIcon={<ArrowLeft className="w-4 h-4" />} onClick={() => navigate('/teachers')}>
           Quay lại
         </Button>
-        <h1 className="text-xl font-bold text-[#1E293B]">{isEditMode ? 'Chỉnh sửa giáo viên' : 'Thêm giáo viên mới'}</h1>
+        <h1 className="text-xl font-bold text-[#1E293B]">Hồ sơ giáo viên</h1>
       </div>
 
       <form onSubmit={handleSubmit}>
@@ -154,53 +163,90 @@ export default function TeacherForm() {
 
 
 
-          <Input
-            label="Họ và tên"
-            placeholder="VD: Nguyễn Văn A"
-            value={form.full_name}
-            onChange={(e) => setField('full_name', e.target.value)}
-            error={errors.full_name}
-            required
-            fullWidth
-          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Họ và tên"
+              value={form.full_name}
+              onChange={(e) => setField('full_name', e.target.value)}
+              error={errors.full_name}
+              required
+              fullWidth
+            />
+            <Select
+              label="Giới tính"
+              value={form.gender}
+              onChange={(v) => setField('gender', v)}
+              options={[
+                { label: 'Nam', value: 'Male' },
+                { label: 'Nữ', value: 'Female' },
+                { label: 'Khác', value: 'Other' },
+              ]}
+              fullWidth
+            />
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
+              label="Ngày sinh"
+              type="date"
+              value={form.date_of_birth}
+              onChange={(e) => setField('date_of_birth', e.target.value)}
+              fullWidth
+            />
+            <Input
               label="Số điện thoại"
               type="tel"
-              placeholder="VD: 0901 234 567"
               value={form.phone}
               onChange={(e) => setField('phone', e.target.value)}
               error={errors.phone}
               required
               fullWidth
             />
+          </div>
 
+          <Input
+            label="Email tài khoản"
+            type="email"
+            value={form.email}
+            disabled
+            hint="Liên kết với tài khoản hệ thống"
+            fullWidth
+          />
+
+          <Input
+            label="Địa chỉ thường trú"
+            value={form.address}
+            onChange={(e) => setField('address', e.target.value)}
+            fullWidth
+          />
+
+          <Input
+            label="Bằng cấp / Chuyên môn"
+            value={form.qualification}
+            onChange={(e) => setField('qualification', e.target.value)}
+            placeholder="VD: Cử nhân Giáo dục mầm non"
+            fullWidth
+          />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
-              label="Email"
-              type="email"
-              placeholder="VD: teacher@kidgarden.vn"
-              value={form.email}
-              onChange={(e) => setField('email', e.target.value)}
-              error={errors.email}
-              required
-              disabled={isEditMode}
-              hint={isEditMode ? 'Không thể thay đổi email tài khoản' : undefined}
+              label="Ngày bắt đầu làm việc"
+              type="date"
+              value={form.start_date}
+              onChange={(e) => setField('start_date', e.target.value)}
               fullWidth
             />
-
-            {!isEditMode && (
-              <Input
-                label="Mật khẩu"
-                type="password"
-                placeholder="Ít nhất 6 ký tự"
-                value={form.password}
-                onChange={(e) => setField('password', e.target.value)}
-                error={errors.password}
-                required
-                fullWidth
-              />
-            )}
+            <Select
+              label="Trạng thái"
+              value={form.status}
+              onChange={(v) => setField('status', v)}
+              options={[
+                { label: 'Đang làm việc', value: 'Active' },
+                { label: 'Tạm nghỉ', value: 'Inactive' },
+                { label: 'Đã nghỉ việc', value: 'Resigned' },
+              ]}
+              fullWidth
+            />
           </div>
 
           <div className="flex items-center justify-end gap-3 pt-2">
@@ -208,7 +254,7 @@ export default function TeacherForm() {
               Hủy
             </Button>
             <Button type="submit" leftIcon={<Save className="w-4 h-4" />} loading={saving || loading}>
-              {isEditMode ? 'Lưu thay đổi' : 'Thêm giáo viên'}
+              Lưu hồ sơ
             </Button>
           </div>
         </Card>

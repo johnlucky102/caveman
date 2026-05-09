@@ -32,6 +32,8 @@ export default function ParentForm() {
     relationship: 'Guardian',
     occupation: '',
     address: '',
+    gender: 'Female',
+    date_of_birth: '',
   });
 
   const [linkedStudents, setLinkedStudents] = useState<{id: string, full_name: string, class_name: string}[]>([]);
@@ -55,6 +57,8 @@ export default function ParentForm() {
             relationship: result.item.relationship,
             occupation: result.item.occupation,
             address: result.item.address,
+            gender: result.item.gender || 'Female',
+            date_of_birth: result.item.date_of_birth || '',
           });
           setLinkedStudents(result.item.students || []);
         }
@@ -209,6 +213,24 @@ export default function ParentForm() {
                 onChange={e => setFormData({ ...formData, address: e.target.value })}
                 placeholder="VD: 123 Nguyễn Huệ, Quận 1"
               />
+              <div className="grid grid-cols-2 gap-4">
+                <Select
+                  label="Giới tính"
+                  value={formData.gender || 'Female'}
+                  onChange={v => setFormData({ ...formData, gender: v })}
+                  options={[
+                    { label: 'Nam', value: 'Male' },
+                    { label: 'Nữ', value: 'Female' },
+                    { label: 'Khác', value: 'Other' },
+                  ]}
+                />
+                <Input
+                  label="Ngày sinh"
+                  type="date"
+                  value={formData.date_of_birth || ''}
+                  onChange={e => setFormData({ ...formData, date_of_birth: e.target.value })}
+                />
+              </div>
             </div>
             <div className="flex justify-end mt-6">
               <Button leftIcon={<Save className="w-4 h-4" />} onClick={handleSubmit} loading={saving}>

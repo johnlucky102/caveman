@@ -131,7 +131,12 @@ export default function Teachers() {
     {
       key: 'status',
       label: 'Trạng thái',
-      render: () => <Badge variant="success" size="sm">Đang làm việc</Badge>,
+      render: (value) => {
+        const s = String(value || 'Active');
+        const variant = s === 'Active' ? 'success' : s === 'Inactive' ? 'warning' : 'neutral';
+        const label = s === 'Active' ? 'Đang làm việc' : s === 'Inactive' ? 'Tạm nghỉ' : 'Đã nghỉ việc';
+        return <Badge variant={variant} size="sm">{label}</Badge>;
+      },
     },
     {
       key: 'actions',
@@ -183,9 +188,6 @@ export default function Teachers() {
               Xóa {selectedKeys.length} đã chọn
             </Button>
           )}
-          <Button size="sm" leftIcon={<UserPlus className="w-4 h-4" />} onClick={() => navigate('/teachers/new')}>
-            Thêm giáo viên
-          </Button>
         </div>
       </div>
 

@@ -10,6 +10,7 @@ import Modal from '../components/common/Modal';
 import { useToast } from '../components/common/Toast';
 import { getSchoolSettings, updateSchoolSettings, createSchoolSettings } from '@/services/settingsService';
 import { supabase } from '@/lib/supabase';
+import { ConfirmModal } from '@/components/common/Modal';
 import type { SchoolSettings } from '@/types/domain';
 import type { AppRole } from '@/types/domain';
 
@@ -60,6 +61,21 @@ export default function Settings() {
   const [newYearName, setNewYearName] = useState('');
   const [newYearStart, setNewYearStart] = useState('');
   const [newYearEnd, setNewYearEnd] = useState('');
+
+  // Add User state
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [newUser, setNewUser] = useState({
+    email: '',
+    password: '',
+    full_name: '',
+    phone: '',
+    role: 'Teacher' as AppRole,
+  });
+
+  // Deletion confirms
+  const [confirmDeleteYear, setConfirmDeleteYear] = useState<AcademicYear | null>(null);
+  const [confirmDeleteUser, setConfirmDeleteUser] = useState<UserItem | null>(null);
+
   const toast = useToast();
 
   const tabs: { id: SettingsTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -177,23 +193,50 @@ export default function Settings() {
     }
   };
 
-  const handleDeleteYear = async (id: number) => {
-    const { error } = await supabase.from('school_settings').delete().eq('id', id);
+  const handleDeleteYear = async () => {
+    if (!confirmDeleteYear) return;
+    const { error } = await supabase.from('school_settings').delete().eq('id', confirmDeleteYear.id);
     if (error) {
       toast.error('Lỗi', error.message);
     } else {
-      setAcademicYears((y) => y.filter((item) => item.id !== id));
+      setAcademicYears((y) => y.filter((item) => item.id !== confirmDeleteYear.id));
       toast.success('Đã xóa', 'Năm học đã được xóa');
     }
+    setConfirmDeleteYear(null);
   };
 
-  const handleDeleteUser = async (id: string) => {
-    const { error } = await supabase.from('users').delete().eq('id', id);
+  const handleDeleteUser = async () => {
+    if (!confirmDeleteUser) return;
+    const { error } = await supabase.from('users').delete().eq('id', confirmDeleteUser.id);
     if (error) {
       toast.error('Lỗi', error.message);
     } else {
-      setUsers((u) => u.filter((user) => user.id !== id));
+      setUsers((u) => u.filter((user) => user.id !== confirmDeleteUser.id));
       toast.success('Đã xóa', 'Người dùng đã bị xóa');
+    }
+    setConfirmDeleteUser(null);
+  };
+
+  const handleAddUser = async () => {
+    if (!newUser.email || !newUser.password || !newUser.full_name) {
+      toast.error('Vui lòng nhập đầy đủ thông tin bắt buộc');
+      return;
+    }
+    setSaving(true);
+    const { data, error } = await supabase.functions.invoke('create-user', {
+      body: newUser
+    });
+    setSaving(false);
+
+    if (error || data?.error) {
+      toast.error('Lỗi', error?.message || data?.error);
+    } else {
+      toast.success('Thành công', 'Đã tạo tài khoản người dùng');
+      setShowAddUserModal(false);
+      setNewUser({ email: '', password: '', full_name: '', phone: '', role: 'Teacher' });
+      // Reload users
+      setActiveTab('school');
+      setTimeout(() => setActiveTab('users'), 50);
     }
   };
 
@@ -317,7 +360,7 @@ export default function Settings() {
                         <div className="flex items-center gap-2">
                           {!year.is_current && (
                             <Button size="xs" variant="ghost" leftIcon={<Trash2 className="w-3 h-3" />}
-                              onClick={() => handleDeleteYear(year.id)}>
+                              onClick={() => setConfirmDeleteYear(year)}>
                               Xóa
                             </Button>
                           )}
@@ -337,6 +380,9 @@ export default function Settings() {
                 header={
                   <div className="flex items-center justify-between gap-3">
                     <CardHeader title="Người dùng" subtitle={`${users.length} tài khoản`} />
+                    <Button size="sm" onClick={() => setShowAddUserModal(true)} leftIcon={<Plus className="w-4 h-4" />}>
+                      Thêm tài khoản
+                    </Button>
                   </div>
                 }
                 noPadding
@@ -379,7 +425,7 @@ export default function Settings() {
                             </td>
                             <td className="px-4 py-3 text-right">
                               <button
-                                onClick={() => handleDeleteUser(user.id)}
+                                onClick={() => setConfirmDeleteUser(user)}
                                 className="p-1.5 rounded-lg text-[#64748B] hover:bg-red-50 hover:text-red-500 transition-colors"
                                 title="Xóa"
                               >
@@ -425,6 +471,56 @@ export default function Settings() {
           </div>
         </div>
       </Modal>
+
+      {/* Add User Account Modal */}
+      <Modal
+        open={showAddUserModal}
+        onClose={() => setShowAddUserModal(false)}
+        title="Tạo tài khoản mới"
+        description="Admin có thể tạo tài khoản cho nhân viên hoặc phụ huynh"
+      >
+        <div className="space-y-4">
+          <Input label="Họ tên" value={newUser.full_name} onChange={e => setNewUser({...newUser, full_name: e.target.value})} required />
+          <div className="grid grid-cols-2 gap-4">
+            <Input label="Email" type="email" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} required />
+            <Input label="Mật khẩu" type="password" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} required />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Input label="Số điện thoại" type="tel" value={newUser.phone} onChange={e => setNewUser({...newUser, phone: e.target.value})} />
+            <Select 
+              label="Vai trò" 
+              value={newUser.role} 
+              onChange={v => setNewUser({...newUser, role: v as AppRole})} 
+              options={[
+                { label: 'Quản trị viên', value: 'Admin' },
+                { label: 'Giáo viên', value: 'Teacher' },
+                { label: 'Phụ huynh', value: 'Parent' },
+                { label: 'Kế toán', value: 'Accountant' },
+              ]}
+            />
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="outline" onClick={() => setShowAddUserModal(false)}>Hủy</Button>
+            <Button onClick={handleAddUser} loading={saving}>Tạo tài khoản</Button>
+          </div>
+        </div>
+      </Modal>
+
+      <ConfirmModal
+        open={Boolean(confirmDeleteYear)}
+        onClose={() => setConfirmDeleteYear(null)}
+        onConfirm={handleDeleteYear}
+        title="Xóa năm học"
+        message={`Bạn có chắc chắn muốn xóa năm học "${confirmDeleteYear?.school_year}"?`}
+      />
+
+      <ConfirmModal
+        open={Boolean(confirmDeleteUser)}
+        onClose={() => setConfirmDeleteUser(null)}
+        onConfirm={handleDeleteUser}
+        title="Xóa tài khoản"
+        message={`Xóa tài khoản của "${confirmDeleteUser?.full_name}"?`}
+      />
     </div>
   );
 }
