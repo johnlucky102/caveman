@@ -114,56 +114,24 @@ export async function createTeacherProfile(payload: TeacherProfileInput): Promis
     return { item: null, error: { code: 'VALIDATION', message: 'Email giáo viên là bắt buộc.', field: 'email' } };
   }
 
-  const shouldGenerateCode = !payload.teacher_code?.trim();
-  const maxAttempts = shouldGenerateCode ? 5 : 1;
-  const currentSessionResult = await supabase.auth.getSession();
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const teacherCode = shouldGenerateCode ? generateTeacherCode() : payload.teacher_code?.trim();
-    const signUpResult = await supabase.auth.signUp({
+  // Call Edge Function to create user securely
+  const { data, error: funcError } = await supabase.functions.invoke('create-user', {
+    body: {
       email: payload.email.trim(),
       password: generateTemporaryPassword(),
-      options: {
-        data: {
-          full_name: payload.full_name,
-          phone: payload.phone,
-          role: 'Teacher',
-        },
-      },
-    });
-
-    if (signUpResult.error || !signUpResult.data.user) {
-      return { item: null, error: toAppError(signUpResult.error, 'Không thể tạo tài khoản giáo viên.') };
+      full_name: payload.full_name,
+      phone: payload.phone,
+      role: 'Teacher',
     }
+  });
 
-    if (currentSessionResult.data.session) {
-      await supabase.auth.setSession({
-        access_token: currentSessionResult.data.session.access_token,
-        refresh_token: currentSessionResult.data.session.refresh_token,
-      });
-    }
-
-    const updateResult = await withSupabaseTimeout(
-      supabase
-        .from('users')
-        .insert({
-          id: signUpResult.data.user.id,
-          full_name: payload.full_name,
-          phone: payload.phone,
-          avatar: payload.avatar,
-          role: 'Teacher',
-        })
-        .select('id, full_name, phone, role, avatar, created_at, updated_at')
-        .single(),
-      8000,
-      { data: null, error: { message: 'Timeout creating teacher profile', details: '', hint: '', code: 'TIMEOUT' } } as any
-    );
-
-    if (!updateResult.error && updateResult.data) return { item: mapUserRow(updateResult.data as UserRow), error: null };
-    if (!shouldGenerateCode || !isTeacherCodeConflict(updateResult.error) || attempt === maxAttempts) {
-      return { item: null, error: toAppError(updateResult.error, 'Không thể tạo hồ sơ giáo viên.') };
-    }
+  if (funcError || !data?.user) {
+    const errorMsg = funcError?.message || data?.error || 'Không thể tạo tài khoản giáo viên.';
+    return { item: null, error: { code: 'FUNCTION_ERROR', message: errorMsg } };
   }
+
+  // The Edge Function already inserted the profile. Fetch it to return.
+  return getTeacherById(data.user.id);
 
   return { item: null, error: { code: 'CONFLICT', message: 'Không thể tạo mã giáo viên duy nhất.' } };
 }

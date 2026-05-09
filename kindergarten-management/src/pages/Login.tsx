@@ -365,14 +365,6 @@ export default function Login() {
         <p className="text-center mt-5 text-xs" style={{ color: '#94A3B8' }}>
           &copy; {new Date().getFullYear()} KidGarden · Hệ thống quản lý mầm non
         </p>
-
-        {/* Sign up link */}
-        <p className="text-center mt-3 text-sm" style={{ color: '#64748B' }}>
-          Chưa có tài khoản?{' '}
-          <Link to="/signup" className="font-semibold hover:underline" style={{ color: '#FF6B6B' }}>
-            Đăng ký ngay
-          </Link>
-        </p>
       </div>
     </div>
   );

@@ -3,7 +3,6 @@ import MainLayout from '@/components/layout/MainLayout';
 import RoleGuard from '@/components/auth/RoleGuard';
 
 import Login from '@/pages/Login';
-import SignUp from '@/pages/SignUp';
 import Dashboard from '@/pages/Dashboard';
 import Students from '@/pages/Students';
 import StudentDetail from '@/pages/StudentDetail';
@@ -30,7 +29,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<SignUp />} />
+
 
         <Route element={<MainLayout />}>
           <Route path="/" element={allow(['Admin', 'Teacher', 'Accountant', 'Parent'], <Dashboard />)} />
