@@ -114,7 +114,7 @@ export default function Classes() {
             <Building2 className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <p className="font-medium text-[#1E293B]">{row.name}</p>
+            <p className="font-medium text-foreground">{row.name}</p>
           </div>
         </div>
       ),
@@ -125,14 +125,14 @@ export default function Classes() {
       render: (_value, row) => (
         <div className="flex items-center gap-2">
           <Avatar name={row.teacher_name || 'Chưa phân công'} size="xs" />
-          <span className="text-[#64748B]">{row.teacher_name || 'Chưa phân công'}</span>
+          <span className="text-muted-foreground">{row.teacher_name || 'Chưa phân công'}</span>
         </div>
       ),
     },
     {
       key: 'room',
       label: 'Phòng',
-      render: (value) => <span className="text-[#64748B]">{String(value || '—')}</span>,
+      render: (value) => <span className="text-muted-foreground">{String(value || '—')}</span>,
     },
     {
       key: 'max_students',
@@ -140,8 +140,8 @@ export default function Classes() {
       sortable: true,
       render: (_value, row) => (
         <div className="flex items-center gap-2">
-          <Users className="w-4 h-4 text-[#94A3B8]" />
-          <span className="text-[#1E293B]">
+          <Users className="w-4 h-4 text-muted-foreground/60" />
+          <span className="text-foreground">
             {row.student_count}/{row.max_students}
           </span>
         </div>
@@ -169,7 +169,7 @@ export default function Classes() {
                   e.stopPropagation();
                   navigate(`/classes/${row.id}/edit`);
                 }}
-                className="p-1.5 rounded-lg text-[#94A3B8] hover:text-primary hover:bg-primary/10 transition-colors"
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
                 title="Chỉnh sửa"
               >
                 <Pencil className="w-4 h-4" />
@@ -183,7 +183,7 @@ export default function Classes() {
                   }
                   setDeleteTarget(row);
                 }}
-                className="p-1.5 rounded-lg text-[#94A3B8] hover:text-red-500 hover:bg-red-50 transition-colors"
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors"
                 title="Xóa"
               >
                 <Trash2 className="w-4 h-4" />
@@ -199,15 +199,15 @@ export default function Classes() {
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-[#1E293B]">Quản lý lớp học</h1>
-          <p className="text-sm text-[#64748B]">{total} lớp học</p>
+          <h1 className="text-xl font-bold text-foreground">Quản lý lớp học</h1>
+          <p className="text-sm text-muted-foreground">{total} lớp học</p>
         </div>
         <div className="flex gap-2">
           {canManage && selectedKeys.length > 0 && (
             <Button
               variant="outline"
               size="sm"
-              className="text-red-500 hover:text-red-600 hover:bg-red-50 border-red-200 hover:border-red-300"
+              className="text-red-500 hover:text-red-600 hover:bg-red-500/10 border-red-500/20 hover:border-red-500/50"
               leftIcon={<Trash2 className="w-4 h-4" />}
               onClick={() => setConfirmBulkDelete(true)}
             >
@@ -224,8 +224,8 @@ export default function Classes() {
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatCard label="Tổng lớp" value={String(total)} icon={<Building2 className="w-5 h-5 text-primary" />} iconBg="bg-primary/10" />
-        <StatCard label="Tổng học sinh (trang hiện tại)" value={String(totalStudents)} icon={<Users className="w-5 h-5 text-emerald-500" />} iconBg="bg-emerald-50" />
-        <StatCard label="Lớp đầy" value={String(fullClasses)} icon={<Users className="w-5 h-5 text-amber-500" />} iconBg="bg-amber-50" />
+        <StatCard label="Tổng học sinh (trang hiện tại)" value={String(totalStudents)} icon={<Users className="w-5 h-5 text-emerald-500" />} iconBg="bg-emerald-500/10" />
+        <StatCard label="Lớp đầy" value={String(fullClasses)} icon={<Users className="w-5 h-5 text-amber-500" />} iconBg="bg-amber-500/10" />
       </div>
 
       <Card noPadding>

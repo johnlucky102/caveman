@@ -60,8 +60,8 @@ const COLORS = {
 function ChartTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-xl p-3 text-sm shadow-lg bg-white border border-[#E2E8F0]">
-      {label && <p className="font-semibold mb-1 text-[#1E293B]">{label}</p>}
+    <div className="rounded-xl p-3 text-sm shadow-lg bg-popover border border-border">
+      {label && <p className="font-semibold mb-1 text-foreground">{label}</p>}
       {payload.map((p: any, i: number) => (
         <p key={i} style={{ color: p.color }}>{p.name}: <strong>{p.value}</strong></p>
       ))}
@@ -135,10 +135,10 @@ export default function Dashboard() {
       {/* Welcome row */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-bold text-[#1E293B]">
+          <h1 className="text-2xl font-bold text-foreground">
             Xin chào, <span className="text-primary">{displayName}</span>!
           </h1>
-          <p className="text-sm text-[#64748B] mt-0.5">{today}</p>
+          <p className="text-sm text-muted-foreground mt-0.5">{today}</p>
         </div>
         <div className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium bg-primary/10 text-primary">
           <Users className="w-4 h-4" />
@@ -147,7 +147,7 @@ export default function Dashboard() {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <StatCard
           label="Tổng học sinh"
           value={loading ? '...' : String(stats?.totalStudents || 0)}
@@ -155,83 +155,90 @@ export default function Dashboard() {
           iconBg="bg-primary/10"
           trend="Hồ sơ chính thức"
           trendDirection="up"
+          onClick={() => navigate('/students')}
         />
         <StatCard
           label="Đang có mặt"
           value={loading ? '...' : String(stats?.attendanceToday.present || 0)}
           icon={<CheckCircle className="w-5 h-5 text-emerald-500" />}
-          iconBg="bg-emerald-50"
+          iconBg="bg-emerald-500/10"
           trend={`${stats?.attendanceToday.total || 0} học sinh điểm danh`}
           trendDirection="up"
+          onClick={() => navigate('/attendance')}
         />
         <StatCard
           label="Vắng mặt"
           value={loading ? '...' : String(stats?.attendanceToday.absent || 0)}
           icon={<XCircle className="w-5 h-5 text-amber-500" />}
-          iconBg="bg-amber-50"
+          iconBg="bg-amber-500/10"
           trend="Tính theo ngày hôm nay"
           trendDirection="down"
+          onClick={() => navigate('/attendance')}
         />
         <StatCard
           label="Công nợ học phí"
           value={loading ? '...' : `${((stats?.totalDebt || 0) / 1000000).toFixed(1)}M`}
           icon={<Wallet className="w-5 h-5 text-red-500" />}
-          iconBg="bg-red-50"
+          iconBg="bg-red-500/10"
           trend={`${(stats?.totalDebt || 0).toLocaleString()} đ`}
           trendDirection="down"
+          onClick={() => navigate('/fees')}
         />
       </div>
 
       {/* Attendance table + Notifications */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Attendance table */}
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-[#E2E8F0] overflow-hidden">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-[#E2E8F0]">
+        <div className="lg:col-span-2 bg-card rounded-2xl border border-border overflow-hidden">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-border">
             <div>
-              <h2 className="text-base font-semibold text-[#1E293B]">Điểm danh hôm nay (Top 5 lớp)</h2>
-              <p className="text-xs text-[#64748B] mt-0.5">
+              <h2 className="text-base font-semibold text-foreground">Điểm danh hôm nay (Top 5 lớp)</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
                 Cập nhật theo thời gian thực từ giáo viên
               </p>
             </div>
-            <button className="flex items-center gap-1 text-xs font-medium text-primary">
+            <button 
+              onClick={() => navigate('/attendance')}
+              className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+            >
               Xem chi tiết <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-[#F8FAFC]">
+                <tr className="bg-muted/50">
                   {['Lớp học', 'Sĩ số', 'Có mặt', 'Vắng', 'Tỷ lệ'].map((h, i) => (
                     <th
                       key={h}
-                      className={`py-3 font-medium text-xs uppercase tracking-wider text-[#64748B] ${i === 0 ? 'text-left px-6' : 'text-center px-4'}`}
+                      className={`py-3 font-medium text-xs uppercase tracking-wider text-muted-foreground ${i === 0 ? 'text-left px-6' : 'text-center px-4'}`}
                     >
                       {h}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#F1F5F9]">
+              <tbody className="divide-y divide-border">
                 {(stats?.attendanceByClass || []).map((row) => {
                   const pct = row.total > 0 ? Math.round((row.present / row.total) * 100) : 0;
                   const barColor = pct >= 90 ? COLORS.success : pct >= 75 ? COLORS.warning : COLORS.error;
                   return (
-                    <tr key={row.classId} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-3 font-medium text-[#1E293B]">{row.className}</td>
-                      <td className="text-center px-4 py-3 text-[#64748B]">{row.total}</td>
+                    <tr key={row.classId} className="hover:bg-muted/30 transition-colors">
+                      <td className="px-6 py-3 font-medium text-foreground">{row.className}</td>
+                      <td className="text-center px-4 py-3 text-muted-foreground">{row.total}</td>
                       <td className="text-center px-4 py-3">
-                        <span className="inline-flex items-center justify-center w-8 h-6 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-600">
+                        <span className="inline-flex items-center justify-center w-8 h-6 rounded-md text-xs font-semibold bg-emerald-500/10 text-emerald-500">
                           {row.present}
                         </span>
                       </td>
                       <td className="text-center px-4 py-3">
-                        <span className="inline-flex items-center justify-center w-8 h-6 rounded-md text-xs font-semibold bg-amber-50 text-amber-600">
+                        <span className="inline-flex items-center justify-center w-8 h-6 rounded-md text-xs font-semibold bg-amber-500/10 text-amber-500">
                           {row.absent}
                         </span>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <div className="flex-1 h-2 rounded-full bg-[#E2E8F0] overflow-hidden">
+                          <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
                             <div className="h-full rounded-full" style={{ width: `${pct}%`, background: barColor }} />
                           </div>
                           <span className="text-xs font-semibold w-10 text-right" style={{ color: barColor }}>
@@ -248,27 +255,27 @@ export default function Dashboard() {
         </div>
 
         {/* Notifications */}
-        <div className="bg-white rounded-2xl border border-[#E2E8F0] flex flex-col overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-[#E2E8F0]">
-            <h2 className="text-base font-semibold text-[#1E293B]">Thông báo hệ thống</h2>
-            <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary text-white text-xs font-bold">
+        <div className="bg-card rounded-2xl border border-border flex flex-col overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+            <h2 className="text-base font-semibold text-foreground">Thông báo hệ thống</h2>
+            <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs font-bold">
               {notifications.length}
             </span>
           </div>
-          <div className="flex-1 divide-y divide-[#F1F5F9] overflow-auto">
+          <div className="flex-1 divide-y divide-border overflow-auto">
             {notifications.length === 0 ? (
-              <div className="p-10 text-center text-xs text-[#94A3B8]">Không có thông báo mới</div>
+              <div className="p-10 text-center text-xs text-muted-foreground/50">Không có thông báo mới</div>
             ) : (
               notifications.map((n) => {
                 const dotColor = n.type === 'success' ? COLORS.success : n.type === 'warning' ? COLORS.warning : COLORS.secondary;
                 return (
-                  <div key={n.id} className="px-5 py-4 hover:bg-gray-50 transition-colors cursor-pointer">
+                  <div key={n.id} className="px-5 py-4 hover:bg-muted/30 transition-colors cursor-pointer">
                     <div className="flex gap-3">
                       <div className="mt-1.5 w-2 h-2 rounded-full shrink-0" style={{ background: dotColor }} />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm leading-snug line-clamp-2 text-[#1E293B] font-medium">{n.title}</p>
-                        <p className="text-xs mt-1 text-[#64748B] line-clamp-1">{n.content}</p>
-                        <p className="text-[10px] mt-1 text-[#94A3B8] italic">{new Date(n.created_at).toLocaleString('vi-VN')}</p>
+                        <p className="text-sm leading-snug line-clamp-2 text-foreground font-medium">{n.title}</p>
+                        <p className="text-xs mt-1 text-muted-foreground line-clamp-1">{n.content}</p>
+                        <p className="text-[10px] mt-1 text-muted-foreground/60 italic">{new Date(n.created_at).toLocaleString('vi-VN')}</p>
                       </div>
                     </div>
                   </div>
@@ -276,8 +283,8 @@ export default function Dashboard() {
               })
             )}
           </div>
-          <div className="px-5 py-3 border-t border-[#E2E8F0]">
-            <button onClick={() => navigate('/notifications')} className="w-full text-xs font-medium text-center py-1.5 rounded-lg hover:bg-gray-50 text-primary transition-colors">
+          <div className="px-5 py-3 border-t border-border">
+            <button onClick={() => navigate('/notifications')} className="w-full text-xs font-medium text-center py-1.5 rounded-lg hover:bg-muted text-primary transition-colors">
               Xem tất cả thông báo
             </button>
           </div>
@@ -286,59 +293,79 @@ export default function Dashboard() {
 
       {/* Charts */}
       <div>
-        <h2 className="text-lg font-semibold text-[#1E293B] mb-5">Thống kê &amp; Biểu đồ</h2>
+        <h2 className="text-lg font-semibold text-foreground mb-5">Thống kê &amp; Biểu đồ</h2>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
           {/* Bar chart */}
-          <div className="bg-white rounded-2xl border border-[#E2E8F0] p-6">
-            <h3 className="text-sm font-semibold text-[#1E293B] mb-4">Học sinh theo khối lớp</h3>
-            <RResponsiveContainer width="100%" height={220}>
-              <RBarChart data={stats?.studentsByGrade || []} margin={{ top: 5, right: 5, left: -20, bottom: 5 }} barSize={28}>
-                <RCartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
-                <RXAxis dataKey="gradeName" tick={{ fontSize: 11, fill: COLORS.textSecondary }} axisLine={false} tickLine={false} />
-                <RYAxis tick={{ fontSize: 11, fill: COLORS.textSecondary }} axisLine={false} tickLine={false} />
-                <RTooltip content={<ChartTooltip />} />
-                <RBar dataKey="count" name="Học sinh" fill={COLORS.primary} radius={[6, 6, 0, 0]} />
-              </RBarChart>
-            </RResponsiveContainer>
+          <div className="bg-card rounded-2xl border border-border p-6">
+            <h3 className="text-sm font-semibold text-foreground mb-4">Học sinh theo khối lớp</h3>
+            {(stats?.studentsByGrade || []).length > 0 ? (
+              <RResponsiveContainer width="100%" height={220}>
+                <RBarChart data={stats?.studentsByGrade || []} margin={{ top: 5, right: 5, left: -20, bottom: 5 }} barSize={28}>
+                  <RCartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-muted/20" vertical={false} />
+                  <RXAxis dataKey="gradeName" tick={{ fontSize: 11, fill: 'currentColor' }} className="text-muted-foreground" axisLine={false} tickLine={false} />
+                  <RYAxis tick={{ fontSize: 11, fill: 'currentColor' }} className="text-muted-foreground" axisLine={false} tickLine={false} />
+                  <RTooltip content={<ChartTooltip />} />
+                  <RBar dataKey="count" name="Học sinh" fill={COLORS.primary} radius={[6, 6, 0, 0]} />
+                </RBarChart>
+              </RResponsiveContainer>
+            ) : (
+              <div className="h-[220px] flex items-center justify-center text-xs text-muted-foreground/60 italic border border-dashed border-border rounded-xl">
+                Chưa có dữ liệu học sinh
+              </div>
+            )}
           </div>
 
           {/* Line chart */}
-          <div className="bg-white rounded-2xl border border-[#E2E8F0] p-6">
-            <h3 className="text-sm font-semibold text-[#1E293B] mb-4">Xu hướng điểm danh (7 ngày)</h3>
-            <RResponsiveContainer width="100%" height={220}>
-              <RLineChart data={trendData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
-                <RCartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
-                <RXAxis dataKey="day" tick={{ fontSize: 11, fill: COLORS.textSecondary }} axisLine={false} tickLine={false} />
-                <RYAxis tick={{ fontSize: 11, fill: COLORS.textSecondary }} axisLine={false} tickLine={false} domain={[0, 100]} tickFormatter={(v: number) => `${v}%`} />
-                <RTooltip content={<ChartTooltip />} />
-                <RLine type="monotone" dataKey="rate" name="Tỷ lệ %" stroke={COLORS.secondary} strokeWidth={2.5} dot={{ fill: COLORS.secondary, r: 4, strokeWidth: 0 }} activeDot={{ r: 6, strokeWidth: 0 }} />
-              </RLineChart>
-            </RResponsiveContainer>
+          <div className="bg-card rounded-2xl border border-border p-6">
+            <h3 className="text-sm font-semibold text-foreground mb-4">Xu hướng điểm danh (7 ngày)</h3>
+            {trendData.length > 0 ? (
+              <RResponsiveContainer width="100%" height={220}>
+                <RLineChart data={trendData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                  <RCartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-muted/20" vertical={false} />
+                  <RXAxis dataKey="day" tick={{ fontSize: 11, fill: 'currentColor' }} className="text-muted-foreground" axisLine={false} tickLine={false} />
+                  <RYAxis tick={{ fontSize: 11, fill: 'currentColor' }} className="text-muted-foreground" axisLine={false} tickLine={false} domain={[0, 100]} tickFormatter={(v: number) => `${v}%`} />
+                  <RTooltip content={<ChartTooltip />} />
+                  <RLine type="monotone" dataKey="rate" name="Tỷ lệ %" stroke={COLORS.secondary} strokeWidth={2.5} dot={{ fill: COLORS.secondary, r: 4, strokeWidth: 0 }} activeDot={{ r: 6, strokeWidth: 0 }} />
+                </RLineChart>
+              </RResponsiveContainer>
+            ) : (
+              <div className="h-[220px] flex items-center justify-center text-xs text-muted-foreground/60 italic border border-dashed border-border rounded-xl">
+                Chưa có dữ liệu điểm danh
+              </div>
+            )}
           </div>
 
           {/* Pie chart */}
-          <div className="bg-white rounded-2xl border border-[#E2E8F0] p-6">
-            <h3 className="text-sm font-semibold text-[#1E293B] mb-4">Tình trạng học phí</h3>
-            <RResponsiveContainer width="100%" height={160}>
-              <RPieChart>
-                <RPie data={feeStatus} cx="50%" cy="50%" innerRadius={45} outerRadius={72} paddingAngle={3} dataKey="value">
-                  {feeStatus.map((entry, i) => <RCell key={i} fill={entry.color} />)}
-                </RPie>
-                <RTooltip content={<ChartTooltip />} />
-              </RPieChart>
-            </RResponsiveContainer>
-            <div className="mt-2 space-y-2">
-              {feeStatus.map((item) => (
-                <div key={item.name} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2.5 h-2.5 rounded-full" style={{ background: item.color }} />
-                    <span className="text-xs text-[#64748B]">{item.name}</span>
-                  </div>
-                  <span className="text-xs font-semibold text-[#1E293B]">{item.value}</span>
+          <div className="bg-card rounded-2xl border border-border p-6">
+            <h3 className="text-sm font-semibold text-foreground mb-4">Tình trạng học phí</h3>
+            {feeStatus.length > 0 ? (
+              <>
+                <RResponsiveContainer width="100%" height={160}>
+                  <RPieChart>
+                    <RPie data={feeStatus} cx="50%" cy="50%" innerRadius={45} outerRadius={72} paddingAngle={3} dataKey="value">
+                      {feeStatus.map((entry, i) => <RCell key={i} fill={entry.color} />)}
+                    </RPie>
+                    <RTooltip content={<ChartTooltip />} />
+                  </RPieChart>
+                </RResponsiveContainer>
+                <div className="mt-2 space-y-2">
+                  {feeStatus.map((item) => (
+                    <div key={item.name} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 rounded-full" style={{ background: item.color }} />
+                        <span className="text-xs text-muted-foreground">{item.name}</span>
+                      </div>
+                      <span className="text-xs font-semibold text-foreground">{item.value}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </>
+            ) : (
+              <div className="h-[210px] flex items-center justify-center text-xs text-muted-foreground/60 italic border border-dashed border-border rounded-xl">
+                Chưa có dữ liệu học phí
+              </div>
+            )}
           </div>
 
         </div>

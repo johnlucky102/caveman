@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 const corsHeaders = {
@@ -6,7 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -54,8 +54,7 @@ serve(async (req) => {
 
     if (createError) throw createError
 
-    // 3. Insert Profile (optional if trigger exists, but explicit is safer here)
-    // Checking if profile already exists (trigger might have created it)
+    // 3. Insert Profile
     const { data: existingProfile } = await adminClient
       .from('users')
       .select('id')
@@ -69,18 +68,20 @@ serve(async (req) => {
           id: newUser.user.id,
           full_name,
           phone,
-          role
+          role,
+          email
         })
 
       if (insertError) throw insertError
     } else {
-      // Update existing profile with correct metadata
+      // Update existing profile
       const { error: updateError } = await adminClient
         .from('users')
         .update({
           full_name,
           phone,
-          role
+          role,
+          email
         })
         .eq('id', newUser.user.id)
 
@@ -95,7 +96,7 @@ serve(async (req) => {
   } catch (error) {
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 400,
+      status: 200, // Return 200 so the client can parse the error message body easily
     })
   }
 })

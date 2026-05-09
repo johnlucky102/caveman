@@ -286,6 +286,18 @@ export async function deleteParent(id: string): Promise<{ error: AppError | null
   return { error: null };
 }
 
+export async function deleteParentBulk(ids: string[]): Promise<{ error: AppError | null }> {
+  if (!ids.length) return { error: null };
+  const result = await withSupabaseTimeout(
+    supabase.from('parents').update({ del_yn: true }).in('id', ids),
+    8000,
+    { data: null, error: { message: 'Timeout xóa danh sách phụ huynh', details: '', hint: '', code: 'TIMEOUT' } } as any
+  );
+
+  if (result.error) return { error: toAppError(result.error, 'Không thể xóa danh sách phụ huynh.') };
+  return { error: null };
+}
+
 export async function linkParentToStudent(parentId: string, studentId: string, relationship: string, isPrimary = false): Promise<{ error: AppError | null }> {
   const result = await withSupabaseTimeout(
     supabase.from('student_parent').upsert({

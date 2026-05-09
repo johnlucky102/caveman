@@ -40,7 +40,7 @@ const studentColumns: TableColumn<StudentReport>[] = [
   {
     key: 'attendance_rate', label: 'Điểm danh',
     render: (val) => (
-      <span className={Number(val) >= 95 ? 'text-emerald-600' : Number(val) >= 85 ? 'text-amber-600' : 'text-red-500'}>
+      <span className={Number(val) >= 95 ? 'text-emerald-500' : Number(val) >= 85 ? 'text-amber-500' : 'text-red-500'}>
         {String(val)}%
       </span>
     ),
@@ -62,9 +62,9 @@ const studentColumns: TableColumn<StudentReport>[] = [
 const attendanceColumns: TableColumn<AttendanceReport>[] = [
   { key: 'date', label: 'Ngày', sortable: true, render: (val) => new Date(String(val)).toLocaleDateString('vi-VN') },
   { key: 'total', label: 'Tổng sĩ số' },
-  { key: 'present', label: 'Có mặt', render: (val) => <span className="text-emerald-600">{String(val)}</span> },
+  { key: 'present', label: 'Có mặt', render: (val) => <span className="text-emerald-500">{String(val)}</span> },
   { key: 'absent', label: 'Vắng mặt', render: (val) => <span className="text-red-500">{String(val)}</span> },
-  { key: 'late', label: 'Đi muộn', render: (val) => <span className="text-amber-600">{String(val)}</span> },
+  { key: 'late', label: 'Đi muộn', render: (val) => <span className="text-amber-500">{String(val)}</span> },
 ];
 
 // ─── Component ─────────────────────────────────────────────────────────────
@@ -269,12 +269,12 @@ export default function Reports() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-bold text-[#1E293B]">Báo cáo</h1>
-        <p className="text-sm text-[#64748B]">Tạo và xem các báo cáo thống kê</p>
+        <h1 className="text-xl font-bold text-foreground">Báo cáo</h1>
+        <p className="text-sm text-muted-foreground">Tạo và xem các báo cáo thống kê</p>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-[#E2E8F0] overflow-x-auto">
+      <div className="flex gap-1 border-b border-border overflow-x-auto">
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -282,7 +282,7 @@ export default function Reports() {
             className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
               activeTab === tab.id
                 ? 'border-primary text-primary'
-                : 'border-transparent text-[#64748B] hover:text-[#1E293B]'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}
           >
             {tab.label}
@@ -299,20 +299,20 @@ export default function Reports() {
             <StatCard label="Đang hiện diện" value={loading ? '...' : (stats?.attendanceToday.present || 0)}
               icon={<Users className="w-5 h-5 text-secondary" />} iconBg="bg-secondary/10" />
             <StatCard label="Vắng mặt" value={loading ? '...' : (stats?.attendanceToday.absent || 0)}
-              icon={<Calendar className="w-5 h-5 text-amber-500" />} iconBg="bg-amber-50" />
+              icon={<Calendar className="w-5 h-5 text-amber-500" />} iconBg="bg-amber-500/10" />
             <StatCard label="Tỷ lệ điểm danh"
               value={loading ? '...' : `${stats?.attendanceToday.total ? Math.round((stats.attendanceToday.present / stats.attendanceToday.total) * 100) : 0}%`}
-              icon={<TrendingUp className="w-5 h-5 text-emerald-500" />} iconBg="bg-emerald-50" trend="Hôm nay" trendDirection="up" />
+              icon={<TrendingUp className="w-5 h-5 text-emerald-500" />} iconBg="bg-emerald-500/10" trend="Hôm nay" trendDirection="up" />
           </div>
 
           <Card header={<CardHeader title="Tổng quan tài chính" subtitle="Thống kê công nợ hiện tại" />}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="p-4 bg-red-50 rounded-xl">
-                <p className="text-xs font-medium text-red-600 mb-1">Tổng công nợ học phí</p>
-                <p className="text-xl font-bold text-red-700">{loading ? '...' : formatCurrency(stats?.totalDebt || 0)}</p>
+              <div className="p-4 bg-red-500/10 rounded-xl">
+                <p className="text-xs font-medium text-red-500 mb-1">Tổng công nợ học phí</p>
+                <p className="text-xl font-bold text-red-500">{loading ? '...' : formatCurrency(stats?.totalDebt || 0)}</p>
               </div>
-              <div className="p-4 bg-emerald-50 rounded-xl">
-                <p className="text-xs font-medium text-emerald-600 mb-1">Học sinh theo khối</p>
+              <div className="p-4 bg-emerald-500/10 rounded-xl">
+                <p className="text-xs font-medium text-emerald-500 mb-1">Học sinh theo khối</p>
                 <div className="flex gap-2 flex-wrap mt-1">
                   {stats?.studentsByGrade.map((g) => (
                     <Badge key={g.gradeName} variant="success" size="sm">{g.gradeName}: {g.count}</Badge>
@@ -377,11 +377,11 @@ export default function Reports() {
               icon={<Calendar className="w-5 h-5 text-secondary" />} iconBg="bg-secondary/10" />
             <StatCard label="TB có mặt"
               value={attendanceReports.length > 0 ? `${Math.round(attendanceReports.reduce((s, a) => s + (a.total > 0 ? (a.present / a.total) * 100 : 0), 0) / attendanceReports.length)}%` : '0%'}
-              icon={<TrendingUp className="w-5 h-5 text-emerald-500" />} iconBg="bg-emerald-50" />
+              icon={<TrendingUp className="w-5 h-5 text-emerald-500" />} iconBg="bg-emerald-500/10" />
             <StatCard label="Tổng vắng" value={attendanceReports.reduce((s, a) => s + a.absent, 0)}
-              icon={<Users className="w-5 h-5 text-red-400" />} iconBg="bg-red-50" />
+              icon={<Users className="w-5 h-5 text-red-500" />} iconBg="bg-red-500/10" />
             <StatCard label="Tổng đi muộn" value={attendanceReports.reduce((s, a) => s + a.late, 0)}
-              icon={<TrendingUp className="w-5 h-5 text-amber-500" />} iconBg="bg-amber-50" />
+              icon={<TrendingUp className="w-5 h-5 text-amber-500" />} iconBg="bg-amber-500/10" />
           </div>
 
           <Card header={<CardHeader title="Chi tiết điểm danh" subtitle={`${attendanceReports.length} ngày`} />} noPadding>
@@ -399,28 +399,28 @@ export default function Reports() {
         <div className="space-y-5">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard label="Tổng đã thu" value={loading ? '...' : formatCurrency(financialSummary?.totalRevenue || 0)}
-              icon={<Wallet className="w-5 h-5 text-emerald-500" />} iconBg="bg-emerald-50" />
+              icon={<Wallet className="w-5 h-5 text-emerald-500" />} iconBg="bg-emerald-500/10" />
             <StatCard label="Đã thanh toán" value={loading ? '...' : `${financialSummary?.paidCount || 0} phiếu`}
               icon={<BarChart3 className="w-5 h-5 text-secondary" />} iconBg="bg-secondary/10" />
             <StatCard label="Chờ thanh toán" value={loading ? '...' : `${financialSummary?.pendingCount || 0} phiếu`}
-              icon={<Wallet className="w-5 h-5 text-amber-500" />} iconBg="bg-amber-50" />
+              icon={<Wallet className="w-5 h-5 text-amber-500" />} iconBg="bg-amber-500/10" />
             <StatCard label="Quá hạn" value={loading ? '...' : `${financialSummary?.overdueCount || 0} phiếu`}
-              icon={<Wallet className="w-5 h-5 text-red-400" />} iconBg="bg-red-50" />
+              icon={<Wallet className="w-5 h-5 text-red-500" />} iconBg="bg-red-500/10" />
           </div>
 
           <Card header={<CardHeader title="Tình trạng học phí" subtitle="Dữ liệu thực từ hệ thống" />}>
             <div className="flex items-center gap-6 flex-wrap">
               <div className="flex items-center gap-2">
                 <span className="w-3 h-3 rounded-full bg-emerald-500" />
-                <span className="text-sm text-[#64748B]">Đã thanh toán ({financialSummary?.paidCount || 0})</span>
+                <span className="text-sm text-muted-foreground">Đã thanh toán ({financialSummary?.paidCount || 0})</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="w-3 h-3 rounded-full bg-amber-500" />
-                <span className="text-sm text-[#64748B]">Chờ thanh toán ({financialSummary?.pendingCount || 0})</span>
+                <span className="text-sm text-muted-foreground">Chờ thanh toán ({financialSummary?.pendingCount || 0})</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="w-3 h-3 rounded-full bg-red-500" />
-                <span className="text-sm text-[#64748B]">Quá hạn ({financialSummary?.overdueCount || 0})</span>
+                <span className="text-sm text-muted-foreground">Quá hạn ({financialSummary?.overdueCount || 0})</span>
               </div>
             </div>
           </Card>

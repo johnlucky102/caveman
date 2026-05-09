@@ -2,12 +2,12 @@ import { useState, useEffect } from 'react';
 import {
   Save, School, CalendarDays, Users, Plus, Trash2, Edit2, Shield,
 } from 'lucide-react';
-import Card, { CardHeader } from '../components/common/Card';
-import Button from '../components/common/Button';
-import Input from '../components/common/Input';
-import Select from '../components/common/Select';
-import Badge from '../components/common/Badge';
-import Modal from '../components/common/Modal';
+import Card, { CardHeader } from '@/components/common/Card';
+import Button from '@/components/common/Button';
+import Input from '@/components/common/Input';
+import Select from '@/components/common/Select';
+import Badge from '@/components/common/Badge';
+import Modal from '@/components/common/Modal';
 import { useToast } from '../components/common/Toast';
 import { getSchoolSettings, updateSchoolSettings, createSchoolSettings } from '@/services/settingsService';
 import { supabase } from '@/lib/supabase';
@@ -230,7 +230,23 @@ export default function Settings() {
     setSaving(false);
 
     if (error || data?.error) {
-      toast.error('Lỗi', error?.message || data?.error);
+      let errorMsg = error?.message || data?.error;
+      
+      // Handle Supabase FunctionsHttpError where the actual message is in the response body
+      if (error && 'context' in error) {
+        try {
+          const body = await (error as any).context.json();
+          if (body?.error) errorMsg = body.error;
+        } catch (e) {
+          // ignore parsing error
+        }
+      }
+
+      if (typeof errorMsg === 'string' && errorMsg.includes('already been registered')) {
+        errorMsg = 'Email này đã được đăng ký cho một tài khoản khác.';
+      }
+      
+      toast.error('Lỗi', errorMsg || 'Đã có lỗi xảy ra');
     } else {
       toast.success('Thành công', 'Đã tạo tài khoản người dùng');
       setShowAddUserModal(false);
@@ -245,13 +261,13 @@ export default function Settings() {
     <div className="space-y-5 max-w-4xl">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-bold text-[#1E293B]">Cài đặt</h1>
-        <p className="text-sm text-[#64748B]">Quản lý cấu hình hệ thống</p>
+        <h1 className="text-xl font-bold text-foreground">Cài đặt</h1>
+        <p className="text-sm text-muted-foreground">Quản lý cấu hình hệ thống</p>
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-5">
+      <div className="flex flex-col md:flex-row gap-5">
         {/* Sidebar */}
-        <div className="lg:w-56 shrink-0">
+        <div className="md:w-56 shrink-0">
           <nav className="space-y-1">
             {tabs.map((tab) => {
               const Icon = tab.icon;
@@ -261,8 +277,8 @@ export default function Settings() {
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
                     activeTab === tab.id
-                      ? 'bg-primary text-white'
-                      : 'text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#1E293B]'
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                   }`}
                 >
                   <Icon className="w-4 h-4" />
@@ -277,35 +293,74 @@ export default function Settings() {
         <div className="flex-1 min-w-0">
           {/* School Info Tab */}
           {activeTab === 'school' && (
-            <Card header={<CardHeader title="Thông tin trường học" subtitle="Cập nhật thông tin trường" />}>
-              {loading ? (
-                <div className="p-10 text-center text-[#64748B]">Đang tải cấu hình...</div>
-              ) : (
-                <div className="space-y-4">
-                  <Input label="Tên trường" value={schoolSettings?.school_name || ''}
-                    onChange={(e) => setSchoolSettings((p) => ({ ...p!, school_name: e.target.value }))} required />
-                  <Input label="Địa chỉ" value={schoolSettings?.address || ''}
-                    onChange={(e) => setSchoolSettings((p) => ({ ...p!, address: e.target.value }))} />
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <Input label="Số điện thoại" value={schoolSettings?.phone || ''}
-                      onChange={(e) => setSchoolSettings((p) => ({ ...p!, phone: e.target.value }))} type="tel" />
-                    <Input label="Email trường" value={schoolSettings?.email || ''}
-                      onChange={(e) => setSchoolSettings((p) => ({ ...p!, email: e.target.value }))} type="email" />
+            <>
+              <Card header={<CardHeader title="Thông tin trường học" subtitle="Cập nhật thông tin trường" />}>
+                {loading ? (
+                  <div className="p-10 text-center text-muted-foreground">Đang tải cấu hình...</div>
+                ) : (
+                  <div className="space-y-4">
+                    <Input label="Tên trường" name="school_name" value={schoolSettings?.school_name || ''}
+                      onChange={(e) => setSchoolSettings((p) => ({ ...p!, school_name: e.target.value }))} required />
+                    <Input label="Địa chỉ" name="address" value={schoolSettings?.address || ''}
+                      onChange={(e) => setSchoolSettings((p) => ({ ...p!, address: e.target.value }))} />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <Input label="Số điện thoại" name="phone" value={schoolSettings?.phone || ''}
+                        onChange={(e) => setSchoolSettings((p) => ({ ...p!, phone: e.target.value }))} type="tel" />
+                      <Input label="Email trường" name="email" value={schoolSettings?.email || ''}
+                        onChange={(e) => setSchoolSettings((p) => ({ ...p!, email: e.target.value }))} type="email" />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <Input label="Năm học hiện tại" name="school_year" value={schoolSettings?.school_year || ''}
+                        onChange={(e) => setSchoolSettings((p) => ({ ...p!, school_year: e.target.value }))} placeholder="VD: 2024-2025" />
+                      <Input label="Logo URL" name="logo_url" value={schoolSettings?.logo_url || ''}
+                        onChange={(e) => setSchoolSettings((p) => ({ ...p!, logo_url: e.target.value }))} />
+                    </div>
+                    <div className="flex justify-end pt-2">
+                      <Button onClick={handleSaveSchool} loading={saving} leftIcon={<Save className="w-4 h-4" />}>
+                        Lưu thay đổi
+                      </Button>
+                    </div>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <Input label="Năm học hiện tại" value={schoolSettings?.school_year || ''}
-                      onChange={(e) => setSchoolSettings((p) => ({ ...p!, school_year: e.target.value }))} placeholder="VD: 2024-2025" />
-                    <Input label="Logo URL" value={schoolSettings?.logo_url || ''}
-                      onChange={(e) => setSchoolSettings((p) => ({ ...p!, logo_url: e.target.value }))} />
+                )}
+              </Card>
+              
+              <Card className="mt-5" header={<CardHeader title="Giao diện" subtitle="Tùy chỉnh màu sắc hiển thị" />}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Chế độ hiển thị</p>
+                    <p className="text-xs text-muted-foreground">Chuyển đổi giữa giao diện sáng và tối</p>
                   </div>
-                  <div className="flex justify-end pt-2">
-                    <Button onClick={handleSaveSchool} loading={saving} leftIcon={<Save className="w-4 h-4" />}>
-                      Lưu thay đổi
-                    </Button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      title="Chế độ sáng"
+                      onClick={() => {
+                        document.documentElement.classList.remove('dark');
+                        localStorage.setItem('theme', 'light');
+                      }}
+                      className="p-2.5 rounded-xl border border-border bg-card text-muted-foreground hover:text-primary hover:border-primary transition-all"
+                    >
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      title="Chế độ tối"
+                      onClick={() => {
+                        document.documentElement.classList.add('dark');
+                        localStorage.setItem('theme', 'dark');
+                      }}
+                      className="p-2.5 rounded-xl border border-border bg-card text-muted-foreground hover:text-primary hover:border-primary transition-all"
+                    >
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                      </svg>
+                    </button>
                   </div>
                 </div>
-              )}
-            </Card>
+              </Card>
+            </>
           )}
 
           {/* Academic Year Tab */}
@@ -322,32 +377,32 @@ export default function Settings() {
                 }
               >
                 {loading ? (
-                  <div className="p-8 text-center text-[#64748B]">Đang tải...</div>
+                  <div className="p-8 text-center text-muted-foreground">Đang tải...</div>
                 ) : academicYears.length === 0 ? (
-                  <div className="p-8 text-center text-[#64748B]">Chưa có năm học nào</div>
+                  <div className="p-8 text-center text-muted-foreground">Chưa có năm học nào</div>
                 ) : (
                   <div className="space-y-3">
                     {academicYears.map((year) => (
                       <div
                         key={year.id}
-                        className={`flex items-center justify-between p-4 rounded-xl border ${
+                        className={`flex items-center justify-between p-4 rounded-xl border transition-colors ${
                           year.is_current
-                            ? 'border-primary/30 bg-primary/[0.02]'
-                            : 'border-[#E2E8F0] bg-white'
+                            ? 'border-primary/30 bg-primary/5'
+                            : 'border-border bg-card'
                         }`}
                       >
                         <div className="flex items-center gap-4">
                           <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                            year.is_current ? 'bg-primary/10' : 'bg-[#F1F5F9]'
+                            year.is_current ? 'bg-primary/10' : 'bg-muted'
                           }`}>
-                            <CalendarDays className={`w-5 h-5 ${year.is_current ? 'text-primary' : 'text-[#94A3B8]'}`} />
+                            <CalendarDays className={`w-5 h-5 ${year.is_current ? 'text-primary' : 'text-muted-foreground'}`} />
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
-                              <p className="text-sm font-semibold text-[#1E293B]">{year.school_year}</p>
+                              <p className="text-sm font-semibold text-foreground">{year.school_year}</p>
                               {year.is_current && <Badge variant="success" size="sm">Hiện tại</Badge>}
                             </div>
-                            <p className="text-xs text-[#64748B] mt-0.5">
+                            <p className="text-xs text-muted-foreground mt-0.5">
                               {year.academic_year_start
                                 ? new Date(year.academic_year_start).toLocaleDateString('vi-VN', { year: 'numeric', month: 'long', day: 'numeric' })
                                 : '—'}{' '}
@@ -389,22 +444,22 @@ export default function Settings() {
                 noPadding
               >
                 {loading ? (
-                  <div className="p-8 text-center text-[#64748B]">Đang tải...</div>
+                  <div className="p-8 text-center text-muted-foreground">Đang tải...</div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-max text-sm">
                       <thead>
-                        <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
-                          <th className="px-4 py-3 text-left text-xs font-semibold text-[#64748B] uppercase tracking-wide">Họ tên</th>
-                          <th className="px-4 py-3 text-left text-xs font-semibold text-[#64748B] uppercase tracking-wide">Số điện thoại</th>
-                          <th className="px-4 py-3 text-left text-xs font-semibold text-[#64748B] uppercase tracking-wide">Vai trò</th>
-                          <th className="px-4 py-3 text-left text-xs font-semibold text-[#64748B] uppercase tracking-wide">Ngày tạo</th>
-                          <th className="px-4 py-3 text-right text-xs font-semibold text-[#64748B] uppercase tracking-wide">Thao tác</th>
+                        <tr className="bg-muted/50 border-b border-border">
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Họ tên</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Số điện thoại</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Vai trò</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Ngày tạo</th>
+                          <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">Thao tác</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-[#F1F5F9]">
+                      <tbody className="divide-y divide-border">
                         {users.map((user) => (
-                          <tr key={user.id} className="hover:bg-[#F8FAFC] transition-colors">
+                          <tr key={user.id} className="hover:bg-muted/30 transition-colors">
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-3">
                                 <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
@@ -412,22 +467,22 @@ export default function Settings() {
                                     {user.full_name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)}
                                   </span>
                                 </div>
-                                <span className="font-medium text-[#1E293B]">{user.full_name}</span>
+                                <span className="font-medium text-foreground">{user.full_name}</span>
                               </div>
                             </td>
-                            <td className="px-4 py-3 text-[#64748B]">{user.phone || '—'}</td>
+                            <td className="px-4 py-3 text-muted-foreground">{user.phone || '—'}</td>
                             <td className="px-4 py-3">
                               <Badge variant={roleBadgeVariant[user.role] || 'neutral'} size="sm">
                                 {roleLabels[user.role] || user.role}
                               </Badge>
                             </td>
-                            <td className="px-4 py-3 text-[#64748B]">
+                            <td className="px-4 py-3 text-muted-foreground">
                               {new Date(user.created_at).toLocaleDateString('vi-VN')}
                             </td>
                             <td className="px-4 py-3 text-right">
                               <button
                                 onClick={() => setConfirmDeleteUser(user)}
-                                className="p-1.5 rounded-lg text-[#64748B] hover:bg-red-50 hover:text-red-500 transition-colors"
+                                className="p-1.5 rounded-lg text-muted-foreground hover:bg-red-500/10 hover:text-red-500 transition-colors"
                                 title="Xóa"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />

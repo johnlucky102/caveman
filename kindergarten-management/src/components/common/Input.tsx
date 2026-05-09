@@ -49,10 +49,10 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
         {label && (
           <label
             htmlFor={inputId}
-            className="text-sm font-medium text-[#1E293B] select-none"
+            className="text-sm font-medium text-foreground select-none"
           >
             {label}
-            {required && <span className="text-red-500 ml-0.5">*</span>}
+            {required && <span className="text-destructive ml-0.5">*</span>}
           </label>
         )}
 
@@ -60,7 +60,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
         <div className="relative flex items-center">
           {/* Left addon */}
           {leftAddon && (
-            <span className="absolute left-3 text-[#94A3B8] pointer-events-none flex items-center">
+            <span className="absolute left-3 text-muted-foreground/60 pointer-events-none flex items-center">
               {leftAddon}
             </span>
           )}
@@ -70,12 +70,12 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
             id={inputId}
             required={required}
             className={cn(
-              'h-10 w-full rounded-xl border bg-white text-sm text-[#1E293B] placeholder:text-[#94A3B8] transition-colors duration-150 outline-none',
+              'h-10 w-full rounded-xl border bg-background text-sm text-foreground placeholder:text-muted-foreground/60 transition-colors duration-150 outline-none',
               'focus:border-primary focus:ring-2 focus:ring-primary/10',
               error
-                ? 'border-red-400 focus:border-red-400 focus:ring-red-400/10'
-                : 'border-[#E2E8F0]',
-              'disabled:cursor-not-allowed disabled:bg-[#F8FAFC] disabled:text-[#94A3B8]',
+                ? 'border-destructive focus:border-destructive focus:ring-destructive/10'
+                : 'border-border',
+              'disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground/60',
               leftAddon ? 'pl-9' : 'pl-3',
               rightAddon ? 'pr-9' : 'pr-3',
               className
@@ -85,7 +85,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
 
           {/* Right addon */}
           {rightAddon && (
-            <span className="absolute right-3 text-[#94A3B8] flex items-center">
+            <span className="absolute right-3 text-muted-foreground/60 flex items-center">
               {rightAddon}
             </span>
           )}
@@ -93,9 +93,9 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
 
         {/* Error / hint text */}
         {error ? (
-          <p className="text-xs text-red-500 flex items-center gap-1">{error}</p>
+          <p className="text-xs text-destructive flex items-center gap-1">{error}</p>
         ) : hint ? (
-          <p className="text-xs text-[#64748B]">{hint}</p>
+          <p className="text-xs text-muted-foreground">{hint}</p>
         ) : null}
       </div>
     );

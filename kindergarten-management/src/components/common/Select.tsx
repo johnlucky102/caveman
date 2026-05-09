@@ -59,10 +59,10 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
         {label && (
           <label
             htmlFor={selectId}
-            className="text-sm font-medium text-[#1E293B] select-none"
+            className="text-sm font-medium text-foreground select-none"
           >
             {label}
-            {required && <span className="text-red-500 ml-0.5">*</span>}
+            {required && <span className="text-destructive ml-0.5">*</span>}
           </label>
         )}
 
@@ -75,12 +75,12 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
             value={value}
             onChange={handleChange}
             className={cn(
-              'h-10 w-full appearance-none rounded-xl border bg-white text-sm text-[#1E293B] transition-colors duration-150 outline-none cursor-pointer',
+              'h-10 w-full appearance-none rounded-xl border bg-background text-sm text-foreground transition-colors duration-150 outline-none cursor-pointer',
               'focus:border-primary focus:ring-2 focus:ring-primary/10',
               error
-                ? 'border-red-400 focus:border-red-400 focus:ring-red-400/10'
-                : 'border-[#E2E8F0]',
-              'disabled:cursor-not-allowed disabled:bg-[#F8FAFC] disabled:text-[#94A3B8]',
+                ? 'border-destructive focus:border-destructive focus:ring-destructive/10'
+                : 'border-border',
+              'disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground/60',
               'pl-3 pr-9',
               className
             )}
@@ -99,16 +99,16 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
           </select>
 
           {/* Custom arrow */}
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[#94A3B8]">
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground/60">
             <ChevronDown className="w-4 h-4" />
           </span>
         </div>
 
         {/* Error / hint text */}
         {error ? (
-          <p className="text-xs text-red-500">{error}</p>
+          <p className="text-xs text-destructive">{error}</p>
         ) : hint ? (
-          <p className="text-xs text-[#64748B]">{hint}</p>
+          <p className="text-xs text-muted-foreground">{hint}</p>
         ) : null}
       </div>
     );

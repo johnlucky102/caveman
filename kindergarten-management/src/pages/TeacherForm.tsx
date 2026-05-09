@@ -20,6 +20,7 @@ interface FormState {
   qualification: string;
   start_date: string;
   status: 'Active' | 'Inactive' | 'Resigned';
+  password?: string;
 }
 
 interface FormErrors {
@@ -32,6 +33,7 @@ function validate(form: FormState): FormErrors {
   const errors: FormErrors = {};
   if (!form.full_name.trim()) errors.full_name = 'Họ tên không được để trống';
   if (!form.phone.trim()) errors.phone = 'Số điện thoại không được để trống';
+  if (!form.email.trim()) errors.email = 'Email không được để trống';
   if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errors.email = 'Email không hợp lệ';
   return errors;
 }
@@ -114,8 +116,10 @@ export default function TeacherForm() {
       qualification: form.qualification,
       start_date: form.start_date,
       status: form.status,
+      email: form.email,
+      password: form.password,
     };
-    const result = await updateTeacherProfile(id, payload);
+    const result = isEditMode && id ? await updateTeacherProfile(id, payload) : await createTeacherProfile(payload);
     setSaving(false);
 
     if (result.error) {
@@ -123,7 +127,7 @@ export default function TeacherForm() {
       return;
     }
 
-    toast.success('Cập nhật hồ sơ thành công');
+    toast.success(isEditMode ? 'Cập nhật hồ sơ thành công' : 'Tạo hồ sơ giáo viên thành công');
     navigate('/teachers');
   };
 
@@ -137,7 +141,7 @@ export default function TeacherForm() {
       </div>
 
       <form onSubmit={handleSubmit}>
-        <Card className="space-y-5">
+        <Card className="space-y-8">
           <div className="flex flex-col items-center">
             <div className="relative">
               <Avatar src={form.avatar} name={form.full_name || 'GV'} size="xl" />
@@ -161,11 +165,10 @@ export default function TeacherForm() {
             </label>
           </div>
 
-
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <Input
               label="Họ và tên"
+              name="full_name"
               value={form.full_name}
               onChange={(e) => setField('full_name', e.target.value)}
               error={errors.full_name}
@@ -185,9 +188,10 @@ export default function TeacherForm() {
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <Input
               label="Ngày sinh"
+              name="date_of_birth"
               type="date"
               value={form.date_of_birth}
               onChange={(e) => setField('date_of_birth', e.target.value)}
@@ -195,6 +199,7 @@ export default function TeacherForm() {
             />
             <Input
               label="Số điện thoại"
+              name="phone"
               type="tel"
               value={form.phone}
               onChange={(e) => setField('phone', e.target.value)}
@@ -204,17 +209,36 @@ export default function TeacherForm() {
             />
           </div>
 
-          <Input
-            label="Email tài khoản"
-            type="email"
-            value={form.email}
-            disabled
-            hint="Liên kết với tài khoản hệ thống"
-            fullWidth
-          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <Input
+              label="Email tài khoản"
+              name="email"
+              type="email"
+              value={form.email}
+              disabled={isEditMode}
+              onChange={(e) => setField('email', e.target.value)}
+              error={errors.email}
+              hint="Sử dụng để đăng nhập hệ thống"
+              required={!isEditMode}
+              fullWidth
+            />
+            {!isEditMode && (
+              <Input
+                label="Mật khẩu"
+                name="password"
+                type="password"
+                value={form.password || ''}
+                onChange={(e) => setField('password', e.target.value)}
+                placeholder="Ít nhất 6 ký tự"
+                required
+                fullWidth
+              />
+            )}
+          </div>
 
           <Input
             label="Địa chỉ thường trú"
+            name="address"
             value={form.address}
             onChange={(e) => setField('address', e.target.value)}
             fullWidth
@@ -222,15 +246,17 @@ export default function TeacherForm() {
 
           <Input
             label="Bằng cấp / Chuyên môn"
+            name="qualification"
             value={form.qualification}
             onChange={(e) => setField('qualification', e.target.value)}
             placeholder="VD: Cử nhân Giáo dục mầm non"
             fullWidth
           />
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <Input
               label="Ngày bắt đầu làm việc"
+              name="start_date"
               type="date"
               value={form.start_date}
               onChange={(e) => setField('start_date', e.target.value)}

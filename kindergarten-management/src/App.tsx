@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import MainLayout from '@/components/layout/MainLayout';
 import RoleGuard from '@/components/auth/RoleGuard';
@@ -19,12 +20,25 @@ import Fees from '@/pages/Fees';
 import FeeForm from '@/pages/FeeForm';
 import Reports from '@/pages/Reports';
 import Settings from '@/pages/Settings';
+import Notifications from '@/pages/Notifications';
+import NotificationForm from '@/pages/NotificationForm';
 
 function allow(roles: Array<'Admin' | 'Teacher' | 'Accountant' | 'Parent'>, element: JSX.Element) {
   return <RoleGuard allow={roles}>{element}</RoleGuard>;
 }
 
 export default function App() {
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else if (savedTheme === 'light') {
+      document.documentElement.classList.remove('dark');
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      document.documentElement.classList.add('dark');
+    }
+  }, []);
+
   return (
     <BrowserRouter>
       <Routes>
@@ -56,6 +70,9 @@ export default function App() {
           <Route path="/fees/new" element={allow(['Admin', 'Accountant'], <FeeForm />)} />
           <Route path="/reports" element={allow(['Admin', 'Teacher', 'Accountant'], <Reports />)} />
           <Route path="/settings" element={allow(['Admin'], <Settings />)} />
+          <Route path="/notifications" element={allow(['Admin', 'Teacher'], <Notifications />)} />
+          <Route path="/notifications/new" element={allow(['Admin', 'Teacher'], <NotificationForm />)} />
+          <Route path="/notifications/:id/edit" element={allow(['Admin', 'Teacher'], <NotificationForm />)} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

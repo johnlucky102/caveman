@@ -25,20 +25,22 @@ export interface DashboardStats {
 }
 
 export async function getDashboardStats(): Promise<{ stats: DashboardStats | null; error: AppError | null }> {
-  const today = new Date().toISOString().split('T')[0];
+  // Use local date for dashboard stats
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
   try {
     const [
       studentsCount,
       debtData,
       attendanceData,
-      gradeData,
+      studentData,
       classesData
     ] = await Promise.all([
       // 1. Total Students
       supabase.from('students').select('id', { count: 'exact', head: true }).eq('del_yn', false),
       
-      // 2. Debt Data (fetch unpaid records to sum)
+      // 2. Debt Data
       supabase.from('fee_records')
         .select('amount_vnd, paid_amount_vnd')
         .neq('status', 'paid')
@@ -50,19 +52,19 @@ export async function getDashboardStats(): Promise<{ stats: DashboardStats | nul
         .eq('attendance_date', today)
         .eq('del_yn', false),
       
-      // 4. Students by Grade/Class
+      // 4. Students by Class (Removed broken grades join)
       supabase.from('students')
-        .select('id, classes(id, name, grade_id, grades(id, name))')
+        .select('id, class_id, classes(id, name)')
         .eq('del_yn', false),
 
-      // 5. All classes for name mapping
-      supabase.from('classes').select('id, name')
+      // 5. All classes
+      supabase.from('classes').select('id, name').eq('del_yn', false)
     ]);
 
     if (studentsCount.error) throw studentsCount.error;
     if (debtData.error) throw debtData.error;
     if (attendanceData.error) throw attendanceData.error;
-    if (gradeData.error) throw gradeData.error;
+    if (studentData.error) throw studentData.error;
     if (classesData.error) throw classesData.error;
 
     // Process Debt
@@ -95,17 +97,17 @@ export async function getDashboardStats(): Promise<{ stats: DashboardStats | nul
       ...stats
     })).sort((a, b) => b.total - a.total).slice(0, 5); // Top 5 classes for dashboard
 
-    // Process Grades
-    const gradeCounts = new Map<string, number>();
-    (gradeData.data || []).forEach(s => {
-      const gName = (s.classes as any)?.grades?.name || 'Khác';
-      gradeCounts.set(gName, (gradeCounts.get(gName) || 0) + 1);
+    // Process Students by Class (instead of Grades since grade_id was removed)
+    const classCounts = new Map<string, number>();
+    (studentData.data || []).forEach((s: any) => {
+      const cName = s.classes?.name || 'Khác';
+      classCounts.set(cName, (classCounts.get(cName) || 0) + 1);
     });
 
-    const studentsByGrade = Array.from(gradeCounts.entries()).map(([gradeName, count]) => ({
-      gradeName,
+    const studentsByGrade = Array.from(classCounts.entries()).map(([gradeName, count]) => ({
+      gradeName, // We keep the property name 'gradeName' for UI compatibility, but it's actually class name now
       count
-    })).sort((a, b) => b.count - a.count);
+    })).sort((a, b) => b.count - a.count).slice(0, 5); // Show top 5 classes/grades
 
     return {
       stats: {
@@ -178,7 +180,8 @@ export async function getAttendanceTrend(): Promise<{ trend: AttendanceTrendPoin
     for (let i = 6; i >= 0; i--) {
       const d = new Date(today);
       d.setDate(d.getDate() - i);
-      dates.push(d.toISOString().split('T')[0]);
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      dates.push(dateStr);
     }
 
     const { data, error } = await supabase

@@ -26,7 +26,7 @@ const MainLayout: React.FC = () => {
   // While checking auth, show a loading screen
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center shadow-lg">
             <span className="text-white font-bold text-xl">K</span>
@@ -40,7 +40,7 @@ const MainLayout: React.FC = () => {
               />
             ))}
           </div>
-          <p className="text-sm text-[#64748B]">Đang tải...</p>
+          <p className="text-sm text-muted-foreground">Đang tải...</p>
         </div>
       </div>
     );
@@ -52,7 +52,7 @@ const MainLayout: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex">
+    <div className="min-h-screen bg-background flex">
       {/* Sidebar */}
       <Sidebar />
 
@@ -61,14 +61,14 @@ const MainLayout: React.FC = () => {
         className={cn(
           'flex-1 flex flex-col min-w-0 transition-all duration-300',
           // Offset for sidebar width on desktop
-          sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'
+          sidebarCollapsed ? 'md:ml-16' : 'md:ml-64'
         )}
       >
         {/* Header */}
         <Header />
 
         {/* Page content */}
-        <main className="flex-1 overflow-auto p-4 lg:p-6">
+        <main className="flex-1 overflow-auto p-4 md:p-6">
           <Outlet />
         </main>
       </div>

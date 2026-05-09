@@ -37,28 +37,28 @@ const variantStyles: Record<BadgeVariant, { badge: string; dot: string }> = {
     dot: 'bg-primary',
   },
   secondary: {
-    badge: 'bg-secondary/10 text-secondary-600 border-secondary/20',
-    dot: 'bg-secondary',
+    badge: 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20',
+    dot: 'bg-indigo-500',
   },
   success: {
-    badge: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    badge: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
     dot: 'bg-emerald-500',
   },
   warning: {
-    badge: 'bg-amber-50 text-amber-700 border-amber-200',
+    badge: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
     dot: 'bg-amber-500',
   },
   danger: {
-    badge: 'bg-red-50 text-red-600 border-red-200',
+    badge: 'bg-red-500/10 text-red-500 border-red-500/20',
     dot: 'bg-red-500',
   },
   info: {
-    badge: 'bg-blue-50 text-blue-700 border-blue-200',
+    badge: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
     dot: 'bg-blue-500',
   },
   neutral: {
-    badge: 'bg-[#F1F5F9] text-[#64748B] border-[#E2E8F0]',
-    dot: 'bg-[#94A3B8]',
+    badge: 'bg-muted text-muted-foreground border-border',
+    dot: 'bg-muted-foreground',
   },
 };
 

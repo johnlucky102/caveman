@@ -107,8 +107,8 @@ export default function Teachers() {
         <div className="flex items-center gap-3">
           <Avatar src={row.avatar} name={row.full_name} size="sm" />
           <div>
-            <p className="font-medium text-[#1E293B]">{row.full_name}</p>
-            <p className="text-xs text-[#64748B]">Giáo viên</p>
+            <p className="font-medium text-foreground">{row.full_name}</p>
+            <p className="text-xs text-muted-foreground">Giáo viên</p>
           </div>
         </div>
       ),
@@ -116,13 +116,13 @@ export default function Teachers() {
     {
       key: 'teacher_code',
       label: 'Mã GV',
-      render: (value) => <span className="font-mono text-xs text-[#64748B]">{String(value || '—')}</span>,
+      render: (value) => <span className="font-mono text-xs text-muted-foreground">{String(value || '—')}</span>,
     },
     {
       key: 'phone',
       label: 'Điện thoại',
       render: (value) => (
-        <div className="flex items-center gap-2 text-[#64748B]">
+        <div className="flex items-center gap-2 text-muted-foreground">
           <Phone className="w-3.5 h-3.5 shrink-0" />
           <span>{String(value || '—')}</span>
         </div>
@@ -149,7 +149,7 @@ export default function Teachers() {
               e.stopPropagation();
               navigate(`/teachers/${row.id}/edit`);
             }}
-            className="p-2 rounded-lg text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#1E293B] transition-colors"
+            className="p-2 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
             title="Sửa"
           >
             <Edit2 className="w-4 h-4" />
@@ -159,7 +159,7 @@ export default function Teachers() {
               e.stopPropagation();
               setDeleteTarget(row);
             }}
-            className="p-2 rounded-lg text-[#64748B] hover:bg-red-50 hover:text-red-500 transition-colors"
+            className="p-2 rounded-lg text-muted-foreground hover:bg-red-500/10 hover:text-red-500 transition-colors"
             title="Xóa"
           >
             <Trash2 className="w-4 h-4" />
@@ -173,21 +173,28 @@ export default function Teachers() {
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-[#1E293B]">Quản lý giáo viên</h1>
-          <p className="text-sm text-[#64748B]">{teachers.length} giáo viên</p>
+          <h1 className="text-xl font-bold text-foreground">Quản lý giáo viên</h1>
+          <p className="text-sm text-muted-foreground">{teachers.length} giáo viên</p>
         </div>
         <div className="flex gap-2">
           {selectedKeys.length > 0 && (
             <Button
               variant="outline"
               size="sm"
-              className="text-red-500 hover:text-red-600 hover:bg-red-50 border-red-200 hover:border-red-300"
+              className="text-red-500 hover:text-red-600 hover:bg-red-500/10 border-red-500/20 hover:border-red-500/50"
               leftIcon={<Trash2 className="w-4 h-4" />}
               onClick={() => setConfirmBulkDelete(true)}
             >
               Xóa {selectedKeys.length} đã chọn
             </Button>
           )}
+          <Button
+            size="sm"
+            leftIcon={<UserPlus className="w-4 h-4" />}
+            onClick={() => navigate('/teachers/new')}
+          >
+            Thêm giáo viên
+          </Button>
         </div>
       </div>
 

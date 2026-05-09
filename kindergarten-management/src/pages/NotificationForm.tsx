@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
 import { useToast } from '../components/common/Toast';
@@ -16,8 +17,8 @@ import {
 
 interface NotificationFormProps {
   notification?: NotificationRecord | null;
-  onSaved: () => void;
-  onCancel: () => void;
+  onSaved?: () => void;
+  onCancel?: () => void;
 }
 
 type ScheduleType = 'now' | 'schedule';
@@ -29,6 +30,17 @@ export default function NotificationForm({
   onSaved,
   onCancel,
 }: NotificationFormProps) {
+  const navigate = useNavigate();
+  
+  const handleCancel = () => {
+    if (onCancel) onCancel();
+    else navigate('/notifications');
+  };
+  
+  const handleSaved = () => {
+    if (onSaved) onSaved();
+    else navigate('/notifications');
+  };
   const [title, setTitle] = useState(notification?.title || '');
   const [message, setMessage] = useState(notification?.message || '');
   const [type, setType] = useState<UINotificationType>(notification?.type || 'info');
@@ -94,7 +106,7 @@ export default function NotificationForm({
         toast.error('Lỗi', error.message);
       } else {
         toast.success('Thành công', 'Đã cập nhật thông báo');
-        onSaved();
+        handleSaved();
       }
     } else {
       // Create new
@@ -110,7 +122,7 @@ export default function NotificationForm({
         toast.error('Lỗi', error.message);
       } else {
         toast.success('Thành công', 'Đã tạo thông báo mới');
-        onSaved();
+        handleSaved();
       }
     }
   };
@@ -120,6 +132,7 @@ export default function NotificationForm({
       {/* Title */}
       <Input
         label="Tiêu đề"
+        name="title"
         placeholder="Nhập tiêu đề thông báo..."
         value={title}
         onChange={(e) => setTitle(e.target.value)}
@@ -129,25 +142,26 @@ export default function NotificationForm({
 
       {/* Content */}
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-[#1E293B]">
-          Nội dung <span className="text-red-500">*</span>
+        <label className="text-sm font-medium text-foreground">
+          Nội dung <span className="text-destructive">*</span>
         </label>
         <textarea
+          name="message"
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           placeholder="Nhập nội dung thông báo..."
           rows={4}
-          className="w-full px-3 py-2.5 rounded-xl border border-[#E2E8F0] bg-white text-sm text-[#1E293B] placeholder:text-[#94A3B8] outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-colors resize-none"
+          className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/50 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-colors resize-none"
         />
         {errors.message && (
-          <p className="text-xs text-red-500">{errors.message}</p>
+          <p className="text-xs text-destructive">{errors.message}</p>
         )}
       </div>
 
       {/* Type */}
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-[#1E293B]">
-          Loại thông báo <span className="text-red-500">*</span>
+        <label className="text-sm font-medium text-foreground">
+          Loại thông báo <span className="text-destructive">*</span>
         </label>
         <div className="flex flex-wrap gap-2">
           {notificationTypes.map((t) => (
@@ -155,8 +169,8 @@ export default function NotificationForm({
               key={t.value}
               className={`flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer transition-colors text-sm font-medium ${
                 type === t.value
-                  ? 'border-primary bg-primary/5 text-primary'
-                  : 'border-[#E2E8F0] text-[#64748B] hover:border-[#CBD5E1]'
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border text-muted-foreground hover:border-primary/50'
               }`}
             >
               <input
@@ -175,7 +189,7 @@ export default function NotificationForm({
 
       {/* Target */}
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-[#1E293B]">Gửi đến</label>
+        <label className="text-sm font-medium text-foreground">Gửi đến</label>
         <div className="flex flex-wrap gap-2">
           {targetTypes.map((r) => (
             <label
@@ -183,7 +197,7 @@ export default function NotificationForm({
               className={`flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer transition-colors text-sm font-medium ${
                 targetType === r.value
                   ? 'border-secondary bg-secondary/10 text-secondary'
-                  : 'border-[#E2E8F0] text-[#64748B] hover:border-[#CBD5E1]'
+                  : 'border-border text-muted-foreground hover:border-secondary/50'
               }`}
             >
               <input
@@ -204,13 +218,13 @@ export default function NotificationForm({
       {!notification && (
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-[#1E293B]">Thời gian gửi</label>
+            <label className="text-sm font-medium text-foreground">Thời gian gửi</label>
             <div className="flex gap-3">
               <label
                 className={`flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer transition-colors text-sm font-medium ${
                   scheduleType === 'now'
-                    ? 'border-primary bg-primary/5 text-primary'
-                    : 'border-[#E2E8F0] text-[#64748B] hover:border-[#CBD5E1]'
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border text-muted-foreground hover:border-primary/50'
                 }`}
               >
                 <input
@@ -226,8 +240,8 @@ export default function NotificationForm({
               <label
                 className={`flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer transition-colors text-sm font-medium ${
                   scheduleType === 'schedule'
-                    ? 'border-primary bg-primary/5 text-primary'
-                    : 'border-[#E2E8F0] text-[#64748B] hover:border-[#CBD5E1]'
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border text-muted-foreground hover:border-primary/50'
                 }`}
               >
                 <input
@@ -265,8 +279,8 @@ export default function NotificationForm({
       )}
 
       {/* Actions */}
-      <div className="flex items-center justify-end gap-3 pt-2 border-t border-[#E2E8F0]">
-        <Button variant="outline" onClick={onCancel} type="button">
+      <div className="flex items-center justify-end gap-3 pt-2 border-t border-border">
+        <Button variant="outline" onClick={handleCancel} type="button">
           Hủy
         </Button>
         <Button

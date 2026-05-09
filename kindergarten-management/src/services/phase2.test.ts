@@ -82,15 +82,27 @@ describe('Phase 2 Service Functions', () => {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         neq: vi.fn().mockReturnThis(),
+        gte: vi.fn().mockReturnThis(),
+        lte: vi.fn().mockReturnThis(),
         order: vi.fn().mockReturnThis(),
         limit: vi.fn().mockReturnThis(),
-        then: (onFullfilled: any) => Promise.resolve({ data: [], error: null }).then(onFullfilled),
+        single: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockReturnThis(),
+        // Define then to make it awaitable
+        then: function(onFulfilled: any) {
+          let data: any = [];
+          let count: number | null = null;
+          if (table === 'students') {
+            data = null;
+            count = 156;
+          } else if (table === 'fee_records') {
+            data = [{ amount_vnd: 100, paid_amount_vnd: 40 }];
+          } else if (table === 'attendance') {
+            data = [{ status: 'present' }, { status: 'absent' }];
+          }
+          return Promise.resolve({ data, count, error: null }).then(onFulfilled);
+        }
       };
-      
-      if (table === 'students') b.then = (onFullfilled: any) => Promise.resolve({ data: null, count: 156, error: null }).then(onFullfilled);
-      if (table === 'fee_records') b.neq = vi.fn().mockResolvedValue({ data: [{ amount_vnd: 100, paid_amount_vnd: 40 }], error: null });
-      if (table === 'attendance') b.eq = vi.fn().mockResolvedValue({ data: [{ status: 'present' }, { status: 'absent' }], error: null });
-      
       return b;
     });
 
@@ -142,5 +154,33 @@ describe('Phase 2 Service Functions', () => {
     expect(error).toBeNull();
     expect(items[0].full_name).toBe('Parent A');
     expect(items[0].students[0].full_name).toBe('Child A');
+  });
+
+  describe('Error Handling', () => {
+    it('dashboardService.getDashboardStats handles Supabase errors', async () => {
+      const { getDashboardStats } = await import('./dashboardService');
+      const mockError = { message: 'Database error', code: '500' };
+      
+      mocks.from.mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        neq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        then: (onFullfilled: any) => Promise.resolve({ data: null, error: mockError }).then(onFullfilled),
+      });
+
+      const { stats, error } = await getDashboardStats();
+      expect(stats).toBeNull();
+      expect(error?.message).toContain('Database error');
+    });
+
+    it('usersService.createTeacherProfile validates required email', async () => {
+      const { createTeacherProfile } = await import('./usersService');
+      const { item, error } = await createTeacherProfile({ full_name: 'No Email', phone: null, avatar: null });
+      
+      expect(item).toBeNull();
+      expect(error?.code).toBe('VALIDATION');
+    });
   });
 });

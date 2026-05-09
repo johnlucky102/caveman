@@ -224,12 +224,12 @@ export default function FeeForm() {
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" leftIcon={<ArrowLeft className="w-4 h-4" />} onClick={() => navigate('/fees')} className="text-[#64748B]">
+          <Button variant="ghost" size="sm" leftIcon={<ArrowLeft className="w-4 h-4" />} onClick={() => navigate('/fees')} className="text-muted-foreground">
             Quay lại
           </Button>
           <div>
-            <h1 className="text-xl font-bold text-[#1E293B]">{isEdit ? 'Chỉnh sửa học phí' : 'Tạo bản ghi phí'}</h1>
-            <p className="text-sm text-[#64748B]">{isEdit ? 'Cập nhật thông tin học phí' : 'Ghi nhận học phí theo tháng'}</p>
+            <h1 className="text-xl font-bold text-foreground">{isEdit ? 'Chỉnh sửa học phí' : 'Tạo bản ghi phí'}</h1>
+            <p className="text-sm text-muted-foreground">{isEdit ? 'Cập nhật thông tin học phí' : 'Ghi nhận học phí theo tháng'}</p>
           </div>
         </div>
         {isEdit && (
@@ -245,7 +245,7 @@ export default function FeeForm() {
             <Button 
               variant="outline" 
               size="sm" 
-              className="text-red-500 hover:text-red-600 hover:bg-red-50 border-red-200"
+              className="text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/20"
               leftIcon={<Trash2 className="w-4 h-4" />}
               onClick={() => setShowDeleteConfirm(true)}
             >
@@ -257,7 +257,7 @@ export default function FeeForm() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2">
-          <Card header={<div className="text-base font-semibold text-[#1E293B]">Thông tin học phí</div>}>
+          <Card header={<div className="text-base font-semibold text-foreground">Thông tin học phí</div>}>
             <div className="space-y-5">
               <Select
                 label="Học sinh"
@@ -323,7 +323,7 @@ export default function FeeForm() {
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3 mt-6 pt-5 border-t border-[#E2E8F0]">
+            <div className="flex items-center justify-end gap-3 mt-6 pt-5 border-t border-border">
               <Button variant="outline" onClick={() => navigate('/fees')}>
                 Hủy
               </Button>
@@ -335,29 +335,29 @@ export default function FeeForm() {
         </div>
 
         <div className="lg:col-span-1">
-          <Card header={<div className="text-base font-semibold text-[#1E293B]">Tóm tắt</div>}>
+          <Card header={<div className="text-base font-semibold text-foreground">Tóm tắt</div>}>
             <div className="space-y-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                   <Receipt className="w-5 h-5 text-primary" />
                 </div>
                 <div>
-                  <p className="text-sm text-[#64748B]">Số tiền phải thu</p>
-                  <p className="text-lg font-bold text-[#1E293B]">{formData.amount ? formatCurrency(Number(formData.amount)) : '—'}</p>
+                  <p className="text-sm text-muted-foreground">Số tiền phải thu</p>
+                  <p className="text-lg font-bold text-foreground">{formData.amount ? formatCurrency(Number(formData.amount)) : '—'}</p>
                 </div>
               </div>
-              <div className="pt-4 border-t border-[#E2E8F0] space-y-2 text-sm">
+              <div className="pt-4 border-t border-border space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-[#64748B]">Học sinh</span>
-                  <span className="text-[#1E293B] font-medium">{selectedStudent?.full_name || '—'}</span>
+                  <span className="text-muted-foreground">Học sinh</span>
+                  <span className="text-foreground font-medium">{selectedStudent?.full_name || '—'}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-[#64748B]">Tên khoản thu</span>
-                  <span className="text-[#1E293B] font-medium">{formData.title || 'Học phí'}</span>
+                  <span className="text-muted-foreground">Tên khoản thu</span>
+                  <span className="text-foreground font-medium">{formData.title || 'Học phí'}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-[#64748B]">Đã thu</span>
-                  <span className="text-[#1E293B] font-medium">{formatCurrency(Number(formData.paidAmount || '0'))}</span>
+                  <span className="text-muted-foreground">Đã thu</span>
+                  <span className="text-foreground font-medium">{formatCurrency(Number(formData.paidAmount || '0'))}</span>
                 </div>
               </div>
             </div>

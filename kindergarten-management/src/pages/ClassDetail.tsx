@@ -81,8 +81,8 @@ export default function ClassDetail() {
   if (loading) {
     return (
       <div className="space-y-5">
-        <div className="h-8 w-56 bg-[#E2E8F0] rounded animate-pulse" />
-        <div className="h-60 bg-[#E2E8F0] rounded-xl animate-pulse" />
+        <div className="h-8 w-56 bg-muted rounded animate-pulse" />
+        <div className="h-60 bg-muted rounded-xl animate-pulse" />
       </div>
     );
   }
@@ -108,13 +108,13 @@ export default function ClassDetail() {
         )}
       </div>
 
-      <div className="flex items-center gap-4 p-5 bg-white border border-[#E2E8F0] rounded-xl">
+      <div className="flex items-center gap-4 p-5 bg-card border border-border rounded-xl">
         <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
           <Users className="w-7 h-7 text-primary" />
         </div>
         <div className="flex-1 min-w-0">
-          <h2 className="text-xl font-bold text-[#1E293B]">{classItem.name}</h2>
-          <p className="text-sm text-[#64748B]">
+          <h2 className="text-xl font-bold text-foreground">{classItem.name}</h2>
+          <p className="text-sm text-muted-foreground">
             Mã: LOP{classItem.id} · {classItem.room || 'Chưa có phòng'}
           </p>
         </div>
@@ -123,14 +123,14 @@ export default function ClassDetail() {
         </Badge>
       </div>
 
-      <div className="border-b border-[#E2E8F0]">
+      <div className="border-b border-border">
         <nav className="flex gap-1">
           {tabs.map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
               className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === tab.key ? 'border-primary text-primary' : 'border-transparent text-[#64748B] hover:text-[#1E293B]'
+                activeTab === tab.key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
             >
               {tab.icon}
@@ -152,8 +152,8 @@ export default function ClassDetail() {
               ['Trạng thái', classItem.student_count >= classItem.max_students ? 'Đầy lớp' : 'Hoạt động'],
             ].map(([label, value]) => (
               <div key={String(label)}>
-                <p className="text-xs text-[#94A3B8] mb-0.5">{label}</p>
-                <p className="font-medium text-[#1E293B]">{value}</p>
+                <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
+                <p className="font-medium text-foreground">{value}</p>
               </div>
             ))}
           </div>
@@ -165,24 +165,24 @@ export default function ClassDetail() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-[#64748B] uppercase tracking-wide">Họ tên</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-[#64748B] uppercase tracking-wide">Mã HS</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-[#64748B] uppercase tracking-wide">Ngày sinh</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-[#64748B] uppercase tracking-wide">Trạng thái</th>
+                <tr className="bg-muted/50 border-b border-border">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Họ tên</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Mã HS</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Ngày sinh</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Trạng thái</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#F1F5F9]">
+              <tbody className="divide-y divide-border">
                 {students.map((student) => (
-                  <tr key={student.id} className="hover:bg-[#F8FAFC] transition-colors cursor-pointer" onClick={() => navigate(`/students/${student.id}`)}>
+                  <tr key={student.id} className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => navigate(`/students/${student.id}`)}>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <Avatar src={student.avatar} name={student.full_name} size="sm" />
-                        <span className="font-medium text-[#1E293B]">{student.full_name}</span>
+                        <span className="font-medium text-foreground">{student.full_name}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 font-mono text-xs text-[#64748B]">{student.student_code}</td>
-                    <td className="px-4 py-3 text-[#64748B]">{student.date_of_birth ? new Date(student.date_of_birth).toLocaleDateString('vi-VN') : '—'}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{student.student_code}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{student.date_of_birth ? new Date(student.date_of_birth).toLocaleDateString('vi-VN') : '—'}</td>
                     <td className="px-4 py-3">
                       <StudentStatusBadge status="active" />
                     </td>
@@ -191,7 +191,7 @@ export default function ClassDetail() {
               </tbody>
             </table>
           </div>
-          {students.length === 0 && <div className="py-12 text-center text-sm text-[#94A3B8]">Chưa có học sinh trong lớp</div>}
+          {students.length === 0 && <div className="py-12 text-center text-sm text-muted-foreground">Chưa có học sinh trong lớp</div>}
         </Card>
       )}
 
@@ -200,13 +200,13 @@ export default function ClassDetail() {
           <Card header={<CardHeader title="Thống kê hôm nay" />}>
             <div className="space-y-2">
               <div className="flex justify-between text-sm mb-1">
-                <span className="text-[#64748B]">Tỷ lệ hiện diện hôm nay</span>
+                <span className="text-muted-foreground">Tỷ lệ hiện diện hôm nay</span>
                 <span className="font-bold text-primary">{attendanceRate}%</span>
               </div>
-              <div className="h-2 bg-[#F1F5F9] rounded-full overflow-hidden">
+              <div className="h-2 bg-muted rounded-full overflow-hidden">
                 <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${attendanceRate}%` }} />
               </div>
-              <p className="text-xs text-[#94A3B8] mt-2">
+              <p className="text-xs text-muted-foreground mt-2">
                 Dựa trên {todayAttendance.length} học sinh trong lớp.
               </p>
             </div>
@@ -235,17 +235,17 @@ export default function ClassDetail() {
                   label: 'Giờ vào',
                   render: (v) => (v as React.ReactNode) || '—'
                 },
-                {
+                 {
                   key: 'note',
                   label: 'Ghi chú',
-                  render: (v) => <span className="text-xs italic text-[#64748B]">{(v as React.ReactNode) || '—'}</span>
+                  render: (v) => <span className="text-xs italic text-muted-foreground">{(v as React.ReactNode) || '—'}</span>
                 }
               ]}
               data={todayAttendance as any}
               loading={loadingAttendance}
               emptyMessage="Chưa có dữ liệu điểm danh hôm nay"
             />
-            <div className="p-4 border-t border-[#F1F5F9] flex justify-end">
+            <div className="p-4 border-t border-border flex justify-end">
               <Button size="sm" onClick={() => navigate('/attendance')}>
                 Đi tới trang điểm danh
               </Button>

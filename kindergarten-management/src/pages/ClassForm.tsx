@@ -136,7 +136,7 @@ export default function ClassForm() {
 
       <form onSubmit={handleSubmit}>
         <Card className="space-y-5">
-          <Input label="Tên lớp học" value={form.name} onChange={(e) => setField('name', e.target.value)} error={errors.name} required fullWidth />
+          <Input label="Tên lớp học" name="name" value={form.name} onChange={(e) => setField('name', e.target.value)} error={errors.name} required fullWidth />
 
           <Select
             label="Giáo viên chủ nhiệm"
@@ -146,9 +146,10 @@ export default function ClassForm() {
           />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input label="Số phòng" value={form.room} onChange={(e) => setField('room', e.target.value)} error={errors.room} required fullWidth />
+            <Input label="Số phòng" name="room" value={form.room} onChange={(e) => setField('room', e.target.value)} error={errors.room} required fullWidth />
             <Input
               label="Sĩ số tối đa"
+              name="max_students"
               type="number"
               min={Math.max(1, studentCount)}
               max={50}

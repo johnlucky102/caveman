@@ -42,7 +42,7 @@ let toastIdCounter = 0;
 
 export const useAppStore = create<AppState>((set, get) => ({
   // ─── Sidebar ────────────────────────────────────────────────────────────────
-  sidebarOpen: true,
+  sidebarOpen: false,
   sidebarCollapsed: false,
 
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),

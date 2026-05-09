@@ -122,8 +122,8 @@ export default function StudentDetail() {
   if (loading) {
     return (
       <div className="space-y-5">
-        <div className="h-8 w-56 bg-[#E2E8F0] rounded animate-pulse" />
-        <div className="h-60 bg-[#E2E8F0] rounded-xl animate-pulse" />
+        <div className="h-8 w-56 bg-muted rounded animate-pulse" />
+        <div className="h-60 bg-muted rounded-xl animate-pulse" />
       </div>
     );
   }
@@ -152,13 +152,13 @@ export default function StudentDetail() {
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 p-6">
           <Avatar src={student.avatar} name={student.full_name} size="xl" />
           <div className="flex-1 text-center sm:text-left">
-            <h1 className="text-xl font-bold text-[#1E293B]">{student.full_name}</h1>
-            <p className="text-sm text-[#64748B] mt-1">
+            <h1 className="text-xl font-bold text-foreground">{student.full_name}</h1>
+            <p className="text-sm text-muted-foreground mt-1">
             {student.class_name} · {getAge(student.date_of_birth)} tuổi
             </p>
-            <p className="text-sm text-[#64748B] mt-1">Mã HS: {student.student_code}</p>
+            <p className="text-sm text-muted-foreground mt-1">Mã HS: {student.student_code}</p>
           </div>
-          <div className="text-sm text-[#64748B]">
+          <div className="text-sm text-muted-foreground">
             <p>Ngày nhập học: {formatDate(student.enrolled_date)}</p>
             <p>Ngày sinh: {formatDate(student.date_of_birth)}</p>
           </div>
@@ -166,7 +166,7 @@ export default function StudentDetail() {
       </Card>
 
       <Card noPadding noBorder className="bg-transparent shadow-none space-y-4">
-        <div className="flex gap-1 bg-white border border-[#E2E8F0] rounded-xl p-1">
+        <div className="flex gap-1 bg-card border border-border rounded-xl p-1">
           {[
             { key: 'info', label: 'Thông tin', icon: <Info className="w-4 h-4" /> },
             { key: 'health', label: 'Sức khỏe', icon: <Heart className="w-4 h-4" /> },
@@ -177,7 +177,7 @@ export default function StudentDetail() {
               key={tab.key}
               onClick={() => setActiveTab(tab.key as Tab)}
               className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                activeTab === tab.key ? 'bg-primary text-white shadow-sm' : 'text-[#64748B] hover:text-[#1E293B] hover:bg-[#F8FAFC]'
+                activeTab === tab.key ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
               }`}
             >
               {tab.icon}
@@ -186,12 +186,12 @@ export default function StudentDetail() {
           ))}
         </div>
 
-        <div className="bg-white border border-[#E2E8F0] rounded-xl">
+        <div className="bg-card border border-border rounded-xl">
           {activeTab === 'info' && (
             <div className="p-5">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                 <Card noPadding header={<CardHeader title="Thông tin học sinh" />}>
-                  <div className="divide-y divide-[#F1F5F9]">
+                  <div className="divide-y divide-border">
                     {[
                       ['Họ tên', student.full_name],
                       ['Mã học sinh', student.student_code],
@@ -201,28 +201,28 @@ export default function StudentDetail() {
                       ['Địa chỉ', student.address || '—'],
                     ].map(([label, value]) => (
                       <div key={label} className="flex items-start justify-between px-5 py-3 first:pt-0 last:pb-0">
-                        <p className="text-sm text-[#94A3B8]">{label}</p>
-                        <p className="text-sm font-medium text-[#1E293B] text-right max-w-[60%]">{value}</p>
+                        <p className="text-sm text-muted-foreground">{label}</p>
+                        <p className="text-sm font-medium text-foreground text-right max-w-[60%]">{value}</p>
                       </div>
                     ))}
                   </div>
                 </Card>
 
                 <Card noPadding header={<CardHeader title="Thông tin phụ huynh" />}>
-                  <div className="divide-y divide-[#F1F5F9]">
+                  <div className="divide-y divide-border">
                     {student.parents && student.parents.length > 0 ? (
                       student.parents.map((parent) => (
                         <div key={parent.id} className="p-5 first:pt-0 last:pb-0">
                           <div className="flex items-center justify-between mb-2">
-                            <p className="text-sm font-bold text-[#1E293B]">{parent.full_name}</p>
+                            <p className="text-sm font-bold text-foreground">{parent.full_name}</p>
                             <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase ${
-                              parent.is_primary ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+                              parent.is_primary ? 'bg-blue-500/10 text-blue-500' : 'bg-muted text-muted-foreground'
                             }`}>
                               {parent.relationship === 'Father' ? 'Bố' : parent.relationship === 'Mother' ? 'Mẹ' : 'Người giám hộ'}
                               {parent.is_primary ? ' (Chính)' : ''}
                             </span>
                           </div>
-                          <div className="flex items-center gap-2 text-sm text-[#64748B]">
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <p>SĐT: {parent.phone}</p>
                           </div>
                           <button 
@@ -234,7 +234,7 @@ export default function StudentDetail() {
                         </div>
                       ))
                     ) : (
-                      <div className="p-5 text-center text-sm text-[#64748B]">Chưa có thông tin phụ huynh</div>
+                      <div className="p-5 text-center text-sm text-muted-foreground">Chưa có thông tin phụ huynh</div>
                     )}
                   </div>
                 </Card>
@@ -245,31 +245,31 @@ export default function StudentDetail() {
           {activeTab === 'health' && (
             <div className="p-5">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
-                <div className="bg-[#F8FAFC] rounded-xl p-4 text-center">
-                  <p className="text-xs text-[#94A3B8] mb-1">Chiều cao</p>
-                  <p className="text-lg font-bold text-[#1E293B]">{height} {height === '—' ? '' : 'cm'}</p>
+                <div className="bg-muted/50 rounded-xl p-4 text-center">
+                  <p className="text-xs text-muted-foreground mb-1">Chiều cao</p>
+                  <p className="text-lg font-bold text-foreground">{height} {height === '—' ? '' : 'cm'}</p>
                 </div>
-                <div className="bg-[#F8FAFC] rounded-xl p-4 text-center">
-                  <p className="text-xs text-[#94A3B8] mb-1">Cân nặng</p>
-                  <p className="text-lg font-bold text-[#1E293B]">{weight} {weight === '—' ? '' : 'kg'}</p>
+                <div className="bg-muted/50 rounded-xl p-4 text-center">
+                  <p className="text-xs text-muted-foreground mb-1">Cân nặng</p>
+                  <p className="text-lg font-bold text-foreground">{weight} {weight === '—' ? '' : 'kg'}</p>
                 </div>
-                <div className="bg-[#F8FAFC] rounded-xl p-4 text-center">
-                  <p className="text-xs text-[#94A3B8] mb-1">Nhóm máu</p>
-                  <p className="text-lg font-bold text-[#1E293B]">{bloodType}</p>
+                <div className="bg-muted/50 rounded-xl p-4 text-center">
+                  <p className="text-xs text-muted-foreground mb-1">Nhóm máu</p>
+                  <p className="text-lg font-bold text-foreground">{bloodType}</p>
                 </div>
-                <div className="bg-[#F8FAFC] rounded-xl p-4 text-center">
-                  <p className="text-xs text-[#94A3B8] mb-1">Dị ứng</p>
-                  <p className="text-sm font-bold text-[#1E293B]">{allergies || 'Không'}</p>
+                <div className="bg-muted/50 rounded-xl p-4 text-center">
+                  <p className="text-xs text-muted-foreground mb-1">Dị ứng</p>
+                  <p className="text-sm font-bold text-foreground">{allergies || 'Không'}</p>
                 </div>
               </div>
 
               {allergies && (
-                <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-5">
+                <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 mb-5">
                   <div className="flex items-start gap-2">
                     <AlertTriangle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
                     <div>
-                      <p className="text-sm font-semibold text-red-600">Cảnh báo dị ứng</p>
-                      <p className="text-sm text-red-500 mt-0.5">{allergies}</p>
+                      <p className="text-sm font-semibold text-red-500">Cảnh báo dị ứng</p>
+                      <p className="text-sm text-red-500/80 mt-0.5">{allergies}</p>
                     </div>
                   </div>
                 </div>
@@ -322,7 +322,7 @@ export default function StudentDetail() {
                   { 
                     key: 'note', 
                     label: 'Ghi chú', 
-                    render: (v) => <span className="text-xs text-[#64748B] italic">{(v as React.ReactNode) || '—'}</span> 
+                    render: (v) => <span className="text-xs text-muted-foreground italic">{(v as React.ReactNode) || '—'}</span> 
                   },
                 ] as TableColumn<AttendanceRecord>[]}
                 data={attendanceItems}

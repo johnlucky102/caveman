@@ -46,7 +46,7 @@ const SortIcon: React.FC<{ columnKey: string; sortState?: SortState }> = ({
   columnKey,
   sortState,
 }) => {
-  if (sortState?.key !== columnKey) return <ChevronsUpDown className="w-3.5 h-3.5 text-[#CBD5E1]" />;
+  if (sortState?.key !== columnKey) return <ChevronsUpDown className="w-3.5 h-3.5 text-muted-foreground/40" />;
   return sortState.direction === 'asc' ? (
     <ChevronUp className="w-3.5 h-3.5 text-primary" />
   ) : (
@@ -71,17 +71,17 @@ const Pagination: React.FC<PaginationProps> = ({ meta, onPageChange }) => {
   );
 
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-[#E2E8F0] bg-[#F8FAFC] rounded-b-xl">
-      <p className="text-xs text-[#64748B]">
-        Hiển thị <span className="font-medium text-[#1E293B]">{start}–{end}</span> trong{' '}
-        <span className="font-medium text-[#1E293B]">{total}</span> kết quả
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-border bg-muted/50 rounded-b-xl">
+      <p className="text-xs text-muted-foreground">
+        Hiển thị <span className="font-medium text-foreground">{start}–{end}</span> trong{' '}
+        <span className="font-medium text-foreground">{total}</span> kết quả
       </p>
 
       <div className="flex items-center gap-1">
         <button
           onClick={() => onPageChange(page - 1)}
           disabled={page <= 1}
-          className="p-1.5 rounded-lg text-[#64748B] hover:bg-white hover:text-[#1E293B] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="p-1.5 rounded-lg text-muted-foreground hover:bg-card hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           aria-label="Trang trước"
         >
           <ChevronLeft className="w-4 h-4" />
@@ -93,15 +93,15 @@ const Pagination: React.FC<PaginationProps> = ({ meta, onPageChange }) => {
           return (
             <React.Fragment key={p}>
               {showEllipsis && (
-                <span className="px-1.5 text-[#94A3B8] text-sm">…</span>
+                <span className="px-1.5 text-muted-foreground/40 text-sm">…</span>
               )}
               <button
                 onClick={() => onPageChange(p)}
                 className={cn(
                   'w-8 h-8 rounded-lg text-sm font-medium transition-colors',
                   p === page
-                    ? 'bg-primary text-white shadow-sm'
-                    : 'text-[#64748B] hover:bg-white hover:text-[#1E293B]'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:bg-card hover:text-foreground'
                 )}
               >
                 {p}
@@ -113,7 +113,7 @@ const Pagination: React.FC<PaginationProps> = ({ meta, onPageChange }) => {
         <button
           onClick={() => onPageChange(page + 1)}
           disabled={page >= totalPages}
-          className="p-1.5 rounded-lg text-[#64748B] hover:bg-white hover:text-[#1E293B] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="p-1.5 rounded-lg text-muted-foreground hover:bg-card hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           aria-label="Trang tiếp"
         >
           <ChevronRight className="w-4 h-4" />
@@ -164,17 +164,17 @@ function Table<T extends object>({
   };
 
   return (
-    <div className={cn('bg-white border border-[#E2E8F0] rounded-xl overflow-hidden', className)}>
+    <div className={cn('bg-card border border-border rounded-xl overflow-hidden', className)}>
       <div className="overflow-x-auto">
         <table className="w-full min-w-max text-sm">
           {/* Head */}
           <thead>
-            <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
+            <tr className="bg-muted/50 border-b border-border">
               {onSelectionChange && (
                 <th className="px-4 py-3 w-10">
                   <input
                     type="checkbox"
-                    className="rounded border-[#CBD5E1] text-primary focus:ring-primary cursor-pointer w-4 h-4"
+                    className="rounded border-input text-primary focus:ring-primary cursor-pointer w-4 h-4 bg-background"
                     checked={isAllSelected}
                     ref={(input) => {
                       if (input) input.indeterminate = isIndeterminate;
@@ -187,8 +187,8 @@ function Table<T extends object>({
                 <th
                   key={String(col.key)}
                   className={cn(
-                    'px-4 py-3 text-left text-xs font-semibold text-[#64748B] uppercase tracking-wide whitespace-nowrap',
-                    col.sortable && 'cursor-pointer hover:text-[#1E293B] select-none',
+                    'px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap',
+                    col.sortable && 'cursor-pointer hover:text-foreground select-none',
                     col.width && `w-[${col.width}]`
                   )}
                   onClick={col.sortable ? () => onSort?.(String(col.key)) : undefined}
@@ -203,7 +203,7 @@ function Table<T extends object>({
           </thead>
 
           {/* Body */}
-          <tbody className="divide-y divide-[#F1F5F9]">
+          <tbody className="divide-y divide-border">
             {loading ? (
               // Loading skeleton rows
               Array.from({ length: 5 }).map((_, idx) => (
@@ -211,7 +211,7 @@ function Table<T extends object>({
                   {onSelectionChange && <td className="px-4 py-3" />}
                   {columns.map((col) => (
                     <td key={String(col.key)} className="px-4 py-3">
-                      <div className="h-4 bg-[#F1F5F9] rounded animate-pulse" />
+                      <div className="h-4 bg-muted rounded animate-pulse" />
                     </td>
                   ))}
                 </tr>
@@ -236,7 +236,7 @@ function Table<T extends object>({
                     onClick={() => onRowClick?.(row)}
                     className={cn(
                       'transition-colors',
-                      isSelected ? 'bg-primary/5' : 'hover:bg-[#F8FAFC]',
+                      isSelected ? 'bg-primary/10' : 'hover:bg-muted/30',
                       onRowClick && 'cursor-pointer'
                     )}
                   >
@@ -244,7 +244,7 @@ function Table<T extends object>({
                       <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
-                          className="rounded border-[#CBD5E1] text-primary focus:ring-primary cursor-pointer w-4 h-4"
+                          className="rounded border-input text-primary focus:ring-primary cursor-pointer w-4 h-4 bg-background"
                           checked={isSelected}
                           onChange={(e) => handleSelectRow(e as unknown as React.MouseEvent, rowId)}
                         />
@@ -253,7 +253,7 @@ function Table<T extends object>({
                     {columns.map((col) => {
                     const value = (row as Record<string, unknown>)[col.key as string];
                     return (
-                      <td key={String(col.key)} className="px-4 py-3 text-[#1E293B] whitespace-nowrap">
+                      <td key={String(col.key)} className="px-4 py-3 text-foreground whitespace-nowrap">
                         {col.render
                           ? col.render(value as unknown, row)
                           : value != null

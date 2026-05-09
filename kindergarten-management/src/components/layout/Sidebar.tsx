@@ -34,6 +34,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Điểm danh', path: '/attendance', icon: CalendarCheck, allow: ['Admin', 'Teacher'] },
   { label: 'Học phí', path: '/fees', icon: Wallet, allow: ['Admin', 'Accountant'] },
   { label: 'Báo cáo', path: '/reports', icon: BarChart3, allow: ['Admin', 'Teacher', 'Accountant'] },
+  { label: 'Thông báo', path: '/notifications', icon: Bell, allow: ['Admin', 'Teacher'] },
   { label: 'Cài đặt', path: '/settings', icon: Settings, allow: ['Admin'] },
 ];
 
@@ -53,20 +54,20 @@ function NavItemRow({ item, collapsed }: NavItemProps) {
       title={collapsed ? item.label : undefined}
       className={cn(
         'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 group relative',
-        isActive ? 'bg-primary text-white shadow-sm' : 'text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#1E293B]',
+        isActive ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
         collapsed && 'justify-center px-2'
       )}
     >
       <Icon
         className={cn(
           'shrink-0 transition-colors',
-          isActive ? 'text-white' : 'text-[#94A3B8] group-hover:text-[#1E293B]',
+          isActive ? 'text-primary-foreground' : 'text-muted-foreground/60 group-hover:text-foreground',
           collapsed ? 'w-5 h-5' : 'w-4 h-4'
         )}
       />
       {!collapsed && <span className="flex-1 truncate">{item.label}</span>}
       {collapsed && (
-        <span className="absolute left-full ml-2 px-2 py-1 bg-[#1E293B] text-white text-xs rounded-md opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">
+        <span className="absolute left-full ml-2 px-2 py-1 bg-foreground text-background text-xs rounded-md opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">
           {item.label}
         </span>
       )}
@@ -82,42 +83,42 @@ export default function Sidebar() {
   return (
     <>
       {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/40 z-30 lg:hidden" onClick={() => setSidebarOpen(false)} aria-hidden="true" />
+        <div className="fixed inset-0 bg-black/40 z-30 md:hidden" onClick={() => setSidebarOpen(false)} aria-hidden="true" />
       )}
 
       <aside
         className={cn(
-          'fixed top-0 left-0 h-full bg-white border-r border-[#E2E8F0] z-40 flex flex-col transition-all duration-300 ease-in-out',
+          'fixed top-0 left-0 h-full bg-sidebar border-r border-sidebar-border z-40 flex flex-col transition-all duration-300 ease-in-out',
           sidebarCollapsed ? 'w-16' : 'w-64',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full',
-          'lg:translate-x-0'
+          'md:translate-x-0'
         )}
       >
         <div
           className={cn(
-            'flex items-center h-16 border-b border-[#E2E8F0] px-4 shrink-0',
+            'flex items-center h-16 border-b border-sidebar-border px-4 shrink-0',
             sidebarCollapsed ? 'justify-center' : 'justify-between'
           )}
         >
           {!sidebarCollapsed ? (
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-xl bg-primary flex items-center justify-center shrink-0">
-                <span className="text-white font-bold text-sm">K</span>
+                <span className="text-primary-foreground font-bold text-sm">K</span>
               </div>
               <div className="leading-tight">
-                <p className="font-bold text-[#1E293B] text-sm">KidGarden</p>
-                <p className="text-[10px] text-[#64748B]">Quản lý mầm non</p>
+                <p className="font-bold text-foreground text-sm">KidGarden</p>
+                <p className="text-[10px] text-muted-foreground">Quản lý mầm non</p>
               </div>
             </div>
           ) : (
             <div className="w-8 h-8 rounded-xl bg-primary flex items-center justify-center">
-              <span className="text-white font-bold text-sm">K</span>
+              <span className="text-primary-foreground font-bold text-sm">K</span>
             </div>
           )}
 
           <button
             onClick={() => setSidebarOpen(false)}
-            className="lg:hidden p-1 rounded-lg text-[#64748B] hover:text-[#1E293B] hover:bg-[#F1F5F9]"
+            className="md:hidden p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted"
             aria-label="Đóng sidebar"
           >
             <X className="w-4 h-4" />
@@ -131,13 +132,13 @@ export default function Sidebar() {
         </nav>
 
         {!sidebarCollapsed && role && (
-          <div className="px-3 pb-3 text-xs text-[#64748B]">{ROLE_LABELS[role]}</div>
+          <div className="px-3 pb-3 text-xs text-muted-foreground/60">{ROLE_LABELS[role]}</div>
         )}
 
-        <div className="hidden lg:flex border-t border-[#E2E8F0] px-2 py-3">
+        <div className="hidden md:flex border-t border-sidebar-border px-2 py-3">
           <button
             onClick={toggleSidebarCollapsed}
-            className="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-[#64748B] hover:text-[#1E293B] hover:bg-[#F1F5F9] text-sm transition-colors"
+            className="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted text-sm transition-colors"
             aria-label={sidebarCollapsed ? 'Mở rộng sidebar' : 'Thu gọn sidebar'}
           >
             {sidebarCollapsed ? (

@@ -126,8 +126,8 @@ export default function Notifications() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-[#1E293B]">Thông báo</h1>
-          <p className="text-sm text-[#64748B]">
+          <h1 className="text-xl font-bold text-foreground">Thông báo</h1>
+          <p className="text-sm text-muted-foreground">
             {unread > 0 ? `${unread} thông báo chưa đọc` : 'Không có thông báo mới'}
             {total > 0 && ` · Tổng ${total}`}
           </p>
@@ -156,21 +156,21 @@ export default function Notifications() {
       {/* Search & Filter */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#94A3B8]" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
             type="text"
             placeholder="Tìm kiếm thông báo..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-10 w-full pl-9 pr-4 rounded-xl border border-[#E2E8F0] bg-white text-sm text-[#1E293B] placeholder:text-[#94A3B8] outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-colors"
+            className="h-10 w-full pl-9 pr-4 rounded-xl border border-border bg-card text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-colors"
           />
         </div>
         <div className="relative">
-          <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#94A3B8] pointer-events-none" />
+          <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
           <select
             value={filterType}
             onChange={(e) => setFilterType(e.target.value as FilterType)}
-            className="h-10 pl-9 pr-9 rounded-xl border border-[#E2E8F0] bg-white text-sm text-[#1E293B] outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 appearance-none cursor-pointer transition-colors"
+            className="h-10 pl-9 pr-9 rounded-xl border border-border bg-card text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 appearance-none cursor-pointer transition-colors"
           >
             {kindFilterOptions.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -187,14 +187,14 @@ export default function Notifications() {
           <Card className="py-10">
             <div className="flex flex-col items-center gap-2">
               <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-              <p className="text-sm text-[#64748B]">Đang tải...</p>
+              <p className="text-sm text-muted-foreground">Đang tải...</p>
             </div>
           </Card>
         ) : notifications.length === 0 ? (
           <Card className="py-10">
             <div className="flex flex-col items-center gap-2">
-              <Bell className="w-10 h-10 text-[#CBD5E1]" />
-              <p className="text-sm text-[#64748B]">Không có thông báo nào</p>
+              <Bell className="w-10 h-10 text-muted-foreground/30" />
+              <p className="text-sm text-muted-foreground">Không có thông báo nào</p>
             </div>
           </Card>
         ) : (
@@ -203,16 +203,16 @@ export default function Notifications() {
             return (
               <Card
                 key={n.id}
-                className={!n.is_read ? 'border-primary/30 bg-primary/[0.02]' : ''}
+                className={!n.is_read ? 'border-primary/30 bg-primary/5' : ''}
               >
                 <div className="flex items-start gap-4">
                   {/* Icon */}
                   <div
                     className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                      n.is_read ? 'bg-[#F1F5F9]' : 'bg-primary/10'
+                      n.is_read ? 'bg-muted' : 'bg-primary/10'
                     }`}
                   >
-                    <Bell className={`w-5 h-5 ${n.is_read ? 'text-[#94A3B8]' : 'text-primary'}`} />
+                    <Bell className={`w-5 h-5 ${n.is_read ? 'text-muted-foreground' : 'text-primary'}`} />
                   </div>
 
                   {/* Content */}
@@ -221,7 +221,7 @@ export default function Notifications() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <p
                           className={`text-sm font-medium ${
-                            n.is_read ? 'text-[#64748B]' : 'text-[#1E293B]'
+                            n.is_read ? 'text-muted-foreground' : 'text-foreground'
                           }`}
                         >
                           {n.title}
@@ -234,12 +234,12 @@ export default function Notifications() {
                         <span className="w-2 h-2 rounded-full bg-primary shrink-0 mt-1.5" />
                       )}
                     </div>
-                    <p className="text-xs text-[#64748B] mt-1 leading-relaxed">{n.message}</p>
-                    <div className="flex items-center justify-between mt-2">
-                      <div className="flex items-center gap-3 text-xs text-[#94A3B8]">
+                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{n.message}</p>
+                      <div className="flex items-center justify-between mt-2">
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground/60">
                         <span>{new Date(n.created_at).toLocaleString('vi-VN')}</span>
                         {n.target_type && n.target_type !== 'specific' && (
-                          <span className="text-[#94A3B8]">
+                          <span>
                             Gửi: {n.target_type === 'all' ? 'Tất cả' : n.target_type}
                           </span>
                         )}
@@ -249,7 +249,7 @@ export default function Notifications() {
                         {!n.is_read && (
                           <button
                             onClick={() => handleMarkAsRead(n.id)}
-                            className="p-1.5 rounded-lg text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#1E293B] transition-colors"
+                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                             title="Đánh dấu đã đọc"
                           >
                             <CheckCheck className="w-3.5 h-3.5" />
@@ -260,14 +260,14 @@ export default function Notifications() {
                             setEditingNotification(n);
                             setShowCreateModal(true);
                           }}
-                          className="p-1.5 rounded-lg text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#1E293B] transition-colors"
+                          className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                           title="Chỉnh sửa"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => handleDelete(n.id)}
-                          className="p-1.5 rounded-lg text-[#64748B] hover:bg-red-50 hover:text-red-500 transition-colors"
+                          className="p-1.5 rounded-lg text-muted-foreground hover:bg-red-500/10 hover:text-red-500 transition-colors"
                           title="Xóa"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -293,7 +293,7 @@ export default function Notifications() {
           >
             ← Trước
           </Button>
-          <span className="text-sm text-[#64748B]">
+          <span className="text-sm text-muted-foreground">
             Trang {page}/{totalPages}
           </span>
           <Button

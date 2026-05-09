@@ -77,7 +77,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-[#F8FAFC]">
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-background">
       {/* ------------------------------------------------------------------ */}
       {/* Decorative gradient blobs                                           */}
       {/* ------------------------------------------------------------------ */}
@@ -113,7 +113,7 @@ export default function Login() {
       {/* ------------------------------------------------------------------ */}
       <div className="relative z-10 w-full max-w-[440px] mx-4">
         <div
-          className="bg-white rounded-3xl shadow-2xl px-10 py-10"
+          className="bg-card rounded-3xl shadow-2xl px-10 py-10 border border-border"
           style={{ boxShadow: '0 25px 60px rgba(0,0,0,0.12)' }}
         >
           {/* Logo & heading */}
@@ -178,12 +178,11 @@ export default function Login() {
             </div>
 
             <h1
-              className="text-3xl font-extrabold tracking-tight"
-              style={{ color: '#FF6B6B' }}
+              className="text-3xl font-extrabold tracking-tight text-primary"
             >
               KidGarden
             </h1>
-            <p className="mt-1 text-sm text-center" style={{ color: '#64748B' }}>
+            <p className="mt-1 text-sm text-center text-muted-foreground">
               Hệ thống quản lý trường mầm non
             </p>
           </div>
@@ -196,12 +195,7 @@ export default function Login() {
             {/* Server error banner */}
             {serverError && (
               <div
-                className="mb-5 flex items-start gap-3 rounded-xl px-4 py-3 text-sm"
-                style={{
-                  background: '#FEF2F2',
-                  border: '1px solid #FECACA',
-                  color: '#EF4444',
-                }}
+                className="mb-5 flex items-start gap-3 rounded-xl px-4 py-3 text-sm bg-destructive/10 border border-destructive/20 text-destructive"
               >
                 <svg
                   className="mt-0.5 shrink-0"
@@ -227,8 +221,7 @@ export default function Login() {
             <div className="mb-5">
               <label
                 htmlFor="email"
-                className="block text-sm font-medium mb-1.5"
-                style={{ color: '#1E293B' }}
+                className="block text-sm font-medium mb-1.5 text-foreground"
               >
                 Email
               </label>
@@ -238,27 +231,10 @@ export default function Login() {
                 autoComplete="email"
                 placeholder="giaovien@kidgarden.vn"
                 {...register('email')}
-                className="w-full rounded-xl px-4 py-3 text-sm outline-none transition-all"
-                style={{
-                  border: errors.email ? '1.5px solid #EF4444' : '1.5px solid #E2E8F0',
-                  background: '#F8FAFC',
-                  color: '#1E293B',
-                }}
-                onFocus={(e) => {
-                  if (!errors.email) {
-                    e.currentTarget.style.border = '1.5px solid #FF6B6B';
-                    e.currentTarget.style.boxShadow = '0 0 0 3px rgba(255,107,107,0.12)';
-                  }
-                }}
-                onBlur={(e) => {
-                  if (!errors.email) {
-                    e.currentTarget.style.border = '1.5px solid #E2E8F0';
-                    e.currentTarget.style.boxShadow = 'none';
-                  }
-                }}
+                className={`w-full rounded-xl px-4 py-3 text-sm outline-none transition-all border bg-muted/50 text-foreground placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/10 ${errors.email ? 'border-destructive' : 'border-border'}`}
               />
               {errors.email && (
-                <p className="mt-1.5 text-xs" style={{ color: '#EF4444' }}>
+                <p className="mt-1.5 text-xs text-destructive">
                   {errors.email.message}
                 </p>
               )}
@@ -269,16 +245,14 @@ export default function Login() {
               <div className="flex items-center justify-between mb-1.5">
                 <label
                   htmlFor="password"
-                  className="block text-sm font-medium"
-                  style={{ color: '#1E293B' }}
+                  className="block text-sm font-medium text-foreground"
                 >
                   Mật khẩu
                 </label>
                 <button
                   type="button"
                   disabled={resetting}
-                  className="text-xs font-medium transition-colors hover:underline disabled:opacity-50"
-                  style={{ color: '#FF6B6B' }}
+                  className="text-xs font-medium transition-colors hover:underline disabled:opacity-50 text-primary"
                   onClick={handleForgotPassword}
                 >
                   {resetting ? 'Đang gửi...' : 'Quên mật khẩu?'}
@@ -291,34 +265,13 @@ export default function Login() {
                   autoComplete="current-password"
                   placeholder="Nhập mật khẩu"
                   {...register('password')}
-                  className="w-full rounded-xl px-4 py-3 pr-12 text-sm outline-none transition-all"
-                  style={{
-                    border: errors.password
-                      ? '1.5px solid #EF4444'
-                      : '1.5px solid #E2E8F0',
-                    background: '#F8FAFC',
-                    color: '#1E293B',
-                  }}
-                  onFocus={(e) => {
-                    if (!errors.password) {
-                      e.currentTarget.style.border = '1.5px solid #FF6B6B';
-                      e.currentTarget.style.boxShadow =
-                        '0 0 0 3px rgba(255,107,107,0.12)';
-                    }
-                  }}
-                  onBlur={(e) => {
-                    if (!errors.password) {
-                      e.currentTarget.style.border = '1.5px solid #E2E8F0';
-                      e.currentTarget.style.boxShadow = 'none';
-                    }
-                  }}
+                  className={`w-full rounded-xl px-4 py-3 pr-12 text-sm outline-none transition-all border bg-muted/50 text-foreground placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/10 ${errors.password ? 'border-destructive' : 'border-border'}`}
                 />
                 <button
                   type="button"
                   aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiển thị mật khẩu'}
                   onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg transition-colors"
-                  style={{ color: '#94A3B8' }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg transition-colors text-muted-foreground"
                 >
                   {showPassword ? (
                     <EyeOff size={18} />
@@ -328,7 +281,7 @@ export default function Login() {
                 </button>
               </div>
               {errors.password && (
-                <p className="mt-1.5 text-xs" style={{ color: '#EF4444' }}>
+                <p className="mt-1.5 text-xs text-destructive">
                   {errors.password.message}
                 </p>
               )}
@@ -362,7 +315,7 @@ export default function Login() {
         </div>
 
         {/* Footer note */}
-        <p className="text-center mt-5 text-xs" style={{ color: '#94A3B8' }}>
+        <p className="text-center mt-5 text-xs text-muted-foreground/60">
           &copy; {new Date().getFullYear()} KidGarden · Hệ thống quản lý mầm non
         </p>
       </div>

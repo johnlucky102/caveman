@@ -62,15 +62,24 @@ const Modal: React.FC<ModalProps> = ({
   const panelRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
   // Keyboard handling & focus management
   useEffect(() => {
     if (!open) return;
 
     previousFocusRef.current = document.activeElement as HTMLElement;
-    panelRef.current?.focus();
+    
+    // Only focus if the panel isn't already focused or contains the active element
+    if (panelRef.current && !panelRef.current.contains(document.activeElement)) {
+      panelRef.current.focus();
+    }
 
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') onCloseRef.current();
     };
     document.addEventListener('keydown', onKeyDown);
     document.body.style.overflow = 'hidden';
@@ -80,7 +89,7 @@ const Modal: React.FC<ModalProps> = ({
       document.body.style.overflow = '';
       previousFocusRef.current?.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
@@ -103,7 +112,7 @@ const Modal: React.FC<ModalProps> = ({
         ref={panelRef}
         tabIndex={-1}
         className={cn(
-          'relative w-full bg-white rounded-2xl shadow-2xl outline-none animate-fade-in flex flex-col',
+          'relative w-full bg-card rounded-2xl shadow-2xl outline-none animate-fade-in flex flex-col border border-border',
           sizeClasses[size],
           size === 'full' && 'overflow-hidden',
           className
@@ -111,21 +120,21 @@ const Modal: React.FC<ModalProps> = ({
       >
         {/* Header */}
         {(title || !hideCloseButton) && (
-          <div className="flex items-start justify-between px-6 py-4 border-b border-[#E2E8F0] shrink-0">
+          <div className="flex items-start justify-between px-6 py-4 border-b border-border shrink-0">
             <div>
               {title && (
-                <h2 id="modal-title" className="text-base font-semibold text-[#1E293B]">
+                <h2 id="modal-title" className="text-base font-semibold text-foreground">
                   {title}
                 </h2>
               )}
               {description && (
-                <p className="text-sm text-[#64748B] mt-0.5">{description}</p>
+                <p className="text-sm text-muted-foreground mt-0.5">{description}</p>
               )}
             </div>
             {!hideCloseButton && (
               <button
                 onClick={onClose}
-                className="ml-4 p-1.5 rounded-lg text-[#64748B] hover:text-[#1E293B] hover:bg-[#F1F5F9] transition-colors shrink-0"
+                className="ml-4 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
                 aria-label="Đóng"
               >
                 <X className="w-4 h-4" />
@@ -141,7 +150,7 @@ const Modal: React.FC<ModalProps> = ({
 
         {/* Footer */}
         {footer && (
-          <div className="px-6 py-4 border-t border-[#E2E8F0] bg-[#F8FAFC] rounded-b-2xl shrink-0 flex items-center justify-end gap-3">
+          <div className="px-6 py-4 border-t border-border bg-muted/30 rounded-b-2xl shrink-0 flex items-center justify-end gap-3">
             {footer}
           </div>
         )}
@@ -197,7 +206,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
         </>
       }
     >
-      <p className="text-sm text-[#64748B]">{message}</p>
+      <p className="text-sm text-muted-foreground">{message}</p>
     </Modal>
   );
 };

@@ -233,6 +233,7 @@ export default function StudentForm() {
             <div className="sm:col-span-2">
               <Input
                 label="Họ và tên"
+                name="full_name"
                 required
                 value={formData.full_name}
                 onChange={(e) => handleChange('full_name', e.target.value)}
@@ -245,6 +246,7 @@ export default function StudentForm() {
 
             <Input
               label="Ngày sinh"
+              name="date_of_birth"
               required
               type="date"
               value={formData.date_of_birth}
@@ -261,10 +263,10 @@ export default function StudentForm() {
               options={genderOptions}
             />
 
-            <Input label="Dân tộc" value={formData.ethnicity} onChange={(e) => handleChange('ethnicity', e.target.value)} placeholder="Ví dụ: Kinh" />
+            <Input label="Dân tộc" name="ethnicity" value={formData.ethnicity} onChange={(e) => handleChange('ethnicity', e.target.value)} placeholder="Ví dụ: Kinh" />
 
             <div className="sm:col-span-2">
-              <Input label="Địa chỉ" value={formData.address} onChange={(e) => handleChange('address', e.target.value)} placeholder="Nhập địa chỉ thường trú" />
+              <Input label="Địa chỉ" name="address" value={formData.address} onChange={(e) => handleChange('address', e.target.value)} placeholder="Nhập địa chỉ thường trú" />
             </div>
           </div>
         </Card>
@@ -282,6 +284,7 @@ export default function StudentForm() {
 
             <Input
               label="Ngày nhập học"
+              name="enrolled_date"
               required
               type="date"
               value={formData.enrolled_date}

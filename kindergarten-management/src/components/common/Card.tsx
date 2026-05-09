@@ -29,8 +29,10 @@ interface StatCardProps {
   iconBg?: string;
   /** Optional trend value (e.g. "+12%") */
   trend?: string;
-  /** Trend direction for color */
+  /** Optional trend direction for color */
   trendDirection?: 'up' | 'down' | 'neutral';
+  /** Optional click handler */
+  onClick?: () => void;
 }
 
 // ─── Card ─────────────────────────────────────────────────────────────────────
@@ -51,8 +53,8 @@ const Card: React.FC<CardProps> = ({
   return (
     <div
       className={cn(
-        'bg-white rounded-xl overflow-hidden transition-shadow',
-        !noBorder && 'border border-[#E2E8F0]',
+        'bg-card rounded-xl overflow-hidden transition-shadow',
+        !noBorder && 'border border-border',
         hoverable && 'hover:shadow-md cursor-pointer',
         className
       )}
@@ -60,7 +62,7 @@ const Card: React.FC<CardProps> = ({
     >
       {/* Header */}
       {header && (
-        <div className="px-5 py-4 border-b border-[#E2E8F0]">{header}</div>
+        <div className="px-5 py-4 border-b border-border">{header}</div>
       )}
 
       {/* Body */}
@@ -68,7 +70,7 @@ const Card: React.FC<CardProps> = ({
 
       {/* Footer */}
       {footer && (
-        <div className="px-5 py-3 border-t border-[#E2E8F0] bg-[#F8FAFC]">{footer}</div>
+        <div className="px-5 py-3 border-t border-border bg-muted/50">{footer}</div>
       )}
     </div>
   );
@@ -85,8 +87,8 @@ interface CardHeaderProps {
 export const CardHeader: React.FC<CardHeaderProps> = ({ title, subtitle, action }) => (
   <div className="flex items-center justify-between gap-4">
     <div>
-      <h3 className="font-semibold text-[#1E293B] text-base">{title}</h3>
-      {subtitle && <p className="text-sm text-[#64748B] mt-0.5">{subtitle}</p>}
+      <h3 className="font-semibold text-foreground text-base">{title}</h3>
+      {subtitle && <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>}
     </div>
     {action && <div className="shrink-0">{action}</div>}
   </div>
@@ -105,21 +107,28 @@ export const StatCard: React.FC<StatCardProps> = ({
   iconBg = 'bg-primary/10',
   trend,
   trendDirection = 'neutral',
+  onClick,
 }) => {
   const trendColor = {
-    up: 'text-emerald-600 bg-emerald-50',
-    down: 'text-red-500 bg-red-50',
-    neutral: 'text-[#64748B] bg-[#F1F5F9]',
+    up: 'text-emerald-600 bg-emerald-500/10',
+    down: 'text-red-500 bg-red-500/10',
+    neutral: 'text-muted-foreground bg-muted',
   }[trendDirection];
 
   return (
-    <div className="bg-white border border-[#E2E8F0] rounded-xl p-5 hover:shadow-md transition-shadow">
+    <div
+      onClick={onClick}
+      className={cn(
+        'bg-card border border-border rounded-xl p-5 transition-all',
+        onClick ? 'hover:shadow-md hover:border-primary/50 cursor-pointer active:scale-[0.98]' : ''
+      )}
+    >
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-[#64748B] truncate">{label}</p>
-          <p className="text-2xl font-bold text-[#1E293B] mt-1 leading-none">{value}</p>
+          <p className="text-sm font-medium text-muted-foreground truncate">{label}</p>
+          <p className="text-2xl font-bold text-foreground mt-1 leading-none">{value}</p>
           {description && (
-            <p className="text-xs text-[#64748B] mt-1.5">{description}</p>
+            <p className="text-xs text-muted-foreground mt-1.5">{description}</p>
           )}
           {trend && (
             <span className={cn('inline-block mt-2 text-xs font-medium px-2 py-0.5 rounded-full', trendColor)}>

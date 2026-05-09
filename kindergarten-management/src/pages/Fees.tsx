@@ -129,8 +129,8 @@ export default function Fees() {
       label: 'Học sinh',
       render: (value, row) => (
         <div>
-          <p className="font-medium text-[#1E293B]">{String(value)}</p>
-          <p className="text-xs text-[#64748B]">
+          <p className="font-medium text-foreground">{String(value)}</p>
+          <p className="text-xs text-muted-foreground">
             {row.class_name} · {row.title || 'Học phí'}
           </p>
         </div>
@@ -139,7 +139,7 @@ export default function Fees() {
     {
       key: 'amount_vnd',
       label: 'Phải thu',
-      render: (value) => <span className="font-medium text-[#1E293B]">{formatCurrency(Number(value))}</span>,
+      render: (value) => <span className="font-medium text-foreground">{formatCurrency(Number(value))}</span>,
     },
     {
       key: 'paid_amount_vnd',
@@ -154,7 +154,7 @@ export default function Fees() {
     {
       key: 'due_date',
       label: 'Hạn nộp',
-      render: (value) => <span className="text-[#64748B]">{value ? new Date(String(value)).toLocaleDateString('vi-VN') : '—'}</span>,
+      render: (value) => <span className="text-muted-foreground">{value ? new Date(String(value)).toLocaleDateString('vi-VN') : '—'}</span>,
     },
     {
       key: 'actions',
@@ -174,14 +174,14 @@ export default function Fees() {
                 toast.success('Xác nhận thanh toán thành công');
                 await loadFees();
               }}
-              className="text-xs px-2 py-1 rounded-md bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+              className="text-xs px-2 py-1 rounded-md bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition-colors"
             >
               Xác nhận
             </button>
           )}
           <button 
             onClick={() => navigate(`/fees/${row.id}/edit`)}
-            className="p-1.5 rounded-lg text-[#94A3B8] hover:text-primary hover:bg-primary/10 transition-colors"
+            className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
             title="Chỉnh sửa"
           >
             <Pencil className="w-4 h-4" />
@@ -191,7 +191,7 @@ export default function Fees() {
               setFeeToDelete(row.id);
               setShowDeleteConfirm(true);
             }}
-            className="p-1.5 rounded-lg text-[#94A3B8] hover:text-red-500 hover:bg-red-50 transition-colors"
+            className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors"
             title="Xóa"
           >
             <Trash2 className="w-4 h-4" />
@@ -205,15 +205,15 @@ export default function Fees() {
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-[#1E293B]">Học phí</h1>
-          <p className="text-sm text-[#64748B]">Quản lý thu phí theo học sinh</p>
+          <h1 className="text-xl font-bold text-foreground">Học phí</h1>
+          <p className="text-sm text-muted-foreground">Quản lý thu phí theo học sinh</p>
         </div>
         <div className="flex gap-2">
           {selectedIds.length > 0 && (
             <Button 
               variant="outline" 
               size="sm" 
-              className="text-red-500 border-red-200 hover:bg-red-50"
+              className="text-red-500 border-red-200/50 hover:bg-red-500/10"
               leftIcon={<Trash2 className="w-4 h-4" />}
               onClick={() => setShowBulkDeleteConfirm(true)}
             >
@@ -228,9 +228,9 @@ export default function Fees() {
 
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <StatCard label="Tổng phải thu" value={formatCurrency(summary.totalAmount)} icon={<Wallet className="w-5 h-5 text-primary" />} iconBg="bg-primary/10" />
-        <StatCard label="Tổng đã thu" value={formatCurrency(summary.totalPaid)} icon={<TrendingUp className="w-5 h-5 text-emerald-500" />} iconBg="bg-emerald-50" />
-        <StatCard label="Công nợ" value={formatCurrency(summary.totalDebt)} icon={<TrendingDown className="w-5 h-5 text-red-500" />} iconBg="bg-red-50" />
-        <StatCard label="Số hồ sơ chưa đủ" value={String(summary.debtCount)} icon={<AlertCircle className="w-5 h-5 text-amber-500" />} iconBg="bg-amber-50" />
+        <StatCard label="Tổng đã thu" value={formatCurrency(summary.totalPaid)} icon={<TrendingUp className="w-5 h-5 text-emerald-500" />} iconBg="bg-emerald-500/10" />
+        <StatCard label="Công nợ" value={formatCurrency(summary.totalDebt)} icon={<TrendingDown className="w-5 h-5 text-red-500" />} iconBg="bg-red-500/10" />
+        <StatCard label="Số hồ sơ chưa đủ" value={String(summary.debtCount)} icon={<AlertCircle className="w-5 h-5 text-amber-500" />} iconBg="bg-amber-500/10" />
       </div>
 
       <Card noPadding>
