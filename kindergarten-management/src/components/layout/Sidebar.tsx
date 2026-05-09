@@ -30,7 +30,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Học sinh', path: '/students', icon: Users, allow: ['Admin', 'Teacher', 'Accountant'] },
   { label: 'Lớp học', path: '/classes', icon: Building2, allow: ['Admin', 'Teacher', 'Accountant'] },
   { label: 'Giáo viên', path: '/teachers', icon: GraduationCap, allow: ['Admin'] },
-  { label: 'Phụ huynh', path: '/parents', icon: UsersRound, allow: ['Admin', 'Teacher'] },
+  { label: 'Phụ huynh', path: '/parents', icon: UsersRound, allow: ['Admin'] },
   { label: 'Điểm danh', path: '/attendance', icon: CalendarCheck, allow: ['Admin', 'Teacher'] },
   { label: 'Học phí', path: '/fees', icon: Wallet, allow: ['Admin', 'Accountant'] },
   { label: 'Báo cáo', path: '/reports', icon: BarChart3, allow: ['Admin', 'Teacher', 'Accountant'] },
