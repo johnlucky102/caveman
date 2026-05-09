@@ -9,11 +9,13 @@ export interface TeacherProfileInput {
   avatar: string | null;
   email?: string | null;
   teacher_code?: string | null;
+  password?: string;
 }
 
 type UserRow = {
   id: string;
   full_name: string;
+  email: string | null;
   phone: string | null;
   role: string | null;
   avatar: string | null;
@@ -32,11 +34,11 @@ function mapUserRow(row: UserRow): UserProfile {
   return {
     id: row.id,
     full_name: row.full_name,
+    email: row.email,
     phone: row.phone,
     role: normalizeRole(row.role),
     avatar: row.avatar,
     teacher_code: null,
-    email: null,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -63,7 +65,7 @@ export async function fetchMyProfile(userId: string): Promise<{ profile: UserPro
   const result = await withSupabaseTimeout(
     supabase
       .from('users')
-      .select('id, full_name, phone, role, avatar, created_at, updated_at')
+      .select('id, full_name, email, phone, role, avatar, created_at, updated_at')
       .eq('id', userId)
       .maybeSingle(),
     8000,
@@ -79,7 +81,7 @@ export async function listTeachers(): Promise<{ items: UserProfile[]; error: App
   const result = await withSupabaseTimeout(
     supabase
       .from('users')
-      .select('id, full_name, phone, role, avatar, created_at, updated_at')
+      .select('id, full_name, email, phone, role, avatar, created_at, updated_at')
       .eq('role', 'Teacher')
       .eq('del_yn', false)
       .order('full_name', { ascending: true }),
@@ -95,7 +97,7 @@ export async function getTeacherById(id: string): Promise<{ item: UserProfile | 
   const result = await withSupabaseTimeout(
     supabase
       .from('users')
-      .select('id, full_name, phone, role, avatar, created_at, updated_at')
+      .select('id, full_name, email, phone, role, avatar, created_at, updated_at')
       .eq('id', id)
       .eq('role', 'Teacher')
       .eq('del_yn', false)
@@ -118,7 +120,7 @@ export async function createTeacherProfile(payload: TeacherProfileInput): Promis
   const { data, error: funcError } = await supabase.functions.invoke('create-user', {
     body: {
       email: payload.email.trim(),
-      password: generateTemporaryPassword(),
+      password: payload.password || generateTemporaryPassword(),
       full_name: payload.full_name,
       phone: payload.phone,
       role: 'Teacher',
@@ -148,7 +150,7 @@ export async function updateTeacherProfile(id: string, payload: TeacherProfileIn
       })
       .eq('id', id)
       .eq('role', 'Teacher')
-      .select('id, full_name, phone, role, avatar, created_at, updated_at')
+      .select('id, full_name, email, phone, role, avatar, created_at, updated_at')
       .single(),
     8000,
     { data: null, error: { message: 'Timeout updating teacher', details: '', hint: '', code: 'TIMEOUT' } } as any

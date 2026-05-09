@@ -14,12 +14,14 @@ interface FormState {
   full_name: string;
   phone: string;
   email: string;
+  password?: string;
 }
 
 interface FormErrors {
   full_name?: string;
   phone?: string;
   email?: string;
+  password?: string;
 }
 
 function validate(form: FormState): FormErrors {
@@ -42,6 +44,7 @@ export default function TeacherForm() {
     full_name: '',
     phone: '',
     email: '',
+    password: '',
   });
   const [errors, setErrors] = useState<FormErrors>({});
   const [saving, setSaving] = useState(false);
@@ -88,6 +91,9 @@ export default function TeacherForm() {
     e.preventDefault();
     const nextErrors = validate(form);
     if (!isEditMode && !form.email.trim()) nextErrors.email = 'Email không được để trống';
+    if (!isEditMode && (!form.password || form.password.length < 6)) {
+      nextErrors.password = 'Mật khẩu phải có ít nhất 6 ký tự';
+    }
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
@@ -96,6 +102,7 @@ export default function TeacherForm() {
       full_name: form.full_name.trim(),
       phone: form.phone.trim(),
       email: form.email.trim(),
+      password: form.password?.trim(),
       avatar: form.avatar,
     };
     const result = isEditMode && id ? await updateTeacherProfile(id, payload) : await createTeacherProfile(payload);
@@ -169,14 +176,27 @@ export default function TeacherForm() {
               fullWidth
             />
 
+            <Input
+              label="Email"
+              type="email"
+              placeholder="VD: teacher@kidgarden.vn"
+              value={form.email}
+              onChange={(e) => setField('email', e.target.value)}
+              error={errors.email}
+              required
+              disabled={isEditMode}
+              hint={isEditMode ? 'Không thể thay đổi email tài khoản' : undefined}
+              fullWidth
+            />
+
             {!isEditMode && (
               <Input
-                label="Email"
-                type="email"
-                placeholder="VD: teacher@kidgarden.vn"
-                value={form.email}
-                onChange={(e) => setField('email', e.target.value)}
-                error={errors.email}
+                label="Mật khẩu"
+                type="password"
+                placeholder="Ít nhất 6 ký tự"
+                value={form.password}
+                onChange={(e) => setField('password', e.target.value)}
+                error={errors.password}
                 required
                 fullWidth
               />
