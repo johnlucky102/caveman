@@ -24,7 +24,7 @@ export interface DashboardStats {
   }>;
 }
 
-export async function getDashboardStats(): Promise<{ stats: DashboardStats | null; error: AppError | null }> {
+export async function getDashboardStats(teacherId?: string): Promise<{ stats: DashboardStats | null; error: AppError | null }> {
   // Use local date for dashboard stats
   const now = new Date();
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -58,7 +58,7 @@ export async function getDashboardStats(): Promise<{ stats: DashboardStats | nul
         .eq('del_yn', false),
 
       // 5. All classes
-      supabase.from('classes').select('id, name').eq('del_yn', false)
+      supabase.from('classes').select('id, name, teacher_id').eq('del_yn', false)
     ]);
 
     if (studentsCount.error) throw studentsCount.error;
@@ -66,6 +66,14 @@ export async function getDashboardStats(): Promise<{ stats: DashboardStats | nul
     if (attendanceData.error) throw attendanceData.error;
     if (studentData.error) throw studentData.error;
     if (classesData.error) throw classesData.error;
+    
+    // Filter classes if teacherId is provided
+    const allInternalClasses = classesData.data || [];
+    const filteredClasses = teacherId 
+      ? allInternalClasses.filter(c => c.teacher_id === teacherId)
+      : allInternalClasses;
+    
+    const filteredClassIds = filteredClasses.map(c => c.id);
 
     // Process Debt
     const totalDebt = (debtData.data || []).reduce((acc, row) => {
@@ -73,7 +81,9 @@ export async function getDashboardStats(): Promise<{ stats: DashboardStats | nul
     }, 0);
 
     // Process Attendance Today
-    const attendanceRecords = attendanceData.data || [];
+    const attendanceRecords = (attendanceData.data || []).filter(r => 
+      filteredClassIds.length === 0 || filteredClassIds.includes(r.class_id)
+    );
     const totalAttendance = attendanceRecords.length;
     const presentAttendance = attendanceRecords.filter(r => r.status === 'present').length;
     const absentAttendance = attendanceRecords.filter(r => r.status === 'absent').length;
@@ -97,21 +107,26 @@ export async function getDashboardStats(): Promise<{ stats: DashboardStats | nul
       ...stats
     })).sort((a, b) => b.total - a.total).slice(0, 5); // Top 5 classes for dashboard
 
-    // Process Students by Class (instead of Grades since grade_id was removed)
+    // Process Students by Class
     const classCounts = new Map<string, number>();
     (studentData.data || []).forEach((s: any) => {
+      if (teacherId && s.class_id && !filteredClassIds.includes(s.class_id)) return;
       const cName = s.classes?.name || 'Khác';
       classCounts.set(cName, (classCounts.get(cName) || 0) + 1);
     });
 
     const studentsByGrade = Array.from(classCounts.entries()).map(([gradeName, count]) => ({
-      gradeName, // We keep the property name 'gradeName' for UI compatibility, but it's actually class name now
+      gradeName,
       count
-    })).sort((a, b) => b.count - a.count).slice(0, 5); // Show top 5 classes/grades
+    })).sort((a, b) => b.count - a.count).slice(0, 5);
+
+    const totalStudentsCount = teacherId 
+      ? Array.from(classCounts.values()).reduce((a, b) => a + b, 0)
+      : (studentsCount.count || 0);
 
     return {
       stats: {
-        totalStudents: studentsCount.count || 0,
+        totalStudents: totalStudentsCount,
         totalDebt,
         attendanceToday: {
           present: presentAttendance,

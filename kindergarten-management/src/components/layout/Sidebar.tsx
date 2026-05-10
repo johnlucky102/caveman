@@ -5,6 +5,7 @@ import {
   Bell,
   Building2,
   CalendarCheck,
+  BookOpen,
   ChevronLeft,
   ChevronRight,
   GraduationCap,
@@ -53,16 +54,18 @@ function NavItemRow({ item, collapsed }: NavItemProps) {
       to={item.path}
       title={collapsed ? item.label : undefined}
       className={cn(
-        'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 group relative',
-        isActive ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+        'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 group relative',
+        isActive 
+          ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-[1.02]' 
+          : 'text-muted-foreground hover:bg-muted hover:text-foreground',
         collapsed && 'justify-center px-2'
       )}
     >
       <Icon
         className={cn(
-          'shrink-0 transition-colors',
-          isActive ? 'text-primary-foreground' : 'text-muted-foreground/60 group-hover:text-foreground',
-          collapsed ? 'w-5 h-5' : 'w-4 h-4'
+          'shrink-0 transition-all duration-200',
+          isActive ? 'text-primary-foreground scale-110' : 'text-muted-foreground/60 group-hover:text-foreground group-hover:scale-110',
+        collapsed ? 'w-5 h-5' : 'w-[18px] h-[18px]'
         )}
       />
       {!collapsed && <span className="flex-1 truncate">{item.label}</span>}
@@ -88,7 +91,7 @@ export default function Sidebar() {
 
       <aside
         className={cn(
-          'fixed top-0 left-0 h-full bg-sidebar border-r border-sidebar-border z-40 flex flex-col transition-all duration-300 ease-in-out',
+          'fixed top-0 left-0 h-full bg-card border-r border-border z-40 flex flex-col transition-all duration-300 ease-in-out',
           sidebarCollapsed ? 'w-16' : 'w-64',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full',
           'md:translate-x-0'
@@ -107,7 +110,7 @@ export default function Sidebar() {
               </div>
               <div className="leading-tight">
                 <p className="font-bold text-foreground text-sm">KidGarden</p>
-                <p className="text-[10px] text-muted-foreground">Quản lý mầm non</p>
+                <p className="text-[10px] text-muted-foreground font-medium">Quản lý mầm non</p>
               </div>
             </div>
           ) : (
@@ -132,7 +135,7 @@ export default function Sidebar() {
         </nav>
 
         {!sidebarCollapsed && role && (
-          <div className="px-3 pb-3 text-xs text-muted-foreground/60">{ROLE_LABELS[role]}</div>
+          <div className="px-5 pb-4 text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest">{ROLE_LABELS[role]}</div>
         )}
 
         <div className="hidden md:flex border-t border-sidebar-border px-2 py-3">

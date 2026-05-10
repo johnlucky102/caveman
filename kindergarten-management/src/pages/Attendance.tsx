@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarCheck, Check, ChevronLeft, ChevronRight, Clock, Filter, History, Search, X, AlertTriangle } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { CalendarCheck, Check, ChevronLeft, ChevronRight, Clock, Filter, History, Search, X, AlertTriangle, Utensils, Pill, Moon, Stethoscope } from 'lucide-react';
 import Card, { CardHeader } from '@/components/common/Card';
 import Button from '@/components/common/Button';
 import Input from '@/components/common/Input';
@@ -28,6 +29,8 @@ function formatDate(dateStr: string): string {
 export default function Attendance() {
   const toast = useToast();
   const { user } = useAuthStore();
+  const [searchParams] = useSearchParams();
+  const classIdParam = searchParams.get('classId');
 
   const [viewMode, setViewMode] = useState<ViewMode>('rollcall');
   const [classOptions, setClassOptions] = useState<SelectOption[]>([]);
@@ -51,10 +54,15 @@ export default function Attendance() {
       }
       const options = result.data.items.map((item) => ({ value: String(item.id), label: item.name }));
       setClassOptions(options);
-      if (options.length > 0) setSelectedClass(options[0].value);
+      
+      if (classIdParam) {
+        setSelectedClass(classIdParam);
+      } else if (options.length > 0) {
+        setSelectedClass(options[0].value);
+      }
     };
     void loadClasses();
-  }, [toast]);
+  }, [toast, classIdParam]);
 
   useEffect(() => {
     if (!selectedClass) return;
@@ -102,6 +110,8 @@ export default function Attendance() {
               status,
               check_in_time: status === 'present' || status === 'late' ? item.check_in_time || '08:00:00' : null,
               check_out_time: status === 'present' ? item.check_out_time || '16:30:00' : null,
+              meal_included: status === 'present' || status === 'late' ? item.meal_included : false,
+              is_hospitalized: status === 'absent' || status === 'excused' ? item.is_hospitalized : false,
             }
           : item
       )
@@ -114,8 +124,9 @@ export default function Attendance() {
     const absent = students.filter((item) => item.status === 'absent').length;
     const late = students.filter((item) => item.status === 'late').length;
     const excused = students.filter((item) => item.status === 'excused').length;
+    const cancelled = students.filter((item) => item.status === 'center_cancelled').length;
     const rate = total === 0 ? 0 : Math.round(((present + late) / total) * 100);
-    return { total, present, absent, late, excused, rate };
+    return { total, present, absent, late, excused, cancelled, rate };
   }, [students]);
 
   const filteredHistory = useMemo(() => {
@@ -171,6 +182,10 @@ export default function Attendance() {
         check_in_time: item.check_in_time,
         check_out_time: item.check_out_time,
         note: item.note,
+        meal_included: item.meal_included,
+        medicine_instructions: item.medicine_instructions,
+        sleep_quality: item.sleep_quality,
+        is_hospitalized: item.is_hospitalized,
         created_by: user?.id || null,
       }))
     );
@@ -248,7 +263,7 @@ export default function Attendance() {
 
       {viewMode === 'rollcall' && (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
             <div className="bg-emerald-500/10 rounded-xl p-4 text-center">
               <p className="text-3xl font-bold text-emerald-500">{summary.present}</p>
               <p className="text-xs text-muted-foreground mt-1">Có mặt</p>
@@ -260,6 +275,14 @@ export default function Attendance() {
             <div className="bg-amber-500/10 rounded-xl p-4 text-center">
               <p className="text-3xl font-bold text-amber-500">{summary.late}</p>
               <p className="text-xs text-muted-foreground mt-1">Muộn</p>
+            </div>
+            <div className="bg-blue-500/10 rounded-xl p-4 text-center">
+              <p className="text-3xl font-bold text-blue-500">{summary.excused}</p>
+              <p className="text-xs text-muted-foreground mt-1">Có phép</p>
+            </div>
+            <div className="bg-indigo-500/10 rounded-xl p-4 text-center">
+              <p className="text-3xl font-bold text-indigo-500">{summary.cancelled}</p>
+              <p className="text-xs text-muted-foreground mt-1">TT Nghỉ</p>
             </div>
             <div className="bg-primary/10 rounded-xl p-4 text-center">
               <p className="text-3xl font-bold text-primary">{summary.rate}%</p>
@@ -284,7 +307,69 @@ export default function Attendance() {
                       )}
                     </div>
                   </div>
-                  <div className="flex flex-col sm:flex-row items-center gap-2">
+                  
+                  <div className="flex flex-col xl:flex-row items-center gap-4 flex-1 justify-end">
+                    {/* Meal & Health controls */}
+                    <div className="flex items-center gap-3 px-3 py-1.5 bg-muted/50 rounded-xl border border-border">
+                      <button
+                        onClick={() => {
+                          setStudents(prev => prev.map(s => s.student_id === student.student_id ? { ...s, meal_included: !s.meal_included } : s));
+                        }}
+                        className={`p-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-colors ${
+                          student.meal_included ? 'bg-orange-500/10 text-orange-600' : 'text-muted-foreground grayscale opacity-50'
+                        }`}
+                        title="Suất ăn"
+                      >
+                        <Utensils className="w-3.5 h-3.5" />
+                        Ăn
+                      </button>
+                      <div className="w-px h-4 bg-border" />
+                      <div className="flex items-center gap-1.5 min-w-[120px]">
+                        <Pill className="w-3.5 h-3.5 text-blue-500" />
+                        <input
+                          type="text"
+                          placeholder="Dặn thuốc..."
+                          value={student.medicine_instructions || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setStudents(prev => prev.map(s => s.student_id === student.student_id ? { ...s, medicine_instructions: val } : s));
+                          }}
+                          className="bg-transparent text-[11px] outline-none w-full placeholder:text-muted-foreground/50"
+                        />
+                      </div>
+                      <div className="w-px h-4 bg-border" />
+                      <div className="flex items-center gap-1.5">
+                        <Moon className="w-3.5 h-3.5 text-indigo-500" />
+                        <select
+                          value={student.sleep_quality || ''}
+                          onChange={(e) => {
+                            const val = e.target.value as any;
+                            setStudents(prev => prev.map(s => s.student_id === student.student_id ? { ...s, sleep_quality: val || null } : s));
+                          }}
+                          className="bg-transparent text-[11px] outline-none font-medium text-foreground cursor-pointer [&>option]:bg-slate-800 [&>option]:text-white"
+                        >
+                          <option value="" className="bg-slate-800 text-white">Ngủ?</option>
+                          <option value="Good" className="bg-slate-800 text-white">Tốt</option>
+                          <option value="Fair" className="bg-slate-800 text-white">Khá</option>
+                          <option value="Poor" className="bg-slate-800 text-white">Kém</option>
+                        </select>
+                      </div>
+                      <div className="w-px h-4 bg-border" />
+                      <button
+                        onClick={() => {
+                          setStudents(prev => prev.map(s => s.student_id === student.student_id ? { ...s, is_hospitalized: !s.is_hospitalized } : s));
+                        }}
+                        className={`p-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-colors ${
+                          student.is_hospitalized ? 'bg-red-500/20 text-red-600' : 'text-muted-foreground grayscale opacity-50'
+                        }`}
+                        title="Nằm viện"
+                      >
+                        <Stethoscope className="w-3.5 h-3.5" />
+                        Viện
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-2">
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => setStatus(student.student_id, 'present')}
@@ -322,6 +407,15 @@ export default function Attendance() {
                       >
                         <AlertTriangle className="w-4 h-4" />
                       </button>
+                      <button
+                        onClick={() => setStatus(student.student_id, 'center_cancelled')}
+                        className={`p-2 rounded-lg transition-colors ${
+                          student.status === 'center_cancelled' ? 'bg-indigo-500/20 text-indigo-600' : 'bg-muted text-muted-foreground hover:bg-indigo-500/10 hover:text-indigo-600'
+                        }`}
+                        title="Trung tâm cho nghỉ"
+                      >
+                        <History className="w-4 h-4" />
+                      </button>
                     </div>
                     <input
                       type="text"
@@ -336,10 +430,15 @@ export default function Attendance() {
                     <AttendanceStatusBadge status={student.status} />
                   </div>
                 </div>
-              ))}
-              {students.length === 0 && <div className="p-6 text-center text-sm text-muted-foreground">{loading ? 'Đang tải...' : 'Không có dữ liệu học sinh'}</div>}
-            </div>
-          </Card>
+              </div>
+            ))}
+            {students.length === 0 && (
+              <div className="p-6 text-center text-sm text-muted-foreground">
+                {loading ? 'Đang tải...' : 'Không có dữ liệu học sinh'}
+              </div>
+            )}
+          </div>
+        </Card>
         </>
       )}
 
@@ -364,6 +463,7 @@ export default function Attendance() {
                   { value: 'absent', label: 'Vắng' },
                   { value: 'late', label: 'Muộn' },
                   { value: 'excused', label: 'Có phép' },
+                  { value: 'center_cancelled', label: 'Trung tâm nghỉ' },
                 ]}
               />
             </div>

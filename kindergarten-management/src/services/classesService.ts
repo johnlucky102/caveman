@@ -16,10 +16,21 @@ type ClassRow = {
   teacher_id: string | null;
   room: string | null;
   max_students: number;
-  description: string | null;
   created_at: string;
   updated_at: string;
+  description: string | null;
+  class_type: 'Daycare' | 'Evening';
+  meal_rate: number;
+  cancel_rate: number;
+  hospital_deduction_type: 'Fixed' | 'Daily';
+  hospital_deduction_value: number;
   users: { id: string; full_name: string } | null;
+  class_teachers: {
+    id: string;
+    teacher_id: string;
+    role: string;
+    users: { full_name: string } | null;
+  }[];
 };
 
 function mapClassRow(row: ClassRow, studentCount: number): ClassRecord {
@@ -32,6 +43,19 @@ function mapClassRow(row: ClassRow, studentCount: number): ClassRecord {
     max_students: row.max_students,
     student_count: studentCount,
     description: row.description,
+    class_type: row.class_type,
+    meal_rate: row.meal_rate,
+    cancel_rate: row.cancel_rate,
+    hospital_deduction_type: row.hospital_deduction_type,
+    hospital_deduction_value: row.hospital_deduction_value,
+    teachers: (row.class_teachers || []).map(ct => ({
+      id: ct.id,
+      class_id: row.id,
+      teacher_id: ct.teacher_id,
+      teacher_name: ct.users?.full_name || 'N/A',
+      role: ct.role as any,
+      created_at: '',
+    })),
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -67,7 +91,7 @@ export async function listClasses(query: ClassListQuery): Promise<{ data: ListEn
 
   let statement = supabase
     .from('classes')
-    .select('id, name, teacher_id, room, max_students, description, created_at, updated_at, users(id, full_name)', { count: 'exact' })
+    .select('id, name, teacher_id, room, max_students, description, created_at, updated_at, class_type, meal_rate, cancel_rate, hospital_deduction_type, hospital_deduction_value, users(id, full_name), class_teachers(id, teacher_id, role, users(full_name))', { count: 'exact' })
     .eq('del_yn', false);
 
   if (query.search?.trim()) {
@@ -110,7 +134,7 @@ export async function getClassById(id: number): Promise<{ item: ClassRecord | nu
   const result = await withSupabaseTimeout(
     supabase
       .from('classes')
-      .select('id, name, teacher_id, room, max_students, description, created_at, updated_at, users(id, full_name)')
+      .select('id, name, teacher_id, room, max_students, description, created_at, updated_at, class_type, meal_rate, cancel_rate, hospital_deduction_type, hospital_deduction_value, users(id, full_name), class_teachers(id, teacher_id, role, users(full_name))')
       .eq('id', id)
       .eq('del_yn', false)
       .maybeSingle(),
@@ -130,7 +154,7 @@ export async function createClass(payload: CreateClassInput): Promise<{ item: Cl
     supabase
       .from('classes')
       .insert(payload)
-      .select('id, name, teacher_id, room, max_students, description, created_at, updated_at, users(id, full_name)')
+      .select('id, name, teacher_id, room, max_students, description, created_at, updated_at, class_type, meal_rate, cancel_rate, hospital_deduction_type, hospital_deduction_value, users(id, full_name)')
       .single(),
     8000,
     { data: null, error: { message: 'Timeout creating class', details: '', hint: '', code: 'TIMEOUT' } } as any
@@ -159,7 +183,7 @@ export async function updateClass(id: number, payload: UpdateClassInput): Promis
       .from('classes')
       .update(payload)
       .eq('id', id)
-      .select('id, name, teacher_id, room, max_students, description, created_at, updated_at, users(id, full_name)')
+      .select('id, name, teacher_id, room, max_students, description, created_at, updated_at, class_type, meal_rate, cancel_rate, hospital_deduction_type, hospital_deduction_value, users(id, full_name)')
       .single(),
     8000,
     { data: null, error: { message: 'Timeout updating class', details: '', hint: '', code: 'TIMEOUT' } } as any
@@ -201,5 +225,24 @@ export async function deleteClasses(ids: number[]): Promise<{ error: AppError | 
   );
 
   if (result.error) return { error: toAppError(result.error, 'Không thể xóa danh sách lớp học.') };
+  return { error: null };
+}
+
+export async function assignTeacherToClass(classId: number, teacherId: string, role: string): Promise<{ error: AppError | null }> {
+  const { error } = await supabase
+    .from('class_teachers')
+    .upsert({ class_id: classId, teacher_id: teacherId, role }, { onConflict: 'class_id,teacher_id' });
+  
+  if (error) return { error: toAppError(error, 'Không thể phân công giáo viên.') };
+  return { error: null };
+}
+
+export async function removeTeacherFromClass(classTeacherId: string): Promise<{ error: AppError | null }> {
+  const { error } = await supabase
+    .from('class_teachers')
+    .delete()
+    .eq('id', classTeacherId);
+  
+  if (error) return { error: toAppError(error, 'Không thể gỡ bỏ giáo viên khỏi lớp.') };
   return { error: null };
 }

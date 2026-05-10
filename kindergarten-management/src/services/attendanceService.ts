@@ -18,6 +18,10 @@ type AttendanceRow = {
   check_in_time: string | null;
   check_out_time: string | null;
   note: string | null;
+  meal_included: boolean;
+  medicine_instructions: string | null;
+  sleep_quality: 'Good' | 'Fair' | 'Poor' | null;
+  is_hospitalized: boolean;
   created_at: string;
   updated_at: string;
   students: {
@@ -39,6 +43,10 @@ function mapAttendance(row: AttendanceRow): AttendanceRecord {
     check_in_time: row.check_in_time,
     check_out_time: row.check_out_time,
     note: row.note,
+    meal_included: row.meal_included,
+    medicine_instructions: row.medicine_instructions,
+    sleep_quality: row.sleep_quality,
+    is_hospitalized: row.is_hospitalized,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -54,6 +62,10 @@ export interface AttendanceStudentItem {
   check_in_time: string | null;
   check_out_time: string | null;
   note: string | null;
+  meal_included: boolean;
+  medicine_instructions: string | null;
+  sleep_quality: 'Good' | 'Fair' | 'Poor' | null;
+  is_hospitalized: boolean;
 }
 
 export async function listAttendanceByClassAndDate(query: AttendanceListQuery): Promise<{ items: AttendanceStudentItem[]; error: AppError | null }> {
@@ -74,7 +86,7 @@ export async function listAttendanceByClassAndDate(query: AttendanceListQuery): 
 
   const attendancePromise = supabase
     .from('attendance')
-    .select('id, student_id, class_id, attendance_date, status, check_in_time, check_out_time, note, created_at, updated_at, students(id, full_name, classes(id, name))')
+    .select('id, student_id, class_id, attendance_date, status, check_in_time, check_out_time, note, meal_included, medicine_instructions, sleep_quality, is_hospitalized, created_at, updated_at, students(id, full_name, classes(id, name))')
     .eq('class_id', query.classId)
     .eq('attendance_date', query.attendanceDate)
     .eq('del_yn', false);
@@ -105,6 +117,10 @@ export async function listAttendanceByClassAndDate(query: AttendanceListQuery): 
       check_in_time: existing?.check_in_time || null,
       check_out_time: existing?.check_out_time || null,
       note: existing?.note || null,
+      meal_included: existing?.meal_included ?? true,
+      medicine_instructions: existing?.medicine_instructions || null,
+      sleep_quality: existing?.sleep_quality || null,
+      is_hospitalized: existing?.is_hospitalized ?? false,
     };
   });
 
@@ -122,6 +138,10 @@ export async function upsertAttendanceBulk(rows: UpsertAttendanceInput[]): Promi
     check_in_time: row.check_in_time || null,
     check_out_time: row.check_out_time || null,
     note: row.note || null,
+    meal_included: row.meal_included ?? true,
+    medicine_instructions: row.medicine_instructions || null,
+    sleep_quality: row.sleep_quality || null,
+    is_hospitalized: row.is_hospitalized ?? false,
     created_by: row.created_by || null,
   }));
 
@@ -146,7 +166,7 @@ export async function listAttendanceHistory(
 ): Promise<{ items: AttendanceRecord[]; error: AppError | null }> {
   let statement = supabase
     .from('attendance')
-    .select('id, student_id, class_id, attendance_date, status, check_in_time, check_out_time, note, created_at, updated_at, students(id, full_name, classes(id, name))')
+    .select('id, student_id, class_id, attendance_date, status, check_in_time, check_out_time, note, meal_included, medicine_instructions, sleep_quality, is_hospitalized, created_at, updated_at, students(id, full_name, classes(id, name))')
     .eq('del_yn', false)
     .order('attendance_date', { ascending: false });
 

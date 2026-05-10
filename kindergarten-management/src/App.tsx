@@ -68,6 +68,7 @@ export default function App() {
           <Route path="/attendance" element={allow(['Admin', 'Teacher'], <Attendance />)} />
           <Route path="/fees" element={allow(['Admin', 'Accountant'], <Fees />)} />
           <Route path="/fees/new" element={allow(['Admin', 'Accountant'], <FeeForm />)} />
+          <Route path="/fees/:id/edit" element={allow(['Admin', 'Accountant'], <FeeForm />)} />
           <Route path="/reports" element={allow(['Admin', 'Teacher', 'Accountant'], <Reports />)} />
           <Route path="/settings" element={allow(['Admin'], <Settings />)} />
           <Route path="/notifications" element={allow(['Admin', 'Teacher'], <Notifications />)} />

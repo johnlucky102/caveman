@@ -211,7 +211,7 @@ export default function StudentForm() {
         <div className="w-24" />
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form onSubmit={handleSubmit} className="space-y-5" aria-label="student-form">
         <Card>
           <div className="flex flex-col items-center gap-4">
             <div className="relative">

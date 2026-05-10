@@ -8,8 +8,10 @@ import Select from '@/components/common/Select';
 import Table from '@/components/common/Table';
 import { FeeStatusBadge } from '@/components/common/Badge';
 import { useToast } from '@/components/common/Toast';
-import { listFees, updateFeeRecordStatus, deleteFeeRecord, deleteFeeRecords } from '@/services/feesService';
-import { ConfirmModal } from '@/components/common/Modal';
+import { listFees, updateFeeRecordStatus, deleteFeeRecord, deleteFeeRecords, createClassFees, syncFeeWithAttendance } from '@/services/feesService';
+import { listClasses } from '@/services/classesService';
+import Modal, { ConfirmModal } from '@/components/common/Modal';
+import { RefreshCw, ClipboardList } from 'lucide-react';
 import type { PaginationMeta, SelectOption, TableColumn } from '@/types';
 import type { FeeRecordP2, FeeStatusValue } from '@/types/domain';
 
@@ -38,6 +40,15 @@ export default function Fees() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [feeToDelete, setFeeToDelete] = useState<string | null>(null);
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [showBulkCreateModal, setShowBulkCreateModal] = useState(false);
+  const [bulkClassId, setBulkClassId] = useState('');
+  const [bulkMonth, setBulkMonth] = useState(new Date().getMonth() + 1);
+  const [bulkSchoolYear, setBulkSchoolYear] = useState('2024-2025');
+  const [bulkBaseAmount, setBulkBaseAmount] = useState(3000000);
+  const [bulkTitle, setBulkTitle] = useState('Học phí tháng');
+  const [classOptions, setClassOptions] = useState<SelectOption[]>([]);
+  const [bulkCreating, setBulkCreating] = useState(false);
+  const [syncingId, setSyncingId] = useState<string | null>(null);
   const pageSize = 10;
 
   useEffect(() => {
@@ -87,6 +98,17 @@ export default function Fees() {
     void loadFees();
   }, [loadFees]);
 
+  useEffect(() => {
+    const loadClasses = async () => {
+      const result = await listClasses({ page: 1, pageSize: 200, sortBy: 'name', sortDirection: 'asc' });
+      if (result.data) {
+        setClassOptions(result.data.items.map(c => ({ value: String(c.id), label: c.name })));
+        if (result.data.items.length > 0) setBulkClassId(String(result.data.items[0].id));
+      }
+    };
+    void loadClasses();
+  }, []);
+
   const handleDelete = async (id: string) => {
     setDeleting(true);
     const result = await deleteFeeRecord(id);
@@ -115,6 +137,29 @@ export default function Fees() {
     }
   };
 
+  const handleBulkCreate = async () => {
+    if (!bulkClassId) {
+      toast.error('Vui lòng chọn lớp học');
+      return;
+    }
+    setBulkCreating(true);
+    const result = await createClassFees(
+      Number(bulkClassId),
+      bulkMonth,
+      bulkSchoolYear,
+      `${bulkTitle} ${bulkMonth}/${bulkSchoolYear.split('-')[0]}`,
+      bulkBaseAmount
+    );
+    setBulkCreating(false);
+    if (result.error) {
+      toast.error('Lỗi khi tạo hàng loạt', result.error.message);
+    } else {
+      toast.success('Đã tạo học phí cho toàn bộ học sinh trong lớp');
+      setShowBulkCreateModal(false);
+      void loadFees();
+    }
+  };
+
   const summary = useMemo(() => {
     const totalAmount = items.reduce((sum, item) => sum + item.amount_vnd, 0);
     const totalPaid = items.reduce((sum, item) => sum + item.paid_amount_vnd, 0);
@@ -139,7 +184,16 @@ export default function Fees() {
     {
       key: 'amount_vnd',
       label: 'Phải thu',
-      render: (value) => <span className="font-medium text-foreground">{formatCurrency(Number(value))}</span>,
+      render: (value, row) => (
+        <div>
+          <span className="font-medium text-foreground">{formatCurrency(Number(value))}</span>
+          {row.base_amount_vnd !== null && row.base_amount_vnd !== row.amount_vnd && (
+            <p className="text-[10px] text-red-500 line-through opacity-70">
+              {formatCurrency(row.base_amount_vnd)}
+            </p>
+          )}
+        </div>
+      ),
     },
     {
       key: 'paid_amount_vnd',
@@ -159,9 +213,27 @@ export default function Fees() {
     {
       key: 'actions',
       label: 'Hành động',
-      width: '120px',
+      width: '150px',
       render: (_value, row) => (
         <div className="flex items-center gap-1">
+          <button
+            onClick={async (e) => {
+              e.stopPropagation();
+              setSyncingId(row.id);
+              const res = await syncFeeWithAttendance(row.id);
+              setSyncingId(null);
+              if (res.error) toast.error('Lỗi đồng bộ', res.error.message);
+              else {
+                toast.success('Đã đồng bộ khấu trừ từ chuyên cần');
+                void loadFees();
+              }
+            }}
+            disabled={syncingId === row.id}
+            className="p-1.5 rounded-lg text-muted-foreground hover:text-blue-500 hover:bg-blue-500/10 transition-colors disabled:opacity-50"
+            title="Đồng bộ chuyên cần"
+          >
+            <RefreshCw className={`w-4 h-4 ${syncingId === row.id ? 'animate-spin' : ''}`} />
+          </button>
           {row.status !== 'paid' && (
             <button
               onClick={async (e) => {
@@ -174,9 +246,9 @@ export default function Fees() {
                 toast.success('Xác nhận thanh toán thành công');
                 await loadFees();
               }}
-              className="text-xs px-2 py-1 rounded-md bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition-colors"
+              className="text-[10px] font-bold px-1.5 py-1 rounded-md bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition-colors uppercase"
             >
-              Xác nhận
+              Thu
             </button>
           )}
           <button 
@@ -220,6 +292,14 @@ export default function Fees() {
               Xóa {selectedIds.length} bản ghi
             </Button>
           )}
+          <Button 
+            variant="outline" 
+            size="sm" 
+            leftIcon={<ClipboardList className="w-4 h-4" />} 
+            onClick={() => setShowBulkCreateModal(true)}
+          >
+            Tạo theo lớp
+          </Button>
           <Button size="sm" leftIcon={<Plus className="w-4 h-4" />} onClick={() => navigate('/fees/new')}>
             Tạo bản ghi phí
           </Button>
@@ -310,6 +390,62 @@ export default function Fees() {
         confirmLabel="Xóa tất cả"
         loading={deleting}
       />
+
+      <Modal
+        open={showBulkCreateModal}
+        onClose={() => setShowBulkCreateModal(false)}
+        title="Tạo học phí theo lớp"
+      >
+        <div className="space-y-4 pt-2">
+          <p className="text-sm text-muted-foreground">Hệ thống sẽ tạo bản ghi học phí cho tất cả học sinh trong lớp được chọn.</p>
+          
+          <div className="grid grid-cols-2 gap-3">
+            <Select
+              label="Chọn lớp"
+              value={bulkClassId}
+              onChange={setBulkClassId}
+              options={classOptions}
+            />
+            <Input
+              label="Tháng"
+              type="number"
+              min={1}
+              max={12}
+              value={bulkMonth}
+              onChange={(e) => setBulkMonth(Number(e.target.value))}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="Năm học"
+              placeholder="2024-2025"
+              value={bulkSchoolYear}
+              onChange={(e) => setBulkSchoolYear(e.target.value)}
+            />
+            <Input
+              label="Tiêu đề mẫu"
+              placeholder="Học phí tháng"
+              value={bulkTitle}
+              onChange={(e) => setBulkTitle(e.target.value)}
+            />
+          </div>
+
+          <Input
+            label="Mức học phí cơ bản (VND)"
+            type="number"
+            step={50000}
+            value={bulkBaseAmount}
+            onChange={(e) => setBulkBaseAmount(Number(e.target.value))}
+            hint="Số tiền này chưa bao gồm khấu trừ chuyên cần."
+          />
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="ghost" onClick={() => setShowBulkCreateModal(false)}>Hủy</Button>
+            <Button onClick={handleBulkCreate} loading={bulkCreating}>Bắt đầu tạo</Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

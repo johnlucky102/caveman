@@ -95,8 +95,10 @@ export default function Dashboard() {
     setPageTitle('Dashboard');
     const load = async () => {
       setLoading(true);
+      const { role, user } = useAuthStore.getState();
+      const teacherId = role === 'Teacher' ? user?.id : undefined;
       const [statsRes, notifyRes, trendRes, feeRes, settingsRes] = await Promise.all([
-        getDashboardStats(),
+        getDashboardStats(teacherId),
         getDashboardNotifications(),
         getAttendanceTrend(),
         getFeeStatusSummary(),

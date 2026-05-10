@@ -48,8 +48,25 @@ export interface ClassRecord {
   max_students: number;
   student_count: number;
   description: string | null;
+  teachers?: ClassTeacherRecord[];
   created_at: string;
   updated_at: string;
+  class_type: 'Daycare' | 'Evening';
+  meal_rate: number;
+  cancel_rate: number;
+  hospital_deduction_type: 'Fixed' | 'Daily';
+  hospital_deduction_value: number;
+}
+
+export type ClassTeacherRole = 'Lead' | 'Assistant' | 'Nanny';
+
+export interface ClassTeacherRecord {
+  id: string;
+  class_id: number;
+  teacher_id: string;
+  teacher_name: string;
+  role: ClassTeacherRole;
+  created_at: string;
 }
 
 export interface ClassListQuery {
@@ -66,6 +83,11 @@ export interface CreateClassInput {
   room: string | null;
   max_students: number;
   description: string | null;
+  class_type?: 'Daycare' | 'Evening';
+  meal_rate?: number;
+  cancel_rate?: number;
+  hospital_deduction_type?: 'Fixed' | 'Daily';
+  hospital_deduction_value?: number;
 }
 
 export type UpdateClassInput = Partial<CreateClassInput>;
@@ -114,7 +136,7 @@ export interface CreateStudentInput {
 
 export type UpdateStudentInput = Partial<CreateStudentInput>;
 
-export type AttendanceStatusValue = 'present' | 'absent' | 'late' | 'excused';
+export type AttendanceStatusValue = 'present' | 'absent' | 'late' | 'excused' | 'center_cancelled';
 
 export interface AttendanceRecord {
   id: string;
@@ -127,6 +149,10 @@ export interface AttendanceRecord {
   check_in_time: string | null;
   check_out_time: string | null;
   note: string | null;
+  meal_included: boolean;
+  medicine_instructions: string | null;
+  sleep_quality: 'Good' | 'Fair' | 'Poor' | null;
+  is_hospitalized: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -144,8 +170,13 @@ export interface UpsertAttendanceInput {
   check_in_time?: string | null;
   check_out_time?: string | null;
   note?: string | null;
+  meal_included?: boolean;
+  medicine_instructions?: string | null;
+  sleep_quality?: 'Good' | 'Fair' | 'Poor' | null;
+  is_hospitalized?: boolean;
   created_by?: string | null;
 }
+
 
 export interface FeeTypeRecordP2 {
   id: number;
@@ -175,6 +206,10 @@ export interface FeeRecordP2 {
   due_date: string | null;
   payment_method: 'cash' | 'bank_transfer' | null;
   status: FeeStatusValue;
+  base_amount_vnd: number;
+  meal_deduction_vnd: number;
+  tuition_deduction_vnd: number;
+  deduction_note: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -201,6 +236,10 @@ export interface CreateFeeInput {
   due_date: string | null;
   payment_method: 'cash' | 'bank_transfer' | null;
   status: FeeStatusValue;
+  base_amount_vnd?: number;
+  meal_deduction_vnd?: number;
+  tuition_deduction_vnd?: number;
+  deduction_note?: string | null;
 }
 
 export interface SchoolSettings {

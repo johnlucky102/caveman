@@ -141,23 +141,64 @@ export default function ClassDetail() {
       </div>
 
       {activeTab === 'info' && (
-        <Card header={<CardHeader title="Thông tin lớp học" />}>
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            {[
-              ['Mã lớp', `LOP${classItem.id}`],
-              ['Giáo viên chủ nhiệm', classItem.teacher_name || 'Chưa phân công'],
-              ['Phòng học', classItem.room || '—'],
-              ['Sĩ số', `${classItem.student_count}/${classItem.max_students} học sinh`],
-              ['Ngày tạo', new Date(classItem.created_at).toLocaleDateString('vi-VN')],
-              ['Trạng thái', classItem.student_count >= classItem.max_students ? 'Đầy lớp' : 'Hoạt động'],
-            ].map(([label, value]) => (
-              <div key={String(label)}>
-                <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
-                <p className="font-medium text-foreground">{value}</p>
+        <div className="space-y-5">
+          <Card header={<CardHeader title="Thông tin lớp học" />}>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              {[
+                ['Mã lớp', `LOP${classItem.id}`],
+                ['Giáo viên chủ nhiệm', classItem.teacher_name || 'Chưa phân công'],
+                ['Phòng học', classItem.room || '—'],
+                ['Sĩ số', `${classItem.student_count}/${classItem.max_students} học sinh`],
+                ['Ngày tạo', new Date(classItem.created_at).toLocaleDateString('vi-VN')],
+                ['Trạng thái', classItem.student_count >= classItem.max_students ? 'Đầy lớp' : 'Hoạt động'],
+              ].map(([label, value]) => (
+                <div key={String(label)}>
+                  <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
+                  <p className="font-medium text-foreground">{value}</p>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          <Card header={<CardHeader title="Cấu hình tài chính (Khấu trừ)" />}>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="text-xs text-muted-foreground mb-0.5">Loại lớp học</p>
+                <p className="font-medium text-foreground">{classItem.class_type === 'Daycare' ? 'Lớp Bán trú' : 'Lớp Tối'}</p>
               </div>
-            ))}
-          </div>
-        </Card>
+              <div>
+                <p className="text-xs text-muted-foreground mb-0.5">
+                  {classItem.class_type === 'Daycare' ? 'Tiền cơm/ngày' : 'Tiền nghỉ/buổi'}
+                </p>
+                <p className="font-medium text-foreground">
+                  {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
+                    classItem.class_type === 'Daycare' ? classItem.meal_rate : classItem.cancel_rate
+                  )}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-0.5">Kiểu khấu trừ nằm viện</p>
+                <p className="font-medium text-foreground">
+                  {classItem.hospital_deduction_type === 'Fixed' ? 'Số tiền cố định' : 'Tỷ lệ theo ngày công'}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-0.5">Giá trị khấu trừ viện</p>
+                <p className="font-medium text-foreground text-red-500">
+                  - {classItem.hospital_deduction_type === 'Fixed' 
+                      ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(classItem.hospital_deduction_value)
+                      : `${classItem.hospital_deduction_value}% học phí ngày`}
+                </p>
+              </div>
+            </div>
+            {classItem.description && (
+              <div className="mt-4 pt-4 border-t border-border">
+                <p className="text-xs text-muted-foreground mb-1">Mô tả</p>
+                <p className="text-sm text-foreground">{classItem.description}</p>
+              </div>
+            )}
+          </Card>
+        </div>
       )}
 
       {activeTab === 'students' && (
@@ -246,7 +287,7 @@ export default function ClassDetail() {
               emptyMessage="Chưa có dữ liệu điểm danh hôm nay"
             />
             <div className="p-4 border-t border-border flex justify-end">
-              <Button size="sm" onClick={() => navigate('/attendance')}>
+              <Button size="sm" onClick={() => navigate(`/attendance?classId=${classItem.id}`)}>
                 Đi tới trang điểm danh
               </Button>
             </div>

@@ -7,8 +7,10 @@ import Input from '@/components/common/Input';
 import Select from '@/components/common/Select';
 import { useToast } from '@/components/common/Toast';
 import { listStudents } from '@/services/studentsService';
-import { createFeeRecord, getFeeById, updateFeeRecord, deleteFeeRecord } from '@/services/feesService';
+import { createFeeRecord, getFeeById, updateFeeRecord, deleteFeeRecord, syncFeeWithAttendance } from '@/services/feesService';
 import { ConfirmModal } from '@/components/common/Modal';
+import { RefreshCw } from 'lucide-react';
+import { useAuthStore } from '@/stores/authStore';
 import type { SelectOption } from '@/types';
 import type { CreateFeeInput, FeeRecordP2, FeeStatusValue, StudentRecord } from '@/types/domain';
 
@@ -22,6 +24,10 @@ interface FeeFormState {
   paymentMethod: '' | 'cash' | 'bank_transfer';
   dueDate: string;
   paidDate: string;
+  baseAmount: string;
+  mealDeduction: string;
+  tuitionDeduction: string;
+  deductionNote: string;
 }
 
 interface FormErrors {
@@ -56,6 +62,7 @@ export default function FeeForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
+  const { user } = useAuthStore();
   const isEdit = Boolean(id);
   const [students, setStudents] = useState<StudentRecord[]>([]);
   const [loading, setLoading] = useState(false);
@@ -73,6 +80,10 @@ export default function FeeForm() {
     paymentMethod: '',
     dueDate: new Date().toISOString().split('T')[0],
     paidDate: '',
+    baseAmount: '',
+    mealDeduction: '0',
+    tuitionDeduction: '0',
+    deductionNote: '',
   });
 
   useEffect(() => {
@@ -100,6 +111,10 @@ export default function FeeForm() {
             paymentMethod: item.payment_method || '',
             dueDate: item.due_date || '',
             paidDate: item.paid_date || '',
+            baseAmount: String(item.base_amount_vnd || item.amount_vnd),
+            mealDeduction: String(item.meal_deduction_vnd || 0),
+            tuitionDeduction: String(item.tuition_deduction_vnd || 0),
+            deductionNote: item.deduction_note || '',
           });
         }
       }
@@ -119,9 +134,11 @@ export default function FeeForm() {
     setFormData((prev) => {
       const next = { ...prev, [field]: value };
       // If payment method is "Chưa thanh toán", reset paidAmount to 0
-      if (field === 'paymentMethod' && value === '') {
-        next.paidAmount = '0';
-        next.paidDate = '';
+      // Sync baseAmount with amount for new records if they match or baseAmount is empty
+      if (field === 'amount' && !isEdit) {
+        if (!prev.baseAmount || prev.baseAmount === prev.amount) {
+          next.baseAmount = value;
+        }
       }
       return next;
     });
@@ -140,24 +157,12 @@ export default function FeeForm() {
     if (!formData.schoolYear.trim()) nextErrors.schoolYear = 'Vui lòng nhập năm học';
     if (!formData.dueDate) nextErrors.dueDate = 'Vui lòng nhập hạn nộp';
 
-    // Chặn tạo phí tháng quá khứ
-    const [startYear] = formData.schoolYear.split('-').map(Number);
-    const selectedMonth = Number(formData.month);
-    const now = new Date();
-    const curMonth = now.getMonth() + 1;
-    const curYear = now.getFullYear();
-
-    // Logic đơn giản: nếu năm học bắt đầu >= năm hiện tại
-    if (startYear < curYear || (startYear === curYear && selectedMonth < curMonth)) {
-      // Cho phép nếu năm học là năm trước nhưng tháng là tháng cuối năm? 
-      // Thôi cứ theo logic: không tạo phí cho tháng đã qua của năm học hiện tại/quá khứ.
-      nextErrors.month = 'Không thể tạo phí cho tháng trong quá khứ';
-    }
-
     // Hạn nộp >= Tháng
     if (formData.dueDate) {
+      const [startYear] = formData.schoolYear.split('-').map(Number);
+      const selectedMonth = Number(formData.month);
       const due = new Date(formData.dueDate);
-      const monthStart = new Date(startYear || curYear, selectedMonth - 1, 1);
+      const monthStart = new Date(startYear || new Date().getFullYear(), selectedMonth - 1, 1);
       if (due < monthStart) {
         nextErrors.dueDate = 'Hạn nộp không được trước tháng thu phí';
       }
@@ -190,6 +195,10 @@ export default function FeeForm() {
       due_date: formData.dueDate || null,
       payment_method: formData.paymentMethod || null,
       status,
+      base_amount_vnd: Number(formData.baseAmount || formData.amount),
+      meal_deduction_vnd: Number(formData.mealDeduction),
+      tuition_deduction_vnd: Number(formData.tuitionDeduction),
+      deduction_note: formData.deductionNote,
     };
 
     setSaving(true);
@@ -220,6 +229,10 @@ export default function FeeForm() {
     navigate('/fees');
   };
 
+  const handlePrint = () => {
+    window.print();
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -233,12 +246,38 @@ export default function FeeForm() {
           </div>
         </div>
         {isEdit && (
-          <div className="flex gap-2">
+          <>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              leftIcon={<RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />}
+              disabled={loading}
+              onClick={async () => {
+                setLoading(true);
+                const res = await syncFeeWithAttendance(id!);
+                setLoading(false);
+                if (res.error) toast.error('Lỗi', res.error.message);
+                else if (res.item) {
+                  const item = res.item;
+                  setFormData(prev => ({
+                    ...prev,
+                    amount: String(item.amount_vnd),
+                    baseAmount: String(item.base_amount_vnd),
+                    mealDeduction: String(item.meal_deduction_vnd),
+                    tuitionDeduction: String(item.tuition_deduction_vnd),
+                    deductionNote: item.deduction_note || ''
+                  }));
+                  toast.success('Đã cập nhật khấu trừ từ chuyên cần');
+                }
+              }}
+            >
+              Đồng bộ chuyên cần
+            </Button>
             <Button 
               variant="outline" 
               size="sm" 
               leftIcon={<Printer className="w-4 h-4" />}
-              onClick={() => window.print()}
+              onClick={handlePrint}
             >
               In biên lai
             </Button>
@@ -251,7 +290,7 @@ export default function FeeForm() {
             >
               Xóa
             </Button>
-          </div>
+          </>
         )}
       </div>
 
@@ -276,14 +315,50 @@ export default function FeeForm() {
                 placeholder="VD: Học phí tháng 10"
               />
 
-              <Input
-                label="Số tiền"
-                type="number"
-                value={formData.amount}
-                onChange={(event) => updateField('amount', event.target.value)}
-                required
-                error={errors.amount}
-              />
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="Học phí gốc"
+                  type="number"
+                  value={formData.baseAmount || formData.amount}
+                  onChange={(event) => updateField('baseAmount', event.target.value)}
+                  required
+                />
+                <Input
+                  label="Số tiền phải thu (Sau khấu trừ)"
+                  type="number"
+                  value={formData.amount}
+                  onChange={(event) => updateField('amount', event.target.value)}
+                  required
+                  error={errors.amount}
+                  hint="Sẽ tự động cập nhật khi Đồng bộ chuyên cần"
+                />
+              </div>
+
+              {(Number(formData.mealDeduction) > 0 || Number(formData.tuitionDeduction) > 0) && (
+                <div className="p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl space-y-3">
+                  <p className="text-xs font-bold text-amber-600 uppercase tracking-wider">Chi tiết khấu trừ</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <Input
+                      label="Trừ tiền cơm"
+                      type="number"
+                      value={formData.mealDeduction}
+                      onChange={(event) => updateField('mealDeduction', event.target.value)}
+                    />
+                    <Input
+                      label="Khấu trừ học phí (Viện/Nghỉ)"
+                      type="number"
+                      value={formData.tuitionDeduction}
+                      onChange={(event) => updateField('tuitionDeduction', event.target.value)}
+                    />
+                  </div>
+                  <Input
+                    label="Ghi chú khấu trừ"
+                    value={formData.deductionNote}
+                    onChange={(event) => updateField('deductionNote', event.target.value)}
+                    placeholder="VD: Trừ 5 ngày cơm..."
+                  />
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <Select label="Tháng" options={monthOptions} value={formData.month} onChange={(value) => updateField('month', value)} required error={errors.month} />
@@ -359,6 +434,12 @@ export default function FeeForm() {
                   <span className="text-muted-foreground">Đã thu</span>
                   <span className="text-foreground font-medium">{formatCurrency(Number(formData.paidAmount || '0'))}</span>
                 </div>
+                {Number(formData.mealDeduction) + Number(formData.tuitionDeduction) > 0 && (
+                  <div className="flex justify-between text-red-500">
+                    <span className="font-medium text-xs italic">Tổng khấu trừ</span>
+                    <span className="font-medium text-xs italic">-{formatCurrency(Number(formData.mealDeduction) + Number(formData.tuitionDeduction))}</span>
+                  </div>
+                )}
               </div>
             </div>
           </Card>
@@ -374,6 +455,113 @@ export default function FeeForm() {
         confirmLabel="Xóa"
         loading={deleting}
       />
+
+      {/* Hidden Invoice for Printing */}
+      <div className="hidden print:block fixed inset-0 bg-white z-[9999] p-10 text-black overflow-y-auto">
+        <div className="max-w-[800px] mx-auto border-2 border-black p-8">
+          <div className="flex justify-between items-start border-b-2 border-black pb-6 mb-6">
+            <div className="flex gap-4">
+              <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center border-2 border-primary/20 shrink-0">
+                <Receipt className="w-8 h-8 text-primary" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold uppercase">Trường Mầm Non KidGarden</h2>
+                <p className="text-sm">Địa chỉ: 123 Đường Láng, Đống Đa, Hà Nội</p>
+                <p className="text-sm">Hotline: 0123 456 789</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <h1 className="text-2xl font-black text-primary uppercase">Biên Lai Thu Tiền</h1>
+              <p className="text-sm font-mono mt-1">Số: #{id?.slice(0, 8).toUpperCase()}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-y-3 mb-8 text-sm">
+            <div className="flex gap-2">
+              <span className="font-bold w-28">Học sinh:</span>
+              <span>{selectedStudent?.full_name}</span>
+            </div>
+            <div className="flex gap-2 text-right justify-end">
+              <span className="font-bold">Ngày in:</span>
+              <span>{new Date().toLocaleDateString('vi-VN')}</span>
+            </div>
+            <div className="flex gap-2">
+              <span className="font-bold w-28">Lớp:</span>
+              <span>{selectedStudent?.class_name}</span>
+            </div>
+            <div className="flex gap-2 text-right justify-end">
+              <span className="font-bold">Kỳ thu phí:</span>
+              <span>Tháng {formData.month} / {formData.schoolYear}</span>
+            </div>
+          </div>
+
+          <table className="w-full border-collapse mb-8">
+            <thead>
+              <tr className="bg-gray-100">
+                <th className="border border-black px-4 py-2 text-left">Nội dung khoản thu</th>
+                <th className="border border-black px-4 py-2 text-right w-40">Số tiền</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td className="border border-black px-4 py-3">
+                  <p className="font-bold">{formData.title || 'Học phí'}</p>
+                  <p className="text-xs text-gray-600 italic">Mức học phí cơ sở áp dụng cho lớp {selectedStudent?.class_name}</p>
+                </td>
+                <td className="border border-black px-4 py-3 text-right">
+                  {formatCurrency(Number(formData.baseAmount || formData.amount))}
+                </td>
+              </tr>
+              {Number(formData.mealDeduction) > 0 && (
+                <tr>
+                  <td className="border border-black px-4 py-2 italic text-sm">
+                    - Khấu trừ tiền ăn (Số ngày vắng)
+                  </td>
+                  <td className="border border-black px-4 py-2 text-right text-red-600">
+                    -{formatCurrency(Number(formData.mealDeduction))}
+                  </td>
+                </tr>
+              )}
+              {Number(formData.tuitionDeduction) > 0 && (
+                <tr>
+                  <td className="border border-black px-4 py-2 italic text-sm">
+                    - Khấu trừ học phí ({formData.deductionNote || 'Lý do khác'})
+                  </td>
+                  <td className="border border-black px-4 py-2 text-right text-red-600">
+                    -{formatCurrency(Number(formData.tuitionDeduction))}
+                  </td>
+                </tr>
+              )}
+              <tr className="bg-primary/5 font-black text-xl">
+                <td className="border-2 border-black px-4 py-5 text-right uppercase tracking-wider">
+                  Tổng cộng phải nộp
+                </td>
+                <td className="border-2 border-black px-4 py-5 text-right text-primary">
+                  {formatCurrency(Number(formData.amount))}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div className="flex justify-between items-start gap-10">
+            <div className="flex-1 italic text-xs">
+              <p className="font-bold mb-1">Ghi chú:</p>
+              <p>- Quý phụ huynh vui lòng thanh toán trước ngày {formData.dueDate ? new Date(formData.dueDate).toLocaleDateString('vi-VN') : '—'}.</p>
+              <p>- Mọi thắc mắc vui lòng liên hệ văn phòng trường.</p>
+              <p>- Trạng thái: <span className="font-bold uppercase underline">
+                {formData.paymentMethod ? 'Đã thanh toán' : 'Chưa thanh toán'}
+              </span></p>
+            </div>
+            <div className="flex flex-col items-center gap-20">
+              <div className="text-center">
+                <p className="text-sm italic">Hà Nội, ngày .... tháng .... năm 20...</p>
+                <p className="font-bold uppercase mt-1">Người lập phiếu</p>
+              </div>
+              <p className="font-bold uppercase">{user?.user_metadata?.full_name || 'Hệ thống'}</p>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

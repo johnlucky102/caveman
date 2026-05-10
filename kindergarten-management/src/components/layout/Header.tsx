@@ -32,17 +32,30 @@ function UserMenu({ onClose }: UserMenuProps) {
       <div className="py-1.5">
         <button
           onClick={() => {
-            document.documentElement.classList.toggle('dark');
+            const isDark = document.documentElement.classList.toggle('dark');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            // Force re-render of this component if needed, but since it's a menu that closes it's fine
             onClose();
           }}
-          className="flex items-center justify-between w-full px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors"
+          className="flex items-center justify-between w-full px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-all group"
         >
           <span className="flex items-center gap-2.5">
-            <svg className="w-4 h-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-            </svg>
-            Giao diện tối
+            <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center group-hover:bg-background transition-colors">
+              <svg className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+              </svg>
+            </div>
+            <span className="font-medium">Chế độ tối</span>
           </span>
+          <div className={cn(
+            "w-9 h-5 rounded-full p-1 transition-colors duration-200 ease-in-out",
+            document.documentElement.classList.contains('dark') ? "bg-primary" : "bg-muted-foreground/30"
+          )}>
+            <div className={cn(
+              "w-3 h-3 bg-white rounded-full transition-transform duration-200 ease-in-out",
+              document.documentElement.classList.contains('dark') ? "translate-x-4" : "translate-x-0"
+            )} />
+          </div>
         </button>
       </div>
       <div className="py-1.5 border-t border-border">
