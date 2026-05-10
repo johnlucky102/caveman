@@ -10,7 +10,7 @@ import Table, { type SortState } from '@/components/common/Table';
 import { ConfirmModal } from '@/components/common/Modal';
 import { useToast } from '@/components/common/Toast';
 import { useAuthStore } from '@/stores/authStore';
-import { canManageStudentOrClass } from '@/lib/rbac';
+import { canManageStudentOrClass, canAddOrDeleteStudent, isTeacher } from '@/lib/rbac';
 import { listClasses } from '@/services/classesService';
 import { deleteStudent, deleteStudents, listStudents } from '@/services/studentsService';
 import type { PaginationMeta, SelectOption, TableColumn } from '@/types';
@@ -28,8 +28,9 @@ function calculatePagination(page: number, pageSize: number, total: number): Pag
 export default function Students() {
   const navigate = useNavigate();
   const toast = useToast();
-  const { role } = useAuthStore();
+  const { role, user } = useAuthStore();
   const canManage = canManageStudentOrClass(role);
+  const canAddDelete = canAddOrDeleteStudent(role);
 
   const [students, setStudents] = useState<StudentRecord[]>([]);
   const [classOptions, setClassOptions] = useState<SelectOption[]>([{ label: 'Tất cả lớp', value: '' }]);
@@ -47,9 +48,14 @@ export default function Students() {
 
   const pageSize = 10;
 
+
   useEffect(() => {
     const loadOptions = async () => {
-      const classesResult = await listClasses({ page: 1, pageSize: 200 });
+      const classesResult = await listClasses({ 
+        page: 1, 
+        pageSize: 200, 
+        teacherId: role === 'Teacher' ? user?.id : undefined 
+      });
 
       if (classesResult.error) toast.error('Không tải được lớp học', classesResult.error.message);
 
@@ -58,10 +64,17 @@ export default function Students() {
         value: String(item.id),
       }));
 
-      setClassOptions([{ label: 'Tất cả lớp', value: '' }, ...classItems]);
+      const options = classItems.length > 1 || role === 'Admin' 
+        ? [{ label: 'Tất cả lớp', value: '' }, ...classItems]
+        : classItems;
+
+      setClassOptions(options);
+      if (classItems.length === 1 && !filterClass) {
+        setFilterClass(classItems[0].value);
+      }
     };
     void loadOptions();
-  }, [toast]);
+  }, [toast, role, user?.id]);
 
   const loadStudents = useCallback(async () => {
     setLoading(true);
@@ -70,6 +83,7 @@ export default function Students() {
       pageSize,
       search,
       classId: filterClass ? Number(filterClass) : undefined,
+      teacherId: role === 'Teacher' ? user?.id : undefined,
       sortBy: sortState.key as 'full_name' | 'student_code' | 'created_at',
       sortDirection: sortState.direction,
     });
@@ -209,16 +223,18 @@ export default function Students() {
               >
                 <Pencil className="w-4 h-4" />
               </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setDeleteTarget(row);
-                }}
-                className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors"
-                title="Xóa"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+              {canAddDelete && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleteTarget(row);
+                  }}
+                  className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                  title="Xóa"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
             </>
           )}
         </div>
@@ -234,10 +250,12 @@ export default function Students() {
           <p className="text-sm text-muted-foreground">{total} học sinh tổng cộng</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" leftIcon={<Download className="w-4 h-4" />} onClick={handleExport}>
-            Xuất dữ liệu
-          </Button>
-          {canManage && selectedKeys.length > 0 && (
+          {!isTeacher(role) && (
+            <Button variant="outline" size="sm" leftIcon={<Download className="w-4 h-4" />} onClick={handleExport}>
+              Xuất dữ liệu
+            </Button>
+          )}
+          {canAddDelete && selectedKeys.length > 0 && (
             <Button
               variant="outline"
               size="sm"
@@ -248,7 +266,7 @@ export default function Students() {
               Xóa {selectedKeys.length} đã chọn
             </Button>
           )}
-          {canManage && (
+          {canAddDelete && (
             <Button size="sm" leftIcon={<UserPlus className="w-4 h-4" />} onClick={() => navigate('/students/new')}>
               Thêm mới
             </Button>

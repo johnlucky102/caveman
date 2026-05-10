@@ -6,8 +6,11 @@ import Button from '@/components/common/Button';
 import Input from '@/components/common/Input';
 import Select from '@/components/common/Select';
 import { useToast } from '@/components/common/Toast';
+import CurrencyInput from '@/components/common/CurrencyInput';
 import { assignTeacherToClass, createClass, getClassById, removeTeacherFromClass, updateClass } from '@/services/classesService';
 import { listTeachers } from '@/services/usersService';
+import { canManageFinance, canCreateClass } from '@/lib/rbac';
+import { useAuthStore } from '@/stores/authStore';
 import type { ClassTeacherRecord } from '@/types/domain';
 import type { SelectOption } from '@/types';
 
@@ -44,7 +47,10 @@ export default function ClassForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
+  const { role } = useAuthStore();
   const isEditMode = Boolean(id && id !== 'new');
+  const canManageFin = canManageFinance(role);
+  const canCreate = canCreateClass(role);
 
   const [form, setForm] = useState<FormState>({
     name: '',
@@ -78,6 +84,12 @@ export default function ClassForm() {
   }, [toast]);
 
   useEffect(() => {
+    if (!isEditMode && role === 'Teacher') {
+      toast.error('Truy cập bị chặn', 'Bạn không có quyền tạo lớp học mới.');
+      navigate('/dashboard');
+      return;
+    }
+
     if (!isEditMode || !id) return;
     const loadClass = async () => {
       setLoading(true);
@@ -180,7 +192,7 @@ export default function ClassForm() {
 
       <form onSubmit={handleSubmit}>
         <Card className="space-y-5">
-          <Input label="Tên lớp học" name="name" value={form.name} onChange={(e) => setField('name', e.target.value)} error={errors.name} required fullWidth />
+          <Input label="Tên lớp học" name="name" value={form.name} onChange={(e) => setField('name', e.target.value)} error={errors.name} required fullWidth disabled={!canCreate && isEditMode} />
 
           {isEditMode && (
             <div className="space-y-3">
@@ -218,7 +230,7 @@ export default function ClassForm() {
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input label="Số phòng" name="room" value={form.room} onChange={(e) => setField('room', e.target.value)} error={errors.room} required fullWidth />
+            <Input label="Số phòng" name="room" value={form.room} onChange={(e) => setField('room', e.target.value)} error={errors.room} required fullWidth disabled={!canCreate && isEditMode} />
             <Input
               label="Sĩ số tối đa"
               name="max_students"
@@ -231,6 +243,7 @@ export default function ClassForm() {
               hint={isEditMode ? `Hiện có ${studentCount} học sinh` : undefined}
               required
               fullWidth
+              disabled={!canCreate && isEditMode}
             />
           </div>
 
@@ -241,80 +254,93 @@ export default function ClassForm() {
               placeholder="Mô tả thêm về lớp học (tùy chọn)"
               value={form.description}
               onChange={(e) => setField('description', e.target.value)}
-              className="w-full rounded-xl border border-[#E2E8F0] bg-white px-3 py-2 text-sm text-[#1E293B] outline-none transition-colors duration-150 focus:border-primary focus:ring-2 focus:ring-primary/10 resize-none"
+              disabled={!canCreate && isEditMode}
+              className="w-full rounded-xl border border-[#E2E8F0] bg-white px-3 py-2 text-sm text-[#1E293B] outline-none transition-colors duration-150 focus:border-primary focus:ring-2 focus:ring-primary/10 resize-none disabled:bg-muted/10"
             />
           </div>
 
-          <div className="pt-4 border-t border-border">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
-                <Calculator className="w-4 h-4" />
+          {canManageFin && (
+            <div className="pt-4 border-t border-border">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
+                  <Calculator className="w-4 h-4" />
+                </div>
+                <h2 className="text-sm font-bold text-foreground">Cấu hình tài chính (Khấu trừ)</h2>
               </div>
-              <h2 className="text-sm font-bold text-foreground">Cấu hình tài chính (Khấu trừ)</h2>
-            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Select
-                label="Loại lớp học"
-                value={form.class_type}
-                onChange={(v) => setField('class_type', v as any)}
-                options={[
-                  { value: 'Daycare', label: 'Lớp Bán trú' },
-                  { value: 'Evening', label: 'Lớp Tối' },
-                ]}
-                fullWidth
-              />
-
-              {form.class_type === 'Daycare' ? (
-                <Input
-                  label="Tiền cơm/ngày"
-                  type="number"
-                  value={form.meal_rate}
-                  onChange={(e) => setField('meal_rate', e.target.value)}
-                  hint="Trừ tiền cơm khi vắng mặt"
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Select
+                  label="Loại lớp học"
+                  value={form.class_type}
+                  onChange={(v) => setField('class_type', v as any)}
+                  options={[
+                    { value: 'Daycare', label: 'Lớp Bán trú' },
+                    { value: 'Evening', label: 'Lớp Tối' },
+                  ]}
                   fullWidth
                 />
-              ) : (
-                <Input
-                  label="Tiền nghỉ/buổi"
-                  type="number"
-                  value={form.cancel_rate}
-                  onChange={(e) => setField('cancel_rate', e.target.value)}
-                  hint="Trừ tiền khi trung tâm cho nghỉ"
+
+                {form.class_type === 'Daycare' ? (
+                  <CurrencyInput
+                    label="Tiền cơm/ngày"
+                    value={form.meal_rate}
+                    onChange={(val) => setField('meal_rate', val)}
+                    hint="Trừ tiền cơm khi vắng mặt"
+                    fullWidth
+                  />
+                ) : (
+                  <CurrencyInput
+                    label="Tiền nghỉ/buổi"
+                    value={form.cancel_rate}
+                    onChange={(val) => setField('cancel_rate', val)}
+                    hint="Trừ tiền khi trung tâm cho nghỉ"
+                    fullWidth
+                  />
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                <Select
+                  label="Kiểu khấu trừ nằm viện"
+                  value={form.hospital_deduction_type}
+                  onChange={(v) => setField('hospital_deduction_type', v as any)}
+                  options={[
+                    { value: 'Fixed', label: 'Số tiền cố định' },
+                    { value: 'Daily', label: 'Tỷ lệ theo ngày công' },
+                  ]}
                   fullWidth
                 />
-              )}
+                {form.hospital_deduction_type === 'Fixed' ? (
+                  <CurrencyInput
+                    label="Số tiền trừ/ngày"
+                    value={form.hospital_deduction_value}
+                    onChange={(val) => setField('hospital_deduction_value', val)}
+                    hint="VD: 100.000"
+                    fullWidth
+                  />
+                ) : (
+                  <Input
+                    label="Tỷ lệ trừ (%)"
+                    type="number"
+                    value={form.hospital_deduction_value}
+                    onChange={(e) => setField('hospital_deduction_value', e.target.value)}
+                    hint="VD: 100 (trừ 100%)"
+                    fullWidth
+                  />
+                )}
+              </div>
             </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-              <Select
-                label="Kiểu khấu trừ nằm viện"
-                value={form.hospital_deduction_type}
-                onChange={(v) => setField('hospital_deduction_type', v as any)}
-                options={[
-                  { value: 'Fixed', label: 'Số tiền cố định' },
-                  { value: 'Daily', label: 'Tỷ lệ theo ngày công' },
-                ]}
-                fullWidth
-              />
-              <Input
-                label={form.hospital_deduction_type === 'Fixed' ? 'Số tiền trừ/ngày' : 'Tỷ lệ trừ (%)'}
-                type="number"
-                value={form.hospital_deduction_value}
-                onChange={(e) => setField('hospital_deduction_value', e.target.value)}
-                hint={form.hospital_deduction_type === 'Fixed' ? 'VD: 100000' : 'VD: 100 (trừ 100%)'}
-                fullWidth
-              />
-            </div>
-          </div>
+          )}
 
           <div className="flex items-center justify-end gap-3 pt-2">
             <Button variant="outline" type="button" onClick={() => navigate('/classes')}>
               Hủy
             </Button>
-            <Button type="submit" leftIcon={<Save className="w-4 h-4" />} loading={saving || loading}>
-              {isEditMode ? 'Lưu thay đổi' : 'Thêm lớp học'}
-            </Button>
+            {(isEditMode ? canCreate : canCreate) && (
+              <Button type="submit" leftIcon={<Save className="w-4 h-4" />} loading={saving || loading}>
+                {isEditMode ? 'Lưu thay đổi' : 'Thêm lớp học'}
+              </Button>
+            )}
           </div>
         </Card>
       </form>

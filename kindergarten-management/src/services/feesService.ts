@@ -10,6 +10,29 @@ import type {
 import { toAppError } from './supabaseErrors';
 import { invalidateSwCache } from '@/utils/swCacheInvalidate';
 
+async function ensureFinancialAccess(id?: string, isFinancialMutation = false): Promise<AppError | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { code: 'UNAUTHORIZED', message: 'Vui lòng đăng nhập lại.' };
+
+  const { data: profile } = await supabase.from('users').select('role').eq('id', user.id).single();
+  const role = profile?.role;
+  const isController = role === 'Admin' || role === 'Accountant';
+
+  if (isFinancialMutation && !isController) {
+    return { code: 'FORBIDDEN', message: 'Bạn không có quyền thay đổi dữ liệu tài chính (Số tiền). Vui lòng liên hệ Kế toán.' };
+  }
+
+  if (id) {
+    const { data: fee } = await supabase.from('fee_records').select('status').eq('id', id).single();
+    if (fee?.status === 'paid' && role !== 'Admin') {
+      return { code: 'FORBIDDEN', message: 'Bản ghi học phí đã hoàn tất thanh toán (Paid). Không thể thay đổi.' };
+    }
+  }
+
+  return null;
+}
+
+
 
 
 type FeeRow = {
@@ -109,6 +132,10 @@ export async function listFees(query: FeeListQuery): Promise<{ data: ListEnvelop
     filterBuilder = filterBuilder.eq('school_year', query.schoolYear);
   }
 
+  if (query.classId) {
+    filterBuilder = filterBuilder.eq('class_id', query.classId);
+  }
+
   if (query.search?.trim()) {
     const filters = await getFeeSearchFilters(query.search.trim());
     if (filters.error) {
@@ -163,6 +190,10 @@ export async function listFees(query: FeeListQuery): Promise<{ data: ListEnvelop
     dataQuery = dataQuery.eq('school_year', query.schoolYear);
   }
 
+  if (query.classId) {
+    dataQuery = dataQuery.eq('class_id', query.classId);
+  }
+
   if (query.search?.trim()) {
     const filters = await getFeeSearchFilters(query.search.trim());
     const orFilter = [];
@@ -214,6 +245,9 @@ export async function getFeeById(id: string): Promise<{ item: FeeRecordP2 | null
 }
 
 export async function createFeeRecord(input: CreateFeeInput): Promise<{ item: FeeRecordP2 | null; error: AppError | null }> {
+  const accessError = await ensureFinancialAccess(undefined, true);
+  if (accessError) return { item: null, error: accessError };
+
   const validationError = validatePaidAmount(input.paid_amount_vnd, input.amount_vnd);
   if (validationError) return { item: null, error: validationError };
 
@@ -250,6 +284,9 @@ export async function updateFeeRecordStatus(
   paidDate: string | null,
   paymentMethod: 'cash' | 'bank_transfer' | null
 ): Promise<{ error: AppError | null }> {
+  const accessError = await ensureFinancialAccess(id, true);
+  if (accessError) return { error: accessError };
+
   const existingResult = await withSupabaseTimeout(
     supabase.from('fee_records').select('amount_vnd').eq('id', id).eq('del_yn', false).single(),
     8000,
@@ -283,6 +320,10 @@ export async function updateFeeRecordStatus(
 }
 
 export async function updateFeeRecord(id: string, payload: Partial<CreateFeeInput>): Promise<{ item: FeeRecordP2 | null; error: AppError | null }> {
+  const isMoneyUpdate = 'amount_vnd' in payload || 'paid_amount_vnd' in payload || 'base_amount_vnd' in payload;
+  const accessError = await ensureFinancialAccess(id, isMoneyUpdate);
+  if (accessError) return { item: null, error: accessError };
+
   const result = await withSupabaseTimeout(
     supabase
       .from('fee_records')
@@ -300,6 +341,9 @@ export async function updateFeeRecord(id: string, payload: Partial<CreateFeeInpu
 }
 
 export async function deleteFeeRecord(id: string): Promise<{ error: AppError | null }> {
+  const accessError = await ensureFinancialAccess(id);
+  if (accessError) return { error: accessError };
+
   const result = await withSupabaseTimeout(
     supabase.from('fee_records').update({ del_yn: true }).eq('id', id),
     8000,
@@ -364,6 +408,9 @@ export async function createClassFees(
 }
 
 export async function syncFeeWithAttendance(feeId: string): Promise<{ item: FeeRecordP2 | null; error: AppError | null }> {
+  const accessError = await ensureFinancialAccess(feeId);
+  if (accessError) return { item: null, error: accessError };
+
   // 1. Load fee with class config
   const feeResult = await supabase
     .from('fee_records')

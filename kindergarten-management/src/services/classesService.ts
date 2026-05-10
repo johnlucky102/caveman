@@ -98,6 +98,31 @@ export async function listClasses(query: ClassListQuery): Promise<{ data: ListEn
     statement = statement.ilike('name', `%${query.search.trim()}%`);
   }
 
+  if (query.teacherId) {
+    // Note: In a real app with RLS, this might be redundant but good for explicit scoping
+    // We check if teacher is the main teacher or assigned in class_teachers
+    // Since we can't easily do a complex OR join on nested relations in a single simple query here without a join,
+    // we use a subquery approach or filter by IDs found first.
+    // For simplicity and consistency with other services, we'll fetch IDs first.
+    const [directClasses, mappedClasses] = await Promise.all([
+      supabase.from('classes').select('id').eq('teacher_id', query.teacherId).eq('del_yn', false),
+      supabase.from('class_teachers').select('class_id').eq('teacher_id', query.teacherId)
+    ]);
+    const classIds = Array.from(new Set([
+      ...(directClasses.data || []).map(c => c.id),
+      ...(mappedClasses.data || []).map(c => c.class_id)
+    ]));
+    
+    if (classIds.length === 0) {
+      // Return early with empty results
+      return {
+        data: { items: [], total: 0, page, pageSize },
+        error: null
+      };
+    }
+    statement = statement.in('id', classIds);
+  }
+
   const sortBy = query.sortBy || 'name';
   const sortDirection = (query.sortDirection || 'asc') === 'asc';
   statement = statement.order(sortBy, { ascending: sortDirection });

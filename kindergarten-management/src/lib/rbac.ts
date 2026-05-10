@@ -15,8 +15,8 @@ export const ROLE_ROUTE_ACCESS: Record<string, AppRole[]> = {
   '/parents': ['Admin', 'Teacher'],
   '/attendance': ['Admin', 'Teacher'],
   '/fees': ['Admin', 'Accountant'],
-  '/notifications': ['Admin', 'Teacher', 'Accountant', 'Parent'],
-  '/reports': ['Admin', 'Teacher', 'Accountant'],
+
+  '/reports': ['Admin', 'Accountant'],
   '/settings': ['Admin'],
 };
 
@@ -29,4 +29,20 @@ export function canAccessRoute(role: AppRole | null, path: string): boolean {
 
 export function canManageStudentOrClass(role: AppRole | null): boolean {
   return role === 'Admin' || role === 'Teacher';
+}
+
+export function canAddOrDeleteStudent(role: AppRole | null): boolean {
+  return role === 'Admin';
+}
+
+export function isTeacher(role: AppRole | null): boolean {
+  return role === 'Teacher';
+}
+
+export function canCreateClass(role: AppRole | null): boolean {
+  return role === 'Admin' || role === 'Accountant';
+}
+
+export function canManageFinance(role: AppRole | null): boolean {
+  return role === 'Admin' || role === 'Accountant';
 }

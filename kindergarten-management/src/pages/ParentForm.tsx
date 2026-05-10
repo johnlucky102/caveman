@@ -6,6 +6,7 @@ import Button from '@/components/common/Button';
 import Input from '@/components/common/Input';
 import Select from '@/components/common/Select';
 import { useToast } from '@/components/common/Toast';
+import { DatePicker } from '@/components/common/DatePicker';
 import { getParentById, createParent, updateParent, deleteParent, linkParentToStudent, unlinkParentFromStudent } from '@/services/usersService';
 import { listStudents } from '@/services/studentsService';
 import type { ParentRecord, CreateParentInput, StudentRecord } from '@/types/domain';
@@ -224,11 +225,10 @@ export default function ParentForm() {
                     { label: 'Khác', value: 'Other' },
                   ]}
                 />
-                <Input
+                <DatePicker
                   label="Ngày sinh"
-                  type="date"
-                  value={formData.date_of_birth || ''}
-                  onChange={e => setFormData({ ...formData, date_of_birth: e.target.value })}
+                  date={formData.date_of_birth || ''}
+                  setDate={(d) => setFormData({ ...formData, date_of_birth: d })}
                 />
               </div>
             </div>

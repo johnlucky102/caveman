@@ -11,7 +11,7 @@ import { ConfirmModal } from '@/components/common/Modal';
 import { useToast } from '@/components/common/Toast';
 import { deleteClass, deleteClasses, listClasses } from '@/services/classesService';
 import { useAuthStore } from '@/stores/authStore';
-import { canManageStudentOrClass } from '@/lib/rbac';
+import { canManageStudentOrClass, canCreateClass } from '@/lib/rbac';
 import type { PaginationMeta, TableColumn } from '@/types';
 import type { ClassRecord } from '@/types/domain';
 
@@ -27,8 +27,9 @@ function paginate(page: number, pageSize: number, total: number): PaginationMeta
 export default function Classes() {
   const navigate = useNavigate();
   const toast = useToast();
-  const { role } = useAuthStore();
+  const { role, user } = useAuthStore();
   const canManage = canManageStudentOrClass(role);
+  const canCreate = canCreateClass(role);
 
   const [items, setItems] = useState<ClassRecord[]>([]);
   const [search, setSearch] = useState('');
@@ -49,6 +50,7 @@ export default function Classes() {
       page,
       pageSize,
       search,
+      teacherId: role === 'Teacher' ? user?.id : undefined,
       sortBy: sortState.key as 'name' | 'created_at' | 'max_students',
       sortDirection: sortState.direction,
     });
@@ -67,6 +69,12 @@ export default function Classes() {
   useEffect(() => {
     void loadClasses();
   }, [loadClasses]);
+
+  useEffect(() => {
+    if (role === 'Teacher' && items.length === 1 && !loading && !search) {
+      navigate(`/classes/${items[0].id}`);
+    }
+  }, [items, role, loading, navigate, search]);
 
   const meta = useMemo(() => paginate(page, pageSize, total), [page, pageSize, total]);
   const totalStudents = useMemo(() => items.reduce((sum, item) => sum + item.student_count, 0), [items]);
@@ -162,7 +170,7 @@ export default function Classes() {
       width: '120px',
       render: (_value, row) => (
         <div className="flex items-center gap-1">
-          {canManage && (
+          {canCreate && (
             <>
               <button
                 onClick={(e) => {
@@ -203,7 +211,7 @@ export default function Classes() {
           <p className="text-sm text-muted-foreground">{total} lớp học</p>
         </div>
         <div className="flex gap-2">
-          {canManage && selectedKeys.length > 0 && (
+          {canCreate && selectedKeys.length > 0 && (
             <Button
               variant="outline"
               size="sm"
@@ -214,7 +222,7 @@ export default function Classes() {
               Xóa {selectedKeys.length} đã chọn
             </Button>
           )}
-          {canManage && (
+          {canCreate && (
             <Button size="sm" leftIcon={<Plus className="w-4 h-4" />} onClick={() => navigate('/classes/new')}>
               Thêm lớp
             </Button>
@@ -245,26 +253,39 @@ export default function Classes() {
       </Card>
 
       <Card noPadding header={<CardHeader title="Danh sách lớp học" subtitle={`${items.length} kết quả / trang`} />}>
-        <Table
-          columns={columns}
-          data={items}
-          rowKey="id"
-          loading={loading}
-          pagination={meta}
-          onPageChange={setPage}
-          sortState={sortState}
-          onSort={(key) => {
-            setPage(1);
-            setSortState((prev) => ({
-              key,
-              direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc',
-            }));
-          }}
-          onRowClick={(row) => navigate(`/classes/${(row as unknown as ClassRecord).id}`)}
-          selectedKeys={selectedKeys}
-          onSelectionChange={setSelectedKeys}
-          emptyMessage="Không tìm thấy lớp học nào"
-        />
+        {role === 'Teacher' && items.length === 0 && !loading && !search ? (
+          <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+            <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center mb-4">
+              <Building2 className="w-10 h-10 text-muted-foreground/40" />
+            </div>
+            <h3 className="text-lg font-semibold text-foreground">Chưa được phân công lớp</h3>
+            <p className="text-sm text-muted-foreground max-w-[320px] mt-2">
+              Bạn chưa được chỉ định làm giáo viên chủ nhiệm cho lớp học nào. 
+              Vui lòng liên hệ với bộ phận Quản trị để được cập nhật thông tin.
+            </p>
+          </div>
+        ) : (
+          <Table
+            columns={columns}
+            data={items}
+            rowKey="id"
+            loading={loading}
+            pagination={meta}
+            onPageChange={setPage}
+            sortState={sortState}
+            onSort={(key) => {
+              setPage(1);
+              setSortState((prev) => ({
+                key,
+                direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc',
+              }));
+            }}
+            onRowClick={(row) => navigate(`/classes/${(row as unknown as ClassRecord).id}`)}
+            selectedKeys={selectedKeys}
+            onSelectionChange={setSelectedKeys}
+            emptyMessage="Không tìm thấy lớp học nào"
+          />
+        )}
       </Card>
 
       <ConfirmModal

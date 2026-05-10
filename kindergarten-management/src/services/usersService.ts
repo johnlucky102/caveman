@@ -200,13 +200,40 @@ export async function deleteTeacherProfiles(ids: string[]): Promise<{ error: App
   return { error: null };
 }
 
-export async function listParents(): Promise<{ items: ParentRecord[]; error: AppError | null }> {
+export async function listParents(teacherId?: string): Promise<{ items: ParentRecord[]; error: AppError | null }> {
+  let query = supabase
+    .from('parents')
+    .select('*, student_parent!inner(student_id, students!inner(full_name, class_id, classes(name)))')
+    .eq('del_yn', false);
+
+  if (teacherId) {
+    // 1. Get classes managed by this teacher
+    const [directClasses, mappedClasses] = await Promise.all([
+      supabase.from('classes').select('id').eq('teacher_id', teacherId).eq('del_yn', false),
+      supabase.from('class_teachers').select('class_id').eq('teacher_id', teacherId)
+    ]);
+    const classIds = Array.from(new Set([
+      ...(directClasses.data || []).map(c => c.id),
+      ...(mappedClasses.data || []).map(c => c.class_id)
+    ]));
+    
+    if (classIds.length === 0) return { items: [], error: null };
+
+    // 2. Get students in those classes
+    const { data: studentIds } = await supabase
+      .from('students')
+      .select('id')
+      .in('class_id', classIds)
+      .eq('del_yn', false);
+    
+    if (!studentIds || studentIds.length === 0) return { items: [], error: null };
+
+    // 3. Filter parents linked to those students
+    query = query.in('student_parent.student_id', studentIds.map(s => s.id));
+  }
+
   const result = await withSupabaseTimeout(
-    supabase
-      .from('parents')
-      .select('*, student_parent(student_id, students(full_name, class_id, classes(name)))')
-      .eq('del_yn', false)
-      .order('full_name', { ascending: true }),
+    query.order('full_name', { ascending: true }),
     8000,
     { data: null, error: { message: 'Timeout loading parents', details: '', hint: '', code: 'TIMEOUT' } } as any
   );

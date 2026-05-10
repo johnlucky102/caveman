@@ -118,6 +118,7 @@ export interface StudentListQuery {
   classId?: number;
   sortBy?: 'full_name' | 'student_code' | 'created_at';
   sortDirection?: SortDirection;
+  teacherId?: string;
 }
 
 export interface CreateStudentInput {
@@ -160,6 +161,7 @@ export interface AttendanceRecord {
 export interface AttendanceListQuery {
   classId: number;
   attendanceDate: string;
+  teacherId?: string;
 }
 
 export interface UpsertAttendanceInput {
@@ -220,6 +222,7 @@ export interface FeeListQuery {
   search?: string;
   status?: FeeStatusValue;
   studentId?: string;
+  classId?: number;
   month?: number;
   schoolYear?: string;
 }

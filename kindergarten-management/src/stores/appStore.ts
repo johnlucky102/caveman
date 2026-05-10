@@ -27,10 +27,7 @@ interface AppState {
   searchQuery: string;
   setSearchQuery: (query: string) => void;
 
-  // Notification badge count
-  unreadNotifications: number;
-  setUnreadNotifications: (count: number) => void;
-  decrementUnreadNotifications: () => void;
+
 
   // Modal state (generic overlay)
   activeModal: string | null;
@@ -92,16 +89,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     return { searchQuery: query };
   }),
 
-  // ─── Notifications ───────────────────────────────────────────────────────────
-  unreadNotifications: 0,
-  setUnreadNotifications: (count) => set((state) => {
-    if (state.unreadNotifications === count) return state;
-    return { unreadNotifications: count };
-  }),
-  decrementUnreadNotifications: () =>
-    set((state) => ({
-      unreadNotifications: Math.max(0, state.unreadNotifications - 1),
-    })),
+
 
   // ─── Modal ───────────────────────────────────────────────────────────────────
   activeModal: null,
@@ -114,6 +102,6 @@ export const selectToasts = (state: AppState) => state.toasts;
 export const selectSidebarOpen = (state: AppState) => state.sidebarOpen;
 export const selectSidebarCollapsed = (state: AppState) => state.sidebarCollapsed;
 export const selectPageTitle = (state: AppState) => state.pageTitle;
-export const selectUnreadNotifications = (state: AppState) => state.unreadNotifications;
+
 
 export default useAppStore;

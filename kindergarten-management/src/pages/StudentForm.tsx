@@ -6,9 +6,23 @@ import Button from '@/components/common/Button';
 import Input from '@/components/common/Input';
 import Select from '@/components/common/Select';
 
+function ReadOnlyField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="space-y-1.5">
+      <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{label}</label>
+      <div className="h-10 flex items-center px-3 rounded-xl bg-muted/30 border border-transparent text-sm font-medium text-foreground">
+        {value || '—'}
+      </div>
+    </div>
+  );
+}
+
 import { useToast } from '@/components/common/Toast';
+import { DatePicker } from '@/components/common/DatePicker';
 import { listClasses } from '@/services/classesService';
 import { createStudent, getStudentById, updateStudent } from '@/services/studentsService';
+import { useAuthStore } from '@/stores/authStore';
+import { isTeacher } from '@/lib/rbac';
 import type { SelectOption } from '@/types';
 import type { CreateStudentInput } from '@/types/domain';
 
@@ -80,6 +94,8 @@ export default function StudentForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
+  const { role } = useAuthStore();
+  const isT = isTeacher(role);
   const isEditMode = Boolean(id && id !== 'new');
 
   const [formData, setFormData] = useState<StudentFormData>(defaultForm());
@@ -87,6 +103,14 @@ export default function StudentForm() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSaving, setIsSaving] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isEditMode && role === 'Teacher') {
+      toast.error('Truy cập bị chặn', 'Giáo viên không có quyền tạo hồ sơ học sinh mới.');
+      navigate('/students');
+      return;
+    }
+  }, [isEditMode, role, navigate, toast]);
 
   useEffect(() => {
     const loadOptions = async () => {
@@ -175,7 +199,7 @@ export default function StudentForm() {
 
     setIsSaving(true);
     const payload = toPayload(formData);
-    const result = isEditMode && id ? await updateStudent(id, payload) : await createStudent(payload);
+    const result = isEditMode && id ? await updateStudent(id, payload, useAuthStore.getState().user?.id) : await createStudent(payload);
     setIsSaving(false);
 
     if (result.error) {
@@ -194,7 +218,7 @@ export default function StudentForm() {
           Quay lại
         </Button>
         <h1 className="text-lg font-bold text-[#1E293B] absolute left-1/2 -translate-x-1/2">
-          {isEditMode ? 'Chỉnh sửa học sinh' : 'Thêm học sinh mới'}
+          {isEditMode ? (isT ? 'Cập nhật sức khỏe học sinh' : 'Chỉnh sửa học sinh') : 'Thêm học sinh mới'}
         </h1>
         <div className="w-24" />
       </div>
@@ -204,66 +228,104 @@ export default function StudentForm() {
         <Card header={<div className="font-semibold text-[#1E293B]">Thông tin cơ bản</div>}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
-              <Input
-                label="Họ và tên"
-                name="full_name"
-                required
-                value={formData.full_name}
-                onChange={(e) => handleChange('full_name', e.target.value)}
-                error={errors.full_name}
-                placeholder="Nhập họ và tên học sinh"
-              />
+              {isT ? (
+                <ReadOnlyField label="Họ và tên" value={formData.full_name} />
+              ) : (
+                <Input
+                  label="Họ và tên"
+                  name="full_name"
+                  required
+                  value={formData.full_name}
+                  onChange={(e) => handleChange('full_name', e.target.value)}
+                  error={errors.full_name}
+                  placeholder="Nhập họ và tên học sinh"
+                />
+              )}
             </div>
 
 
 
-            <Input
-              label="Ngày sinh"
-              name="date_of_birth"
-              required
-              type="date"
-              value={formData.date_of_birth}
-              onChange={(e) => handleChange('date_of_birth', e.target.value)}
-              error={errors.date_of_birth}
-            />
+            {isT ? (
+              <ReadOnlyField label="Ngày sinh" value={formData.date_of_birth ? new Date(formData.date_of_birth).toLocaleDateString('vi-VN') : ''} />
+            ) : (
+              <DatePicker
+                label="Ngày sinh"
+                date={formData.date_of_birth}
+                setDate={(d) => handleChange('date_of_birth', d)}
+                required
+                error={errors.date_of_birth}
+                clearable={false}
+              />
+            )}
 
-            <Select
-              label="Giới tính"
-              required
-              value={formData.gender}
-              onChange={(v) => handleChange('gender', v as 'Male' | 'Female' | '')}
-              error={errors.gender}
-              options={genderOptions}
-            />
+            {isT ? (
+              <ReadOnlyField label="Giới tính" value={genderOptions.find(o => o.value === formData.gender)?.label || ''} />
+            ) : (
+              <Select
+                label="Giới tính"
+                required
+                value={formData.gender}
+                onChange={(v) => handleChange('gender', v as 'Male' | 'Female' | '')}
+                error={errors.gender}
+                options={genderOptions}
+              />
+            )}
 
-            <Input label="Dân tộc" name="ethnicity" value={formData.ethnicity} onChange={(e) => handleChange('ethnicity', e.target.value)} placeholder="Ví dụ: Kinh" />
+            {isT ? (
+              <ReadOnlyField label="Dân tộc" value={formData.ethnicity} />
+            ) : (
+              <Input 
+                label="Dân tộc" 
+                name="ethnicity" 
+                value={formData.ethnicity} 
+                onChange={(e) => handleChange('ethnicity', e.target.value)} 
+                placeholder="Ví dụ: Kinh" 
+              />
+            )}
 
             <div className="sm:col-span-2">
-              <Input label="Địa chỉ" name="address" value={formData.address} onChange={(e) => handleChange('address', e.target.value)} placeholder="Nhập địa chỉ thường trú" />
+              {isT ? (
+                <ReadOnlyField label="Địa chỉ" value={formData.address} />
+              ) : (
+                <Input 
+                  label="Địa chỉ" 
+                  name="address" 
+                  value={formData.address} 
+                  onChange={(e) => handleChange('address', e.target.value)} 
+                  placeholder="Nhập địa chỉ thường trú" 
+                />
+              )}
             </div>
           </div>
         </Card>
 
         <Card header={<div className="font-semibold text-[#1E293B]">Thông tin lớp học</div>}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Select
-              label="Lớp học"
-              required
-              value={formData.class_id}
-              onChange={(v) => handleChange('class_id', v)}
-              error={errors.class_id}
-              options={classOptions}
-            />
+            {isT ? (
+              <ReadOnlyField label="Lớp học" value={classOptions.find(o => o.value === formData.class_id)?.label || ''} />
+            ) : (
+              <Select
+                label="Lớp học"
+                required
+                value={formData.class_id}
+                onChange={(v) => handleChange('class_id', v)}
+                error={errors.class_id}
+                options={classOptions}
+              />
+            )}
 
-            <Input
-              label="Ngày nhập học"
-              name="enrolled_date"
-              required
-              type="date"
-              value={formData.enrolled_date}
-              onChange={(e) => handleChange('enrolled_date', e.target.value)}
-              error={errors.enrolled_date}
-            />
+            {isT ? (
+              <ReadOnlyField label="Ngày nhập học" value={formData.enrolled_date ? new Date(formData.enrolled_date).toLocaleDateString('vi-VN') : ''} />
+            ) : (
+              <DatePicker
+                label="Ngày nhập học"
+                date={formData.enrolled_date}
+                setDate={(d) => handleChange('enrolled_date', d)}
+                required
+                error={errors.enrolled_date}
+                clearable={false}
+              />
+            )}
           </div>
         </Card>
 
@@ -283,7 +345,7 @@ export default function StudentForm() {
             Hủy bỏ
           </Button>
           <Button type="submit" loading={isSaving || loading}>
-            {isEditMode ? 'Lưu thay đổi' : 'Tạo học sinh'}
+            {isEditMode ? (isT ? 'Lưu thông tin sức khỏe' : 'Lưu thay đổi') : 'Tạo học sinh'}
           </Button>
         </div>
       </form>

@@ -10,6 +10,7 @@
     "lint": "pnpm install --prefer-offline && eslint .",
     "preview": "pnpm install --prefer-offline && vite preview",
     "test": "vitest --run",
+    "test:security": "vitest run src/services/__tests__/financial-rbac.test.tsx",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",

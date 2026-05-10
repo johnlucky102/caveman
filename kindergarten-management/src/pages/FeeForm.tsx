@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Printer, Receipt, Save, Trash2, Wallet, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Printer, Receipt, Save, Trash2, Wallet, RefreshCw, Lock, AlertCircle } from 'lucide-react';
 import Card from '@/components/common/Card';
 import Button from '@/components/common/Button';
 import Input from '@/components/common/Input';
 import Select from '@/components/common/Select';
 import { useToast } from '@/components/common/Toast';
+import { DatePicker } from '@/components/common/DatePicker';
+import CurrencyInput from '@/components/common/CurrencyInput';
 import { listStudents } from '@/services/studentsService';
 import { createFeeRecord, getFeeById, updateFeeRecord, deleteFeeRecord, syncFeeWithAttendance } from '@/services/feesService';
 import { ConfirmModal } from '@/components/common/Modal';
@@ -54,6 +56,11 @@ const paymentOptions: SelectOption[] = [
   { value: 'bank_transfer', label: 'Chuyển khoản' },
 ];
 
+const schoolYearOptions: SelectOption[] = Array.from({ length: 5 }, (_, i) => {
+  const start = currentYear - 2 + i;
+  return { value: `${start}-${start + 1}`, label: `${start}-${start + 1}` };
+});
+
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('vi-VN').format(value) + ' đ';
 }
@@ -62,28 +69,34 @@ export default function FeeForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
-  const { user } = useAuthStore();
+  const { user, role } = useAuthStore();
   const isEdit = Boolean(id);
   const [students, setStudents] = useState<StudentRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [feeStatus, setFeeStatus] = useState<FeeStatusValue>('unpaid');
   const [errors, setErrors] = useState<FormErrors>({});
-  const [formData, setFormData] = useState<FeeFormState>({
-    studentId: '',
-    title: '',
-    amount: '',
-    month: String(currentMonth),
-    schoolYear: `${currentYear}-${currentYear + 1}`,
-    paidAmount: '0',
-    paymentMethod: '',
-    dueDate: new Date().toISOString().split('T')[0],
-    paidDate: '',
-    baseAmount: '',
-    mealDeduction: '0',
-    tuitionDeduction: '0',
-    deductionNote: '',
+  const [formData, setFormData] = useState<FeeFormState>(() => {
+    const today = new Date().toISOString().split('T')[0];
+    const lastDayOfMonth = new Date(currentYear, currentMonth, 0).toISOString().split('T')[0];
+    
+    return {
+      studentId: '',
+      title: '',
+      amount: '',
+      month: String(currentMonth),
+      schoolYear: `${currentYear}-${currentYear + 1}`,
+      paidAmount: '0',
+      paymentMethod: '',
+      dueDate: lastDayOfMonth,
+      paidDate: today,
+      baseAmount: '',
+      mealDeduction: '0',
+      tuitionDeduction: '0',
+      deductionNote: '',
+    };
   });
 
   useEffect(() => {
@@ -102,6 +115,7 @@ export default function FeeForm() {
             navigate('/fees');
           } else if (feeResult?.item) {
             const item = feeResult.item;
+            setFeeStatus(item.status);
             setFormData({
               studentId: item.student_id,
               title: item.title || '',
@@ -237,8 +251,22 @@ export default function FeeForm() {
     window.print();
   };
 
+  const isTeacher = role === 'Teacher';
+  const isPaid = feeStatus === 'paid';
+  const isFinancialReadOnly = isTeacher || (isEdit && isPaid);
+
   return (
     <div className="space-y-5">
+      {isFinancialReadOnly && (
+        <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center gap-3 text-amber-600">
+          <AlertCircle className="w-5 h-5 shrink-0" />
+          <p className="text-sm font-medium">
+            {isPaid 
+              ? 'Bản ghi này đã hoàn tất thanh toán và được khóa.' 
+              : 'Bạn chỉ có quyền xem dữ liệu tài chính. Vui lòng liên hệ Kế toán để điều chỉnh số tiền.'}
+          </p>
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" leftIcon={<ArrowLeft className="w-4 h-4" />} onClick={() => navigate('/fees')} className="text-muted-foreground">
@@ -255,7 +283,7 @@ export default function FeeForm() {
               variant="outline" 
               size="sm" 
               leftIcon={<RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />}
-              disabled={loading}
+              disabled={loading || isPaid}
               onClick={async () => {
                 setLoading(true);
                 const res = await syncFeeWithAttendance(id!);
@@ -285,15 +313,18 @@ export default function FeeForm() {
             >
               In biên lai
             </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/20"
-              leftIcon={<Trash2 className="w-4 h-4" />}
-              onClick={() => setShowDeleteConfirm(true)}
-            >
-              Xóa
-            </Button>
+            {!isTeacher && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/20"
+                leftIcon={<Trash2 className="w-4 h-4" />}
+                onClick={() => setShowDeleteConfirm(true)}
+              >
+                Xóa
+              </Button>
+            )}
+
           </>
         )}
       </div>
@@ -302,15 +333,32 @@ export default function FeeForm() {
         <div className="lg:col-span-2">
           <Card header={<div className="text-base font-semibold text-foreground">Thông tin học phí</div>}>
             <div className="space-y-5">
-              <Select
-                label="Học sinh"
-                options={studentOptions}
-                value={formData.studentId}
-                onChange={(value) => updateField('studentId', value)}
-                required
-                error={errors.studentId}
-                placeholder="Chọn học sinh"
-              />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {isEdit ? (
+                  <Input
+                    label="Học sinh"
+                    value={selectedStudent?.full_name || '—'}
+                    readOnly
+                    leftAddon={<Lock className="w-4 h-4 text-muted-foreground" />}
+                  />
+                ) : (
+                  <Select
+                    label="Học sinh"
+                    options={studentOptions}
+                    value={formData.studentId}
+                    onChange={(value) => updateField('studentId', value)}
+                    required
+                    error={errors.studentId}
+                    placeholder="Chọn học sinh"
+                  />
+                )}
+                <Input
+                  label="Lớp học"
+                  value={selectedStudent?.class_name || '—'}
+                  readOnly
+                  leftAddon={<Lock className="w-4 h-4 text-muted-foreground" />}
+                />
+              </div>
 
               <Input
                 label="Tên khoản thu"
@@ -320,21 +368,21 @@ export default function FeeForm() {
               />
 
               <div className="grid grid-cols-2 gap-4">
-                <Input
+                <CurrencyInput
                   label="Học phí gốc"
-                  type="number"
                   value={formData.baseAmount || formData.amount}
-                  onChange={(event) => updateField('baseAmount', event.target.value)}
+                  onChange={(val) => updateField('baseAmount', val)}
                   required
+                  readOnly={isFinancialReadOnly}
                 />
-                <Input
+                <CurrencyInput
                   label="Số tiền phải thu (Sau khấu trừ)"
-                  type="number"
                   value={formData.amount}
-                  onChange={(event) => updateField('amount', event.target.value)}
+                  onChange={(val) => updateField('amount', val)}
                   required
                   error={errors.amount}
-                  hint="Sẽ tự động cập nhật khi Đồng bộ chuyên cần"
+                  readOnly={isFinancialReadOnly}
+                  hint={isFinancialReadOnly ? undefined : "Sẽ tự động cập nhật khi Đồng bộ chuyên cần"}
                 />
               </div>
 
@@ -342,17 +390,17 @@ export default function FeeForm() {
                 <div className="p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl space-y-3">
                   <p className="text-xs font-bold text-amber-600 uppercase tracking-wider">Chi tiết khấu trừ</p>
                   <div className="grid grid-cols-2 gap-4">
-                    <Input
+                    <CurrencyInput
                       label="Trừ tiền cơm"
-                      type="number"
                       value={formData.mealDeduction}
-                      onChange={(event) => updateField('mealDeduction', event.target.value)}
+                      onChange={(val) => updateField('mealDeduction', val)}
+                      readOnly={isFinancialReadOnly}
                     />
-                    <Input
+                    <CurrencyInput
                       label="Khấu trừ học phí (Viện/Nghỉ)"
-                      type="number"
                       value={formData.tuitionDeduction}
-                      onChange={(event) => updateField('tuitionDeduction', event.target.value)}
+                      onChange={(val) => updateField('tuitionDeduction', val)}
+                      readOnly={isFinancialReadOnly}
                     />
                   </div>
                   <Input
@@ -366,39 +414,46 @@ export default function FeeForm() {
 
               <div className="grid grid-cols-2 gap-4">
                 <Select label="Tháng" options={monthOptions} value={formData.month} onChange={(value) => updateField('month', value)} required error={errors.month} />
-                <Input
+                <Select
                   label="Năm học"
+                  options={schoolYearOptions}
                   value={formData.schoolYear}
-                  onChange={(event) => updateField('schoolYear', event.target.value)}
+                  onChange={(value) => updateField('schoolYear', value)}
                   required
                   error={errors.schoolYear}
-                  placeholder="VD: 2025-2026"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <Input
+                <CurrencyInput
                   label="Đã thu"
-                  type="number"
                   value={formData.paidAmount}
-                  onChange={(event) => updateField('paidAmount', event.target.value)}
-                  error={errors.paidAmount}
-                  disabled={formData.paymentMethod === ''}
-                  hint={formData.paymentMethod === '' ? 'Chọn phương thức để nhập số tiền' : 'Nhập số tiền đã thu'}
+                  onChange={(val) => updateField('paidAmount', val)}
+                  disabled={formData.paymentMethod === '' || isFinancialReadOnly}
+                  readOnly={isFinancialReadOnly}
+                  hint={isFinancialReadOnly ? undefined : (formData.paymentMethod === '' ? 'Chọn phương thức để nhập số tiền' : 'Nhập số tiền đã thu')}
                 />
-                <Select label="Phương thức" options={paymentOptions} value={formData.paymentMethod} onChange={(value) => updateField('paymentMethod', value)} />
+                <Select 
+                  label="Phương thức" 
+                  options={paymentOptions} 
+                  value={formData.paymentMethod} 
+                  onChange={(value) => updateField('paymentMethod', value)}
+                  disabled={isFinancialReadOnly}
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <Input
+                <DatePicker
                   label="Hạn nộp"
-                  type="date"
-                  value={formData.dueDate}
-                  onChange={(event) => updateField('dueDate', event.target.value)}
+                  date={formData.dueDate}
+                  setDate={(d) => updateField('dueDate', d)}
                   required
-                  error={errors.dueDate}
                 />
-                <Input label="Ngày thu" type="date" value={formData.paidDate} onChange={(event) => updateField('paidDate', event.target.value)} />
+                <DatePicker
+                  label="Ngày thu (nếu đã nộp)"
+                  date={formData.paidDate}
+                  setDate={(d) => updateField('paidDate', d)}
+                />
               </div>
             </div>
 
@@ -406,8 +461,8 @@ export default function FeeForm() {
               <Button variant="outline" onClick={() => navigate('/fees')}>
                 Hủy
               </Button>
-              <Button leftIcon={<Save className="w-4 h-4" />} onClick={submit} loading={saving || loading}>
-                {isEdit ? 'Lưu thay đổi' : 'Lưu bản ghi'}
+              <Button leftIcon={<Save className="w-4 h-4" />} onClick={submit} loading={saving || loading} disabled={isPaid && !isTeacher && role !== 'Admin'}>
+                {(isEdit && isPaid) ? 'Đã thanh toán (Khóa)' : (isEdit ? 'Lưu thay đổi' : 'Lưu bản ghi')}
               </Button>
             </div>
           </Card>

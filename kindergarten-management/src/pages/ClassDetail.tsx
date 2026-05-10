@@ -10,7 +10,7 @@ import { listStudents } from '@/services/studentsService';
 import { getClassById } from '@/services/classesService';
 import { listAttendanceByClassAndDate, AttendanceStudentItem } from '@/services/attendanceService';
 import { useAuthStore } from '@/stores/authStore';
-import { canManageStudentOrClass } from '@/lib/rbac';
+import { canManageStudentOrClass, canManageFinance, canCreateClass } from '@/lib/rbac';
 import type { ClassRecord, StudentRecord } from '@/types/domain';
 import Table from '@/components/common/Table';
 
@@ -22,6 +22,8 @@ export default function ClassDetail() {
   const toast = useToast();
   const { role } = useAuthStore();
   const canManage = canManageStudentOrClass(role);
+  const hasFinanceAccess = canManageFinance(role);
+  const canEditClass = canCreateClass(role);
 
   const [activeTab, setActiveTab] = useState<Tab>('info');
   const [classItem, setClassItem] = useState<ClassRecord | null>(null);
@@ -101,7 +103,7 @@ export default function ClassDetail() {
         <Button variant="ghost" size="sm" leftIcon={<ArrowLeft className="w-4 h-4" />} onClick={() => navigate('/classes')}>
           Quay lại
         </Button>
-        {canManage && (
+        {canEditClass && (
           <Button variant="outline" size="sm" leftIcon={<Edit className="w-4 h-4" />} onClick={() => navigate(`/classes/${classItem.id}/edit`)}>
             Chỉnh sửa
           </Button>
@@ -160,44 +162,46 @@ export default function ClassDetail() {
             </div>
           </Card>
 
-          <Card header={<CardHeader title="Cấu hình tài chính (Khấu trừ)" />}>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <p className="text-xs text-muted-foreground mb-0.5">Loại lớp học</p>
-                <p className="font-medium text-foreground">{classItem.class_type === 'Daycare' ? 'Lớp Bán trú' : 'Lớp Tối'}</p>
+          {hasFinanceAccess && (
+            <Card header={<CardHeader title="Cấu hình tài chính (Khấu trừ)" />}>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-0.5">Loại lớp học</p>
+                  <p className="font-medium text-foreground">{classItem.class_type === 'Daycare' ? 'Lớp Bán trú' : 'Lớp Tối'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-0.5">
+                    {classItem.class_type === 'Daycare' ? 'Tiền cơm/ngày' : 'Tiền nghỉ/buổi'}
+                  </p>
+                  <p className="font-medium text-foreground">
+                    {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
+                      classItem.class_type === 'Daycare' ? classItem.meal_rate : classItem.cancel_rate
+                    )}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-0.5">Kiểu khấu trừ nằm viện</p>
+                  <p className="font-medium text-foreground">
+                    {classItem.hospital_deduction_type === 'Fixed' ? 'Số tiền cố định' : 'Tỷ lệ theo ngày công'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-0.5">Giá trị khấu trừ viện</p>
+                  <p className="font-medium text-foreground text-red-500">
+                    - {classItem.hospital_deduction_type === 'Fixed' 
+                        ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(classItem.hospital_deduction_value)
+                        : `${classItem.hospital_deduction_value}% học phí ngày`}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-0.5">
-                  {classItem.class_type === 'Daycare' ? 'Tiền cơm/ngày' : 'Tiền nghỉ/buổi'}
-                </p>
-                <p className="font-medium text-foreground">
-                  {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
-                    classItem.class_type === 'Daycare' ? classItem.meal_rate : classItem.cancel_rate
-                  )}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-0.5">Kiểu khấu trừ nằm viện</p>
-                <p className="font-medium text-foreground">
-                  {classItem.hospital_deduction_type === 'Fixed' ? 'Số tiền cố định' : 'Tỷ lệ theo ngày công'}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-0.5">Giá trị khấu trừ viện</p>
-                <p className="font-medium text-foreground text-red-500">
-                  - {classItem.hospital_deduction_type === 'Fixed' 
-                      ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(classItem.hospital_deduction_value)
-                      : `${classItem.hospital_deduction_value}% học phí ngày`}
-                </p>
-              </div>
-            </div>
-            {classItem.description && (
-              <div className="mt-4 pt-4 border-t border-border">
-                <p className="text-xs text-muted-foreground mb-1">Mô tả</p>
-                <p className="text-sm text-foreground">{classItem.description}</p>
-              </div>
-            )}
-          </Card>
+              {classItem.description && (
+                <div className="mt-4 pt-4 border-t border-border">
+                  <p className="text-xs text-muted-foreground mb-1">Mô tả</p>
+                  <p className="text-sm text-foreground">{classItem.description}</p>
+                </div>
+              )}
+            </Card>
+          )}
         </div>
       )}
 

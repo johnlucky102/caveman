@@ -21,12 +21,14 @@ import Card, { CardHeader, StatCard } from '../components/common/Card';
 import Button from '../components/common/Button';
 import Badge from '../components/common/Badge';
 import Table from '../components/common/Table';
-import Input from '../components/common/Input';
 import Select from '../components/common/Select';
+import { DatePicker } from '../components/common/DatePicker';
 import { useToast } from '../components/common/Toast';
 import { getDashboardStats, getFinancialSummary, DashboardStats } from '@/services/dashboardService';
 import { supabase } from '@/lib/supabase';
 import { exportToCsv } from '@/utils/exportCsv';
+import { canManageFinance, isTeacher as checkIsTeacher } from '@/lib/rbac';
+import { useAuthStore } from '@/stores/authStore';
 import type { TableColumn } from '../types';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -86,22 +88,32 @@ const attendanceColumns: TableColumn<AttendanceReport>[] = [
 
 export default function Reports() {
   const [activeTab, setActiveTab] = useState<ReportTab>('overview');
-  const [dateRange, setDateRange] = useState({ from: '', to: '' });
+  const [dateRange, setDateRange] = useState(() => {
+    const to = new Date().toISOString().split('T')[0];
+    const fromDate = new Date();
+    fromDate.setDate(fromDate.getDate() - 7);
+    const from = fromDate.toISOString().split('T')[0];
+    return { from, to };
+  });
   const [classFilter, setClassFilter] = useState('');
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [studentReports, setStudentReports] = useState<StudentReport[]>([]);
   const [attendanceReports, setAttendanceReports] = useState<AttendanceReport[]>([]);
   const [financialSummary, setFinancialSummary] = useState<FinancialSummary | null>(null);
+  const [deductionLogs, setDeductionLogs] = useState<any[]>([]);
   const [classes, setClasses] = useState<{ value: string; label: string }[]>([]);
   const [loading, setLoading] = useState(false);
+  const { role } = useAuthStore();
   const toast = useToast();
+  const isT = checkIsTeacher(role);
+  const hasFinanceAccess = canManageFinance(role);
 
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('vi-VN').format(amount) + ' đ';
 
   // Load classes for filter
   useEffect(() => {
-    supabase.from('classes').select('id, name').order('name').then(({ data }) => {
+    supabase.from('classes').select('id, name').eq('del_yn', false).order('name').then(({ data }) => {
       setClasses([
         { value: '', label: 'Tất cả lớp' },
         ...(data || []).map((c: any) => ({ value: String(c.id), label: c.name })),
@@ -118,7 +130,19 @@ export default function Reports() {
         if (res.stats) setStats(res.stats);
       });
     }
-  }, [activeTab]);
+
+    if (activeTab === 'financial' && !hasFinanceAccess) {
+      setActiveTab('overview');
+      toast.error('Truy cập bị chặn', 'Bạn không có quyền xem báo cáo tài chính');
+    }
+  }, [activeTab, hasFinanceAccess, toast]);
+
+  // Derived financial stats
+  const totalMealDeduction = deductionLogs.reduce((sum, log) => sum + (log.meal_deduction_vnd || 0), 0);
+  const totalOtherDeduction = deductionLogs.reduce((sum, log) => sum + (log.tuition_deduction_vnd || 0), 0);
+  const totalDeduction = totalMealDeduction + totalOtherDeduction;
+  const mealDeductionPercent = totalDeduction > 0 ? Math.round((totalMealDeduction / totalDeduction) * 100) : 0;
+  const otherDeductionPercent = totalDeduction > 0 ? Math.round((totalOtherDeduction / totalDeduction) * 100) : 0;
 
   // Load student reports
   const loadStudents = useCallback(async () => {
@@ -126,7 +150,9 @@ export default function Reports() {
     try {
       let query = supabase
         .from('students')
-        .select('id, full_name, gender, class_id, classes(name)');
+        .select('id, full_name, gender, class_id, classes!inner(name, del_yn)')
+        .eq('del_yn', false)
+        .eq('classes.del_yn', false);
 
       if (classFilter) query = query.eq('class_id', Number(classFilter));
 
@@ -192,7 +218,10 @@ export default function Reports() {
   const loadAttendance = useCallback(async () => {
     setLoading(true);
     try {
-      let query = supabase.from('attendance').select('attendance_date, status');
+      let query = supabase
+        .from('attendance')
+        .select('id, attendance_date, status, del_yn')
+        .eq('del_yn', false);
 
       if (dateRange.from) query = query.gte('attendance_date', dateRange.from);
       if (dateRange.to) query = query.lte('attendance_date', dateRange.to);
@@ -232,17 +261,53 @@ export default function Reports() {
     if (activeTab === 'attendance') void loadAttendance();
   }, [activeTab, loadAttendance]);
 
-  // Load financial summary
-  useEffect(() => {
-    if (activeTab === 'financial') {
-      setLoading(true);
-      getFinancialSummary().then(({ data, error }) => {
-        setLoading(false);
-        if (error) { toast.error('Lỗi', error.message); return; }
-        if (data) setFinancialSummary(data);
-      });
+  // Load financial details (deductions)
+  const loadFinancialDetails = useCallback(async () => {
+    setLoading(true);
+    try {
+      // 1. Load Summary
+      const summaryRes = await getFinancialSummary(role || '');
+      if (summaryRes.data) setFinancialSummary(summaryRes.data);
+
+      // 2. Load Deduction Logs
+      const { data, error } = await supabase
+        .from('fee_records')
+        .select('id, student_id, students(full_name, classes(name)), title, meal_deduction_vnd, tuition_deduction_vnd, deduction_note')
+        .or('meal_deduction_vnd.gt.0,tuition_deduction_vnd.gt.0')
+        .eq('del_yn', false)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setDeductionLogs(data || []);
+    } catch (err: any) {
+      toast.error('Lỗi', err.message || 'Không tải được báo cáo tài chính');
     }
-  }, [activeTab, toast]);
+    setLoading(false);
+  }, [toast, role]);
+
+  useEffect(() => {
+    if (activeTab === 'financial') void loadFinancialDetails();
+  }, [activeTab, loadFinancialDetails]);
+
+  const handleExportDeductions = () => {
+    if (deductionLogs.length === 0) {
+      toast.error('Không có dữ liệu để xuất');
+      return;
+    }
+
+    const headers = ['Học sinh', 'Lớp', 'Khoản thu', 'Tiền cơm', 'Khấu trừ khác', 'Ghi chú'];
+    const rows = deductionLogs.map(log => [
+      log.students?.full_name || 'N/A',
+      log.students?.classes?.name || 'N/A',
+      log.title || 'Học phí',
+      log.meal_deduction_vnd || 0,
+      log.tuition_deduction_vnd || 0,
+      log.deduction_note || ''
+    ]);
+
+    exportToCsv(`so_nhat_ky_khau_tru_${new Date().toISOString().slice(0, 10)}`, headers, rows);
+    toast.success('Đã xuất file báo cáo chi tiết');
+  };
 
   // Export handlers
   const exportStudents = () => {
@@ -271,7 +336,7 @@ export default function Reports() {
     { id: 'overview', label: 'Tổng quan' },
     { id: 'students', label: 'Học sinh' },
     { id: 'attendance', label: 'Điểm danh' },
-    { id: 'financial', label: 'Tài chính' },
+    ...(hasFinanceAccess ? [{ id: 'financial' as const, label: 'Tài chính' }] : []),
   ];
 
   return (
@@ -314,22 +379,24 @@ export default function Reports() {
               icon={<TrendingUp className="w-5 h-5 text-emerald-500" />} iconBg="bg-emerald-500/10" trend="Hôm nay" trendDirection="up" />
           </div>
 
-          <Card header={<CardHeader title="Tổng quan tài chính" subtitle="Thống kê công nợ hiện tại" />}>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="p-4 bg-red-500/10 rounded-xl">
-                <p className="text-xs font-medium text-red-500 mb-1">Tổng công nợ học phí</p>
-                <p className="text-xl font-bold text-red-500">{loading ? '...' : formatCurrency(stats?.totalDebt || 0)}</p>
-              </div>
-              <div className="p-4 bg-emerald-500/10 rounded-xl">
-                <p className="text-xs font-medium text-emerald-500 mb-1">Học sinh theo khối</p>
-                <div className="flex gap-2 flex-wrap mt-1">
-                  {stats?.studentsByGrade.map((g) => (
-                    <Badge key={g.gradeName} variant="success" size="sm">{g.gradeName}: {g.count}</Badge>
-                  ))}
+          {hasFinanceAccess && (
+            <Card header={<CardHeader title="Tổng quan tài chính" subtitle="Thống kê công nợ hiện tại" />}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="p-4 bg-red-500/10 rounded-xl">
+                  <p className="text-xs font-medium text-red-500 mb-1">Tổng công nợ học phí</p>
+                  <p className="text-xl font-bold text-red-500">{loading ? '...' : formatCurrency(stats?.totalDebt || 0)}</p>
+                </div>
+                <div className="p-4 bg-emerald-500/10 rounded-xl">
+                  <p className="text-xs font-medium text-emerald-500 mb-1">Học sinh theo khối</p>
+                  <div className="flex gap-2 flex-wrap mt-1">
+                    {stats?.studentsByGrade.map((g) => (
+                      <Badge key={g.gradeName} variant="success" size="sm">{g.gradeName}: {g.count}</Badge>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
-          </Card>
+            </Card>
+          )}
         </div>
       )}
 
@@ -347,9 +414,11 @@ export default function Reports() {
             header={
               <div className="flex items-center justify-between gap-3">
                 <CardHeader title="Báo cáo học sinh" subtitle={loading ? 'Đang tải...' : `${studentReports.length} học sinh`} />
-                <Button size="sm" leftIcon={<Download className="w-4 h-4" />} onClick={exportStudents} disabled={studentReports.length === 0}>
-                  Xuất Excel
-                </Button>
+                {!isT && (
+                  <Button size="sm" leftIcon={<Download className="w-4 h-4" />} onClick={exportStudents} disabled={studentReports.length === 0}>
+                    Xuất Excel
+                  </Button>
+                )}
               </div>
             }
             noPadding
@@ -368,16 +437,18 @@ export default function Reports() {
         <div className="space-y-5">
           <Card>
             <div className="flex flex-col sm:flex-row gap-4 items-end">
-              <Input label="Từ ngày" type="date" value={dateRange.from}
-                onChange={(e) => setDateRange((p) => ({ ...p, from: e.target.value }))} />
-              <Input label="Đến ngày" type="date" value={dateRange.to}
-                onChange={(e) => setDateRange((p) => ({ ...p, to: e.target.value }))} />
+              <DatePicker label="Từ ngày" date={dateRange.from}
+                setDate={(d) => setDateRange((p) => ({ ...p, from: d }))} />
+              <DatePicker label="Đến ngày" date={dateRange.to}
+                setDate={(d) => setDateRange((p) => ({ ...p, to: d }))} />
               <Button variant="outline" size="sm" leftIcon={<Calendar className="w-4 h-4" />} onClick={loadAttendance}>
                 Lọc
               </Button>
-              <Button size="sm" leftIcon={<Download className="w-4 h-4" />} onClick={exportAttendance} disabled={attendanceReports.length === 0}>
-                Xuất báo cáo
-              </Button>
+              {!isT && (
+                <Button size="sm" leftIcon={<Download className="w-4 h-4" />} onClick={exportAttendance} disabled={attendanceReports.length === 0}>
+                  Xuất báo cáo
+                </Button>
+              )}
             </div>
           </Card>
 
@@ -419,7 +490,6 @@ export default function Reports() {
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            {/* Class Ledger */}
             <Card 
               header={
                 <div className="flex items-center justify-between">
@@ -452,8 +522,6 @@ export default function Reports() {
                         <td className="px-4 py-3 font-semibold text-foreground">{c.className}</td>
                         <td className="px-4 py-3 text-center text-muted-foreground">{c.total}</td>
                         <td className="px-4 py-3 text-right font-medium text-emerald-600">
-                          {/* We don't have per-class revenue in DashboardStats, but we can approximate or just show attendance as proxy if needed. 
-                              For now, I'll keep it simple or expand service later */}
                           <span className="opacity-50">—</span>
                         </td>
                         <td className="px-4 py-3">
@@ -473,43 +541,35 @@ export default function Reports() {
               </div>
             </Card>
 
-            {/* Deduction Summary */}
             <Card header={<CardHeader title="Phân tích khoản khấu trừ" subtitle="Các lý do giảm trừ doanh thu" />}>
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
                     <p className="text-sm font-medium text-foreground">Tổng tiền khấu trừ (Tháng này)</p>
-                    <p className="text-2xl font-black text-red-500">{formatCurrency(12500000)}</p>
+                    <p className="text-2xl font-black text-red-500">{formatCurrency(totalDeduction)}</p>
                   </div>
-                  <Badge variant="danger" size="lg">-12% Revenue</Badge>
+                  {financialSummary && financialSummary.totalRevenue > 0 && (
+                    <Badge variant="danger" size="lg">-{Math.round((totalDeduction / financialSummary.totalRevenue) * 100)}% Doanh thu</Badge>
+                  )}
                 </div>
                 
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <div className="flex justify-between text-xs">
                       <span className="text-muted-foreground">Khấu trừ tiền cơm (Vắng mặt)</span>
-                      <span className="font-bold">65% (8.1M)</span>
+                      <span className="font-bold">{mealDeductionPercent}% ({formatCurrency(totalMealDeduction)})</span>
                     </div>
                     <div className="h-2 rounded-full bg-muted overflow-hidden">
-                      <div className="h-full bg-amber-500" style={{ width: '65%' }} />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">Khấu trừ nằm viện (Chính sách)</span>
-                      <span className="font-bold">25% (3.1M)</span>
-                    </div>
-                    <div className="h-2 rounded-full bg-muted overflow-hidden">
-                      <div className="h-full bg-emerald-500" style={{ width: '25%' }} />
+                      <div className="h-full bg-amber-500" style={{ width: `${mealDeductionPercent}%` }} />
                     </div>
                   </div>
                   <div className="space-y-2">
                     <div className="flex justify-between text-xs">
                       <span className="text-muted-foreground">Khấu trừ khác / Miễn giảm</span>
-                      <span className="font-bold">10% (1.3M)</span>
+                      <span className="font-bold">{otherDeductionPercent}% ({formatCurrency(totalOtherDeduction)})</span>
                     </div>
                     <div className="h-2 rounded-full bg-muted overflow-hidden">
-                      <div className="h-full bg-blue-500" style={{ width: '10%' }} />
+                      <div className="h-full bg-blue-500" style={{ width: `${otherDeductionPercent}%` }} />
                     </div>
                   </div>
                 </div>
@@ -527,12 +587,18 @@ export default function Reports() {
             </Card>
           </div>
 
-          {/* Audit Table */}
           <Card 
             header={
               <div className="flex items-center justify-between">
                 <CardHeader title="Sổ nhật ký khấu trừ chi tiết" subtitle="Dành cho kiểm toán nội bộ" />
-                <Button size="sm" leftIcon={<Download className="w-4 h-4" />}>Xuất chi tiết</Button>
+                <Button 
+                  size="sm" 
+                  leftIcon={<Download className="w-4 h-4" />}
+                  onClick={handleExportDeductions}
+                  disabled={deductionLogs.length === 0}
+                >
+                  Xuất chi tiết
+                </Button>
               </div>
             }
             noPadding
@@ -549,18 +615,25 @@ export default function Reports() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {[1, 2, 3].map((_, i) => (
-                    <tr key={i} className="hover:bg-muted/20 transition-colors">
+                  {deductionLogs.map((log, i) => (
+                    <tr key={log.id || i} className="hover:bg-muted/20 transition-colors">
                       <td className="px-6 py-4">
-                        <div className="font-bold text-foreground">Nguyễn Văn {i + 1}</div>
-                        <div className="text-[10px] text-muted-foreground uppercase">Lớp Mầm 1</div>
+                        <div className="font-bold text-foreground">{log.students?.full_name || 'N/A'}</div>
+                        <div className="text-[10px] text-muted-foreground uppercase">{log.students?.classes?.name || 'N/A'}</div>
                       </td>
-                      <td className="px-4 py-4 text-muted-foreground">Học phí tháng 10</td>
-                      <td className="px-4 py-4 text-right font-medium text-red-500">-{formatCurrency(150000)}</td>
-                      <td className="px-4 py-4 text-right font-medium text-red-500">-{formatCurrency(200000)}</td>
-                      <td className="px-4 py-4 text-xs italic text-muted-foreground">Vắng 5 ngày, nằm viện 3 ngày</td>
+                      <td className="px-4 py-4 text-muted-foreground">{log.title || 'Học phí'}</td>
+                      <td className="px-4 py-4 text-right font-medium text-red-500">-{formatCurrency(log.meal_deduction_vnd || 0)}</td>
+                      <td className="px-4 py-4 text-right font-medium text-red-500">-{formatCurrency(log.tuition_deduction_vnd || 0)}</td>
+                      <td className="px-4 py-4 text-xs italic text-muted-foreground">{log.deduction_note || '—'}</td>
                     </tr>
                   ))}
+                  {deductionLogs.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-10 text-center text-muted-foreground">
+                        Chưa có dữ liệu khấu trừ trong kỳ này.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>

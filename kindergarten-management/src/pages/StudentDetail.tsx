@@ -11,7 +11,7 @@ import { getStudentById, deleteStudent } from '@/services/studentsService';
 import { listFees } from '@/services/feesService';
 import { listAttendanceHistory } from '@/services/attendanceService';
 import { useAuthStore } from '@/stores/authStore';
-import { canManageStudentOrClass } from '@/lib/rbac';
+import { canManageStudentOrClass, canAddOrDeleteStudent, isTeacher } from '@/lib/rbac';
 import type { StudentRecord, FeeRecordP2, AttendanceRecord } from '@/types/domain';
 import type { TableColumn } from '@/types';
 
@@ -38,6 +38,8 @@ export default function StudentDetail() {
   const toast = useToast();
   const { role } = useAuthStore();
   const canManage = canManageStudentOrClass(role);
+  const canAddDelete = canAddOrDeleteStudent(role);
+  const isT = isTeacher(role);
 
   const [student, setStudent] = useState<StudentRecord | null>(null);
   const [loading, setLoading] = useState(true);
@@ -136,16 +138,18 @@ export default function StudentDetail() {
         <Button variant="ghost" size="sm" leftIcon={<ArrowLeft className="w-4 h-4" />} onClick={() => navigate('/students')}>
           Quay lại
         </Button>
-        {canManage && (
-          <div className="flex gap-2">
+        <div className="flex gap-2">
+          {canManage && (
             <Button variant="outline" size="sm" leftIcon={<Edit className="w-4 h-4" />} onClick={() => navigate(`/students/${student.id}/edit`)}>
-              Chỉnh sửa
+              {isT ? 'Cập nhật sức khỏe' : 'Chỉnh sửa'}
             </Button>
+          )}
+          {canAddDelete && (
             <Button variant="danger" size="sm" leftIcon={<Trash2 className="w-4 h-4" />} onClick={handleDeleteStudent}>
               Xóa
             </Button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       <Card noPadding>
@@ -172,7 +176,7 @@ export default function StudentDetail() {
           {[
             { key: 'info', label: 'Thông tin', icon: <Info className="w-4 h-4" /> },
             { key: 'health', label: 'Sức khỏe', icon: <Heart className="w-4 h-4" /> },
-            { key: 'fees', label: 'Học phí', icon: <Wallet className="w-4 h-4" /> },
+            ...(!isT ? [{ key: 'fees', label: 'Học phí', icon: <Wallet className="w-4 h-4" /> }] : []),
             { key: 'attendance', label: 'Điểm danh', icon: <CalendarCheck className="w-4 h-4" /> },
           ].map((tab) => (
             <button

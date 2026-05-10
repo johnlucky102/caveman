@@ -8,6 +8,7 @@ import Select from '@/components/common/Select';
 import Table from '@/components/common/Table';
 import { FeeStatusBadge } from '@/components/common/Badge';
 import { useToast } from '@/components/common/Toast';
+import CurrencyInput from '@/components/common/CurrencyInput';
 import { listFees, updateFeeRecordStatus, deleteFeeRecord, deleteFeeRecords, createClassFees, syncFeeWithAttendance } from '@/services/feesService';
 import { listClasses } from '@/services/classesService';
 import Modal, { ConfirmModal } from '@/components/common/Modal';
@@ -30,6 +31,7 @@ export default function Fees() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [status, setStatus] = useState<FeeStatusValue | ''>('');
   const [month, setMonth] = useState<string>('');
+  const [classId, setClassId] = useState<string>('');
   const [schoolYear, setSchoolYear] = useState<string>('');
   const [items, setItems] = useState<FeeRecordP2[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -81,6 +83,7 @@ export default function Fees() {
       search: debouncedSearch,
       status: status || undefined,
       month: month ? Number(month) : undefined,
+      classId: classId ? Number(classId) : undefined,
       schoolYear: schoolYear || undefined,
     });
     setLoading(false);
@@ -92,7 +95,7 @@ export default function Fees() {
     }
     setItems(result.data.items);
     setTotal(result.data.total);
-  }, [page, pageSize, debouncedSearch, status, month, schoolYear, toast]);
+  }, [page, pageSize, debouncedSearch, status, month, classId, schoolYear, toast]);
 
   useEffect(() => {
     void loadFees();
@@ -319,7 +322,7 @@ export default function Fees() {
         </div>
         <div className="flex gap-2">
           {selectedIds.length > 0 && (
-            <>
+            <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-2">
               <Button 
                 variant="outline" 
                 size="sm" 
@@ -327,7 +330,7 @@ export default function Fees() {
                 leftIcon={<Printer className="w-4 h-4" />}
                 onClick={() => navigate(`/fees/print-bulk?ids=${selectedIds.join(',')}`)}
               >
-                In hàng loạt ({selectedIds.length})
+                In ({selectedIds.length})
               </Button>
               <Button 
                 variant="outline" 
@@ -335,11 +338,10 @@ export default function Fees() {
                 className="text-amber-600 border-amber-200/50 hover:bg-amber-500/10"
                 leftIcon={<Bell className="w-4 h-4" />}
                 onClick={async () => {
-                  if (selectedIds.length === 0) return;
                   setLoading(true);
                   await new Promise(r => setTimeout(r, 1000));
                   setLoading(false);
-                  toast.success(`Đã gửi ${selectedIds.length} thông báo nhắc nợ đến phụ huynh.`);
+                  toast.success(`Đã gửi ${selectedIds.length} thông báo nhắc nợ.`);
                   setSelectedIds([]);
                 }}
                 disabled={loading}
@@ -353,28 +355,11 @@ export default function Fees() {
                 leftIcon={<Trash2 className="w-4 h-4" />}
                 onClick={() => setShowBulkDeleteConfirm(true)}
               >
-                Xóa {selectedIds.length} bản ghi
+                Xóa ({selectedIds.length})
               </Button>
-            </>
+              <div className="w-px h-6 bg-border mx-1" />
+            </div>
           )}
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="text-amber-600 border-amber-200/50 hover:bg-amber-500/10"
-            leftIcon={<Bell className="w-4 h-4" />}
-            onClick={async () => {
-              if (selectedIds.length === 0) return;
-              setLoading(true);
-              // Mock sending reminders - in real app, we'd call a service to create notifications
-              await new Promise(r => setTimeout(r, 1000));
-              setLoading(false);
-              toast.success(`Đã gửi ${selectedIds.length} thông báo nhắc nợ đến phụ huynh.`);
-              setSelectedIds([]);
-            }}
-            disabled={selectedIds.length === 0 || loading}
-          >
-            Nhắc nợ ({selectedIds.length})
-          </Button>
           <Button 
             variant="outline" 
             size="sm" 
@@ -383,8 +368,8 @@ export default function Fees() {
           >
             Tạo theo lớp
           </Button>
-          <Button size="sm" leftIcon={<Plus className="w-4 h-4" />} onClick={() => navigate('/fees/new')}>
-            Tạo bản ghi phí
+          <Button size="sm" color="primary" leftIcon={<Plus className="w-4 h-4" />} onClick={() => navigate('/fees/new')}>
+            Tạo mới
           </Button>
         </div>
       </div>
@@ -428,6 +413,16 @@ export default function Fees() {
             />
           </div>
           <div className="w-full sm:w-48">
+            <Select
+              value={classId}
+              onChange={(value) => {
+                setClassId(value);
+                setPage(1);
+              }}
+              options={[{ value: '', label: 'Tất cả lớp' }, ...classOptions]}
+            />
+          </div>
+          <div className="w-full sm:w-64">
             <Input
               value={schoolYear}
               onChange={(e) => {
@@ -514,12 +509,10 @@ export default function Fees() {
             />
           </div>
 
-          <Input
+          <CurrencyInput
             label="Mức học phí cơ bản (VND)"
-            type="number"
-            step={50000}
             value={bulkBaseAmount}
-            onChange={(e) => setBulkBaseAmount(Number(e.target.value))}
+            onChange={(val) => setBulkBaseAmount(Number(val))}
             hint="Số tiền này chưa bao gồm khấu trừ chuyên cần."
           />
 

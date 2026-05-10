@@ -26,8 +26,7 @@ const FeeForm        = lazy(() => import('@/pages/FeeForm'));
 const Reports        = lazy(() => import('@/pages/Reports'));
 const BulkPrintFees  = lazy(() => import('@/pages/BulkPrintFees'));
 const Settings       = lazy(() => import('@/pages/Settings'));
-const Notifications  = lazy(() => import('@/pages/Notifications'));
-const NotificationForm = lazy(() => import('@/pages/NotificationForm'));
+
 
 // ─── Page loading skeleton ────────────────────────────────────────────────────
 function PageSkeleton() {
@@ -96,13 +95,11 @@ export default function App() {
             <Route path="/fees/:id/edit"     element={allow(['Admin', 'Accountant'], <FeeForm />)} />
             <Route path="/fees/print-bulk"   element={allow(['Admin', 'Accountant'], <BulkPrintFees />)} />
 
-            <Route path="/reports"           element={allow(['Admin', 'Teacher', 'Accountant'], <Reports />)} />
+            <Route path="/reports"           element={allow(['Admin', 'Accountant'], <Reports />)} />
 
             <Route path="/settings"          element={allow(['Admin'], <Settings />)} />
 
-            <Route path="/notifications"          element={allow(['Admin', 'Teacher'], <Notifications />)} />
-            <Route path="/notifications/new"      element={allow(['Admin', 'Teacher'], <NotificationForm />)} />
-            <Route path="/notifications/:id/edit" element={allow(['Admin', 'Teacher'], <NotificationForm />)} />
+
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

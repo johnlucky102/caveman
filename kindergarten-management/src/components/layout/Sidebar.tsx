@@ -23,6 +23,8 @@ import { useAuthStore } from '@/stores/authStore';
 import type { SidebarNavItem } from '@/types';
 import type { AppRole } from '@/types/domain';
 import { ROLE_LABELS } from '@/lib/rbac';
+import { listClasses } from '@/services/classesService';
+import { useServiceCache } from '@/hooks/useServiceCache';
 
 type NavItem = SidebarNavItem & { allow: AppRole[] };
 
@@ -34,8 +36,8 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Phụ huynh', path: '/parents', icon: UsersRound, allow: ['Admin'] },
   { label: 'Điểm danh', path: '/attendance', icon: CalendarCheck, allow: ['Admin', 'Teacher'] },
   { label: 'Học phí', path: '/fees', icon: Wallet, allow: ['Admin', 'Accountant'] },
-  { label: 'Báo cáo', path: '/reports', icon: BarChart3, allow: ['Admin', 'Teacher', 'Accountant'] },
-  { label: 'Thông báo', path: '/notifications', icon: Bell, allow: ['Admin', 'Teacher'] },
+  { label: 'Báo cáo', path: '/reports', icon: BarChart3, allow: ['Admin', 'Accountant'] },
+
   { label: 'Cài đặt', path: '/settings', icon: Settings, allow: ['Admin'] },
 ];
 
@@ -80,8 +82,21 @@ function NavItemRow({ item, collapsed }: NavItemProps) {
 
 export default function Sidebar() {
   const { sidebarOpen, sidebarCollapsed, setSidebarOpen, toggleSidebarCollapsed } = useAppStore();
-  const { role } = useAuthStore();
-  const navItems = NAV_ITEMS.filter((item) => role && item.allow.includes(role));
+  const { role, user } = useAuthStore();
+
+  // For Teachers: if they have exactly 1 class, link straight to it
+  const { data: classesRes } = useServiceCache(
+    `sidebar-classes-${user?.id}`,
+    () => listClasses({ page: 1, pageSize: 50, teacherId: user?.id }),
+    { staleTime: 300_000, enabled: role === 'Teacher' && !!user?.id }
+  );
+
+  const navItems = NAV_ITEMS.filter((item) => role && item.allow.includes(role)).map(item => {
+    if (item.path === '/classes' && role === 'Teacher' && classesRes?.data.items.length === 1) {
+      return { ...item, path: `/classes/${classesRes.data.items[0].id}` };
+    }
+    return item;
+  });
 
   return (
     <>

@@ -72,14 +72,14 @@ export default function Parents() {
   const [parents, setParents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
-  const { role } = useAuthStore();
+  const { role, user } = useAuthStore();
   const canManage = canManageStudentOrClass(role);
   const toast = useToast();
   const navigate = useNavigate();
 
   const loadParents = async () => {
     setLoading(true);
-    const { items, error } = await listParents();
+    const { items, error } = await listParents(role === 'Teacher' ? user?.id : undefined);
     setLoading(false);
     if (error) {
       toast.error('Lỗi', error.message);
@@ -90,7 +90,7 @@ export default function Parents() {
 
   useEffect(() => {
     void loadParents();
-  }, []);
+  }, [role, user?.id]);
 
   const handleBulkDelete = async () => {
     if (!window.confirm(`Xóa ${selectedKeys.length} phụ huynh đã chọn?`)) return;

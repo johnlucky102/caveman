@@ -8,6 +8,7 @@ import Input from '@/components/common/Input';
 import Select from '@/components/common/Select';
 import Badge from '@/components/common/Badge';
 import Modal from '@/components/common/Modal';
+import { DatePicker } from '@/components/common/DatePicker';
 import { useToast } from '../components/common/Toast';
 import { getSchoolSettings, updateSchoolSettings, createSchoolSettings } from '@/services/settingsService';
 import { supabase } from '@/lib/supabase';
@@ -512,10 +513,10 @@ export default function Settings() {
           <Input label="Tên năm học" placeholder="VD: 2024-2025" value={newYearName}
             onChange={(e) => setNewYearName(e.target.value)} hint="Nhập theo định dạng: 2024-2025" />
           <div className="grid grid-cols-2 gap-3">
-            <Input label="Ngày bắt đầu" type="date" value={newYearStart}
-              onChange={(e) => setNewYearStart(e.target.value)} />
-            <Input label="Ngày kết thúc" type="date" value={newYearEnd}
-              onChange={(e) => setNewYearEnd(e.target.value)} />
+            <DatePicker label="Ngày bắt đầu" date={newYearStart}
+              setDate={setNewYearStart} />
+            <DatePicker label="Ngày kết thúc" date={newYearEnd}
+              setDate={setNewYearEnd} />
           </div>
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="outline" onClick={() => { setShowAddYearModal(false); setNewYearName(''); }}>

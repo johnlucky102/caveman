@@ -5,6 +5,7 @@ import Card from '@/components/common/Card';
 import Button from '@/components/common/Button';
 import Input from '@/components/common/Input';
 import Select from '@/components/common/Select';
+import { DatePicker } from '@/components/common/DatePicker';
 
 import { useToast } from '@/components/common/Toast';
 import { createTeacherProfile, getTeacherById, updateTeacherProfile } from '@/services/usersService';
@@ -155,13 +156,12 @@ export default function TeacherForm() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <Input
+            <DatePicker
               label="Ngày sinh"
-              name="date_of_birth"
-              type="date"
-              value={form.date_of_birth}
-              onChange={(e) => setField('date_of_birth', e.target.value)}
+              date={form.date_of_birth}
+              setDate={(d) => setField('date_of_birth', d)}
               fullWidth
+              clearable={false}
             />
             <Input
               label="Số điện thoại"
@@ -220,13 +220,12 @@ export default function TeacherForm() {
           />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <Input
+            <DatePicker
               label="Ngày bắt đầu làm việc"
-              name="start_date"
-              type="date"
-              value={form.start_date}
-              onChange={(e) => setField('start_date', e.target.value)}
+              date={form.start_date}
+              setDate={(d) => setField('start_date', d)}
               fullWidth
+              clearable={false}
             />
             <Select
               label="Trạng thái"

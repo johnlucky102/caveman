@@ -22,82 +22,97 @@ export interface DashboardStats {
     gradeName: string;
     count: number;
   }>;
+  attentionCount: number;
+}
+
+/**
+ * Helper to get all class IDs assigned to a teacher
+ * Checks both classes table (direct teacher_id) and class_teachers mapping table
+ */
+async function getAssignedClassIds(teacherId: string): Promise<number[]> {
+  const [directClasses, mappedClasses] = await Promise.all([
+    supabase.from('classes').select('id').eq('teacher_id', teacherId).eq('del_yn', false),
+    supabase.from('class_teachers').select('class_id').eq('teacher_id', teacherId)
+  ]);
+
+  const directIds = (directClasses.data || []).map(c => Number(c.id));
+  const mappedIds = (mappedClasses.data || []).map(c => Number(c.class_id));
+  
+  // Return unique IDs
+  return Array.from(new Set([...directIds, ...mappedIds]));
 }
 
 export async function getDashboardStats(teacherId?: string): Promise<{ stats: DashboardStats | null; error: AppError | null }> {
-  // Use local date for dashboard stats
-  const now = new Date();
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const today = new Date().toISOString().split('T')[0];
 
   try {
-    const [
-      studentsCount,
-      debtData,
-      attendanceData,
-      studentData,
-      classesData
-    ] = await Promise.all([
-      // 1. Total Students
-      supabase.from('students').select('id', { count: 'exact', head: true }).eq('del_yn', false),
-      
-      // 2. Debt Data
-      supabase.from('fee_records')
-        .select('amount_vnd, paid_amount_vnd')
-        .neq('status', 'paid')
-        .eq('del_yn', false),
-      
-      // 3. Attendance Today
-      supabase.from('attendance')
-        .select('status, class_id')
-        .eq('attendance_date', today)
-        .eq('del_yn', false),
-      
-      // 4. Students by Class (Removed broken grades join)
-      supabase.from('students')
-        .select('id, class_id, classes(id, name)')
-        .eq('del_yn', false),
+    // 1. Resolve assigned classes first (Security First)
+    let assignedClassIds: number[] = [];
+    if (teacherId) {
+      assignedClassIds = await getAssignedClassIds(teacherId);
+      // If teacher has no classes, return empty stats immediately to avoid unnecessary broad queries
+      if (assignedClassIds.length === 0) {
+        return {
+          stats: {
+            totalStudents: 0,
+            totalDebt: 0,
+            attendanceToday: { present: 0, absent: 0, total: 0 },
+            attendanceByClass: [],
+            studentsByGrade: [],
+            attentionCount: 0
+          },
+          error: null
+        };
+      }
+    }
 
-      // 5. All classes
+    // 2. Fetch scoped data (Server-side filtering via RLS + explicit filters)
+    let studentsCountQuery = supabase.from('students').select('id', { count: 'exact', head: true }).eq('del_yn', false);
+    let attendanceQuery = supabase.from('attendance').select('status, class_id, medicine_instructions').eq('attendance_date', today).eq('del_yn', false);
+    let studentDataQuery = supabase.from('students').select('id, class_id, classes(id, name)').eq('del_yn', false);
+    
+    if (teacherId) {
+      studentsCountQuery = studentsCountQuery.in('class_id', assignedClassIds);
+      attendanceQuery = attendanceQuery.in('class_id', assignedClassIds);
+      studentDataQuery = studentDataQuery.in('class_id', assignedClassIds);
+    }
+
+    const [
+      studentsCountRes,
+      attendanceRes,
+      studentDataRes,
+      classesRes
+    ] = await Promise.all([
+      studentsCountQuery,
+      attendanceQuery,
+      studentDataQuery,
       supabase.from('classes').select('id, name, teacher_id').eq('del_yn', false)
     ]);
 
-    if (studentsCount.error) throw studentsCount.error;
-    if (debtData.error) throw debtData.error;
-    if (attendanceData.error) throw attendanceData.error;
-    if (studentData.error) throw studentData.error;
-    if (classesData.error) throw classesData.error;
-    
-    // Filter classes if teacherId is provided
-    const allInternalClasses = classesData.data || [];
-    const filteredClasses = teacherId 
-      ? allInternalClasses.filter(c => c.teacher_id === teacherId)
-      : allInternalClasses;
-    
-    const filteredClassIds = filteredClasses.map(c => c.id);
+    if (studentsCountRes.error) throw studentsCountRes.error;
+    if (attendanceRes.error) throw attendanceRes.error;
+    if (studentDataRes.error) throw studentDataRes.error;
+    if (classesRes.error) throw classesRes.error;
 
-    // Process Debt
-    const totalDebt = (debtData.data || []).reduce((acc, row) => {
-      return acc + (row.amount_vnd - (row.paid_amount_vnd || 0));
-    }, 0);
+    const attendanceRecords = attendanceRes.data || [];
+    const students = studentDataRes.data || [];
+    const allClasses = classesRes.data || [];
 
-    // Process Attendance Today
-    const attendanceRecords = (attendanceData.data || []).filter(r => 
-      filteredClassIds.length === 0 || filteredClassIds.includes(r.class_id)
-    );
+    // 3. Process Attendance Metrics
     const totalAttendance = attendanceRecords.length;
-    const presentAttendance = attendanceRecords.filter(r => r.status === 'present').length;
-    const absentAttendance = attendanceRecords.filter(r => r.status === 'absent').length;
+    const presentCount = attendanceRecords.filter(r => r.status === 'present' || r.status === 'late').length;
+    const absentCount = attendanceRecords.filter(r => r.status === 'absent' || r.status === 'excused').length;
 
-    // Attendance by Class
+    // 4. Class-level Breakdown
     const classMap = new Map<number, string>();
-    (classesData.data || []).forEach(c => classMap.set(c.id, c.name));
+    allClasses.forEach(c => classMap.set(Number(c.id), c.name));
 
     const attendanceByClassMap = new Map<number, { present: number; absent: number; total: number }>();
     attendanceRecords.forEach(r => {
       const current = attendanceByClassMap.get(r.class_id) || { present: 0, absent: 0, total: 0 };
       current.total++;
-      if (r.status === 'present') current.present++;
-      else if (r.status === 'absent') current.absent++;
+      if (r.status === 'present' || r.status === 'late') current.present++;
+      else if (r.status === 'absent' || r.status === 'excused') current.absent++;
       attendanceByClassMap.set(r.class_id, current);
     });
 
@@ -105,12 +120,11 @@ export async function getDashboardStats(teacherId?: string): Promise<{ stats: Da
       classId: id,
       className: classMap.get(id) || `Lớp ${id}`,
       ...stats
-    })).sort((a, b) => b.total - a.total).slice(0, 5); // Top 5 classes for dashboard
+    })).sort((a, b) => b.total - a.total).slice(0, 5);
 
-    // Process Students by Class
+    // 5. Distribution & Attention
     const classCounts = new Map<string, number>();
-    (studentData.data || []).forEach((s: any) => {
-      if (teacherId && s.class_id && !filteredClassIds.includes(s.class_id)) return;
+    students.forEach((s: any) => {
       const cName = s.classes?.name || 'Khác';
       classCounts.set(cName, (classCounts.get(cName) || 0) + 1);
     });
@@ -120,60 +134,21 @@ export async function getDashboardStats(teacherId?: string): Promise<{ stats: Da
       count
     })).sort((a, b) => b.count - a.count).slice(0, 5);
 
-    const totalStudentsCount = teacherId 
-      ? Array.from(classCounts.values()).reduce((a, b) => a + b, 0)
-      : (studentsCount.count || 0);
-
     return {
       stats: {
-        totalStudents: totalStudentsCount,
-        totalDebt,
-        attendanceToday: {
-          present: presentAttendance,
-          absent: absentAttendance,
-          total: totalAttendance
-        },
+        totalStudents: teacherId ? students.length : (studentsCountRes.count || 0),
+        totalDebt: 0, 
+        attendanceToday: { present: presentCount, absent: absentCount, total: totalAttendance },
         attendanceByClass,
-        studentsByGrade
+        studentsByGrade,
+        attentionCount: attendanceRecords.filter(r => !!r.medicine_instructions).length
       },
       error: null
     };
   } catch (err) {
+    console.error('[Dashboard Service Error]:', err);
     return { stats: null, error: toAppError(err, 'Lỗi tổng hợp dữ liệu dashboard.') };
   }
-}
-
-export interface DashboardNotification {
-  id: string;
-  title: string;
-  content: string;
-  type: string;
-  created_at: string;
-}
-
-export async function getDashboardNotifications(): Promise<{ items: DashboardNotification[]; error: AppError | null }> {
-  const result = await withSupabaseTimeout(
-    supabase
-      .from('notifications')
-      .select('id, title, body, kind, created_at')
-      .eq('del_yn', false)
-      .order('created_at', { ascending: false })
-      .limit(5),
-    5000,
-    { data: null, error: { message: 'Timeout tải thông báo', details: '', hint: '', code: 'TIMEOUT' } } as any
-  );
-
-  if (result.error) return { items: [], error: toAppError(result.error, 'Không tải được thông báo.') };
-  
-  const items = (result.data || []).map((n: any) => ({
-    id: n.id,
-    title: n.title,
-    content: n.body,
-    type: n.kind,
-    created_at: n.created_at
-  }));
-
-  return { items, error: null };
 }
 
 // ─── Attendance Trend (7 days) ────────────────────────────────────────────────
@@ -188,7 +163,7 @@ export interface AttendanceTrendPoint {
 
 const DAY_LABELS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 
-export async function getAttendanceTrend(): Promise<{ trend: AttendanceTrendPoint[]; error: AppError | null }> {
+export async function getAttendanceTrend(teacherId?: string): Promise<{ trend: AttendanceTrendPoint[]; error: AppError | null }> {
   try {
     const today = new Date();
     const dates: string[] = [];
@@ -199,18 +174,29 @@ export async function getAttendanceTrend(): Promise<{ trend: AttendanceTrendPoin
       dates.push(dateStr);
     }
 
-    const { data, error } = await supabase
+    // Filter by assigned classes if teacher (Security: Filter at DB level)
+    let attendanceQuery = supabase
       .from('attendance')
-      .select('attendance_date, status')
+      .select('attendance_date, status, class_id')
       .gte('attendance_date', dates[0])
       .lte('attendance_date', dates[dates.length - 1])
       .eq('del_yn', false);
 
+    if (teacherId) {
+      const assignedIds = await getAssignedClassIds(teacherId);
+      if (assignedIds.length === 0) return { trend: [], error: null };
+      attendanceQuery = attendanceQuery.in('class_id', assignedIds);
+    }
+
+    const { data, error } = await attendanceQuery;
+
     if (error) throw error;
+
+    const filteredData = data || [];
 
     // Group by date
     const dateMap = new Map<string, { present: number; total: number }>();
-    (data || []).forEach((r: any) => {
+    filteredData.forEach((r: any) => {
       const key = r.attendance_date;
       const cur = dateMap.get(key) || { present: 0, total: 0 };
       cur.total++;
@@ -240,12 +226,19 @@ export interface FeeStatusSummary {
   partial: number;
 }
 
-export async function getFeeStatusSummary(): Promise<{ summary: FeeStatusSummary; error: AppError | null }> {
+export async function getFeeStatusSummary(teacherId?: string): Promise<{ summary: FeeStatusSummary; error: AppError | null }> {
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('fee_records')
-      .select('status')
+      .select('status, student_id, students!inner(class_id)')
       .eq('del_yn', false);
+    
+    if (teacherId) {
+      const assignedIds = await getAssignedClassIds(teacherId);
+      query = query.in('students.class_id', assignedIds);
+    }
+
+    const { data, error } = await query;
 
     if (error) throw error;
 
@@ -261,6 +254,7 @@ export async function getFeeStatusSummary(): Promise<{ summary: FeeStatusSummary
     return { summary: { paid: 0, unpaid: 0, partial: 0 }, error: toAppError(err, 'Lỗi tải tình trạng học phí.') };
   }
 }
+
 // ─── Financial Summary ────────────────────────────────────────────────────────
 export interface FinancialSummaryData {
   totalRevenue: number;
@@ -269,8 +263,13 @@ export interface FinancialSummaryData {
   overdueCount: number;
 }
 
-export async function getFinancialSummary(): Promise<{ data: FinancialSummaryData | null; error: AppError | null }> {
+export async function getFinancialSummary(userRole?: string): Promise<{ data: FinancialSummaryData | null; error: AppError | null }> {
   try {
+    // App-level Guard: Only Admin and Accountant can access aggregate financial stats
+    if (userRole && !['Admin', 'Accountant'].includes(userRole)) {
+       return { data: null, error: toAppError(new Error('Unauthorized'), 'Truy cập bị từ chối: Chỉ quản trị viên và kế toán mới có quyền xem báo cáo này.') };
+    }
+
     const today = new Date().toISOString().split('T')[0];
     const { data, error } = await supabase
       .from('fee_records')
@@ -291,5 +290,68 @@ export async function getFinancialSummary(): Promise<{ data: FinancialSummaryDat
     };
   } catch (err) {
     return { data: null, error: toAppError(err, 'Lỗi tải báo cáo tài chính.') };
+  }
+}
+
+// ─── Teacher Widgets (Birthdays & Medication) ───────────────────────────────
+
+export interface TeacherWidgetsData {
+  birthdays: any[];
+  medications: Array<{
+    studentId: string;
+    studentName: string;
+    notes: string;
+  }>;
+}
+
+export async function getTeacherWidgets(teacherId: string): Promise<{ data: TeacherWidgetsData | null; error: AppError | null }> {
+  try {
+    // 1. Get assigned classes
+    const assignedIds = await getAssignedClassIds(teacherId);
+    if (!assignedIds.length) return { data: { birthdays: [], medications: [] }, error: null };
+
+    // 2. Get birthdays in current month
+    const currentMonth = new Date().getMonth() + 1;
+    const { data: students } = await supabase
+      .from('students')
+      .select('id, full_name, date_of_birth, avatar, class_id')
+      .in('class_id', assignedIds)
+      .eq('del_yn', false);
+
+    const monthlyBirthdays = (students || []).filter(s => {
+      if (!s.date_of_birth) return false;
+      const m = new Date(s.date_of_birth).getMonth() + 1;
+      return m === currentMonth;
+    }).map(s => ({
+      id: s.id,
+      full_name: s.full_name,
+      date_of_birth: s.date_of_birth,
+      avatar: s.avatar,
+      class_id: s.class_id
+    }));
+
+    // 3. Get medication notes for today
+    const today = new Date().toISOString().split('T')[0];
+    const { data: attendance } = await supabase
+      .from('attendance')
+      .select('student_id, medicine_instructions, students(full_name)')
+      .in('class_id', assignedIds)
+      .eq('attendance_date', today)
+      .not('medicine_instructions', 'is', null)
+      .neq('medicine_instructions', '')
+      .eq('del_yn', false);
+
+    const medications = (attendance || []).map(a => ({
+      studentId: a.student_id,
+      studentName: (a.students as any)?.full_name || 'Học sinh',
+      notes: a.medicine_instructions
+    }));
+
+    return {
+      data: { birthdays: monthlyBirthdays, medications },
+      error: null
+    };
+  } catch (err) {
+    return { data: null, error: toAppError(err, 'Lỗi tải thông tin widget giáo viên.') };
   }
 }

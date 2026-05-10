@@ -100,6 +100,28 @@ export async function listStudents(query: StudentListQuery): Promise<{ data: Lis
     statement = statement.eq('class_id', query.classId);
   }
 
+  if (query.teacherId) {
+    const [directClasses, mappedClasses] = await Promise.all([
+      supabase.from('classes').select('id').eq('teacher_id', query.teacherId).eq('del_yn', false),
+      supabase.from('class_teachers').select('class_id').eq('teacher_id', query.teacherId)
+    ]);
+    const classIds = Array.from(new Set([
+      ...(directClasses.data || []).map(c => c.id),
+      ...(mappedClasses.data || []).map(c => c.class_id)
+    ]));
+
+    if (classIds.length === 0) {
+      return { data: { items: [], total: 0, page, pageSize }, error: null };
+    }
+    
+    // If classId is specified, check if it's in the allowed list
+    if (query.classId && !classIds.includes(query.classId)) {
+      return { data: { items: [], total: 0, page, pageSize }, error: null };
+    }
+
+    statement = statement.in('class_id', classIds);
+  }
+
   const sortBy = query.sortBy || 'created_at';
   const ascending = (query.sortDirection || 'desc') === 'asc';
   statement = statement.order(sortBy, { ascending });
@@ -177,12 +199,15 @@ export async function createStudent(payload: CreateStudentInput): Promise<{ item
   return { item: null, error: { code: 'CONFLICT', message: 'Không thể tạo mã học sinh duy nhất.' } };
 }
 
-export async function updateStudent(id: string, payload: UpdateStudentInput): Promise<{ item: StudentRecord | null; error: AppError | null }> {
+export async function updateStudent(id: string, payload: UpdateStudentInput, userId?: string): Promise<{ item: StudentRecord | null; error: AppError | null }> {
   const { student_code: _studentCode, ...safePayload } = payload;
   const result = await withSupabaseTimeout(
     supabase
       .from('students')
-      .update(safePayload)
+      .update({
+        ...safePayload,
+        updated_at: new Date().toISOString()
+      })
       .eq('id', id)
       .select('id, class_id, student_code, full_name, date_of_birth, gender, ethnicity, nationality, address, enrolled_date, health_info, avatar, created_at, updated_at, classes(id, name)')
       .single(),

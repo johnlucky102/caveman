@@ -70,7 +70,7 @@ function UserMenu({ onClose }: UserMenuProps) {
 
 export default function Header() {
   const navigate = useNavigate();
-  const { toggleSidebar, unreadNotifications } = useAppStore();
+  const { toggleSidebar } = useAppStore();
   const { user, profile } = useAuthStore();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
@@ -135,18 +135,7 @@ export default function Header() {
       </div>
 
       <div className="flex items-center gap-2 ml-auto">
-        <button
-          onClick={() => navigate('/notifications')}
-          className="relative p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-          aria-label="Thông báo"
-        >
-          <Bell className="w-5 h-5" />
-          {unreadNotifications > 0 && (
-            <span className="absolute top-1 right-1 w-4 h-4 bg-primary text-primary-foreground text-[10px] font-bold rounded-full flex items-center justify-center leading-none">
-              {unreadNotifications > 9 ? '9+' : unreadNotifications}
-            </span>
-          )}
-        </button>
+
 
         <div ref={userMenuRef} className="relative">
           <button

@@ -72,6 +72,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
             className={cn(
               'h-10 w-full rounded-xl border bg-background text-sm text-foreground placeholder:text-muted-foreground/60 transition-colors duration-150 outline-none',
               'focus:border-primary focus:ring-2 focus:ring-primary/10',
+              'cursor-pointer [&::-webkit-calendar-picker-indicator]:cursor-pointer',
               error
                 ? 'border-destructive focus:border-destructive focus:ring-destructive/10'
                 : 'border-border',
@@ -80,6 +81,15 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
               rightAddon ? 'pr-9' : 'pr-3',
               className
             )}
+            onClick={(e) => {
+              if (['date', 'time', 'datetime-local'].includes(rest.type || '')) {
+                try {
+                  (e.currentTarget as any).showPicker();
+                } catch (err) {
+                  // Fallback for older browsers
+                }
+              }
+            }}
             {...rest}
           />
 
