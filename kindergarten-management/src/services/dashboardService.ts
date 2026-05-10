@@ -261,3 +261,35 @@ export async function getFeeStatusSummary(): Promise<{ summary: FeeStatusSummary
     return { summary: { paid: 0, unpaid: 0, partial: 0 }, error: toAppError(err, 'Lỗi tải tình trạng học phí.') };
   }
 }
+// ─── Financial Summary ────────────────────────────────────────────────────────
+export interface FinancialSummaryData {
+  totalRevenue: number;
+  paidCount: number;
+  pendingCount: number;
+  overdueCount: number;
+}
+
+export async function getFinancialSummary(): Promise<{ data: FinancialSummaryData | null; error: AppError | null }> {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const { data, error } = await supabase
+      .from('fee_records')
+      .select('status, paid_amount_vnd, due_date')
+      .eq('del_yn', false);
+
+    if (error) throw error;
+
+    const records = data || [];
+    const totalRevenue = records.reduce((s, r: any) => s + (r.paid_amount_vnd || 0), 0);
+    const paidCount = records.filter((r: any) => r.status === 'paid').length;
+    const pendingCount = records.filter((r: any) => r.status === 'unpaid' || r.status === 'partial').length;
+    const overdueCount = records.filter((r: any) => r.status !== 'paid' && r.due_date && r.due_date < today).length;
+
+    return {
+      data: { totalRevenue, paidCount, pendingCount, overdueCount },
+      error: null
+    };
+  } catch (err) {
+    return { data: null, error: toAppError(err, 'Lỗi tải báo cáo tài chính.') };
+  }
+}

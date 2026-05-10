@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Camera } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import Card from '@/components/common/Card';
 import Button from '@/components/common/Button';
 import Input from '@/components/common/Input';
 import Select from '@/components/common/Select';
-import Avatar from '@/components/common/Avatar';
+
 import { useToast } from '@/components/common/Toast';
 import { listClasses } from '@/services/classesService';
 import { createStudent, getStudentById, updateStudent } from '@/services/studentsService';
@@ -13,7 +13,6 @@ import type { SelectOption } from '@/types';
 import type { CreateStudentInput } from '@/types/domain';
 
 interface StudentFormData {
-  avatar: string | null;
   student_code: string;
   full_name: string;
   date_of_birth: string;
@@ -38,7 +37,6 @@ interface FormErrors {
 
 function defaultForm(): StudentFormData {
   return {
-    avatar: null,
     student_code: '',
     full_name: '',
     date_of_birth: '',
@@ -119,7 +117,6 @@ export default function StudentForm() {
 
       const health = result.item.health_info || {};
       setFormData({
-        avatar: result.item.avatar,
         student_code: result.item.student_code,
         full_name: result.item.full_name,
         date_of_birth: result.item.date_of_birth || '',
@@ -149,15 +146,6 @@ export default function StudentForm() {
     }
   }
 
-  function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      handleChange('avatar', reader.result as string);
-    };
-    reader.readAsDataURL(file);
-  }
 
   function toPayload(data: StudentFormData): CreateStudentInput {
     return {
@@ -169,7 +157,7 @@ export default function StudentForm() {
       nationality: 'Việt Nam',
       address: data.address || null,
       enrolled_date: data.enrolled_date || null,
-      avatar: data.avatar,
+      avatar: null,
       health_info: {
         height: data.height ? Number(data.height) : null,
         weight: data.weight ? Number(data.weight) : null,
@@ -212,21 +200,6 @@ export default function StudentForm() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5" aria-label="student-form">
-        <Card>
-          <div className="flex flex-col items-center gap-4">
-            <div className="relative">
-              <Avatar src={formData.avatar} name={formData.full_name || 'Học sinh'} size="xl" />
-              <label
-                htmlFor="avatar-upload"
-                className="absolute -bottom-1 -right-1 w-8 h-8 bg-primary rounded-full flex items-center justify-center cursor-pointer hover:bg-primary-600 transition-colors shadow-md"
-              >
-                <Camera className="w-4 h-4 text-white" />
-                <input id="avatar-upload" type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
-              </label>
-            </div>
-            <p className="text-sm text-[#64748B]">Nhấn vào biểu tượng máy ảnh để tải ảnh đại diện</p>
-          </div>
-        </Card>
 
         <Card header={<div className="font-semibold text-[#1E293B]">Thông tin cơ bản</div>}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

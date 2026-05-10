@@ -8,6 +8,8 @@ import type {
   UpsertAttendanceInput,
 } from '@/types/domain';
 import { toAppError } from './supabaseErrors';
+import { invalidateSwCache } from '@/utils/swCacheInvalidate';
+
 
 type AttendanceRow = {
   id: string;
@@ -69,34 +71,31 @@ export interface AttendanceStudentItem {
 }
 
 export async function listAttendanceByClassAndDate(query: AttendanceListQuery): Promise<{ items: AttendanceStudentItem[]; error: AppError | null }> {
-  const studentsPromise = supabase
-    .from('students')
-    .select('id, full_name, class_id, classes(id, name)')
-    .eq('class_id', query.classId)
-    .eq('del_yn', false)
-    .order('full_name', { ascending: true });
-
-  const studentsResult = await withSupabaseTimeout(
-    studentsPromise,
-    8000,
-    { data: null, error: { message: 'Timeout tải học sinh', details: '', hint: '', code: 'TIMEOUT' } } as any
-  );
+  // Run both queries in parallel — halves network round-trips vs sequential
+  const [studentsResult, attendanceResult] = await Promise.all([
+    withSupabaseTimeout(
+      supabase
+        .from('students')
+        .select('id, full_name, class_id, classes(id, name)')
+        .eq('class_id', query.classId)
+        .eq('del_yn', false)
+        .order('full_name', { ascending: true }),
+      8000,
+      { data: null, error: { message: 'Timeout tải học sinh', details: '', hint: '', code: 'TIMEOUT' } } as any
+    ),
+    withSupabaseTimeout(
+      supabase
+        .from('attendance')
+        .select('id, student_id, class_id, attendance_date, status, check_in_time, check_out_time, note, meal_included, medicine_instructions, sleep_quality, is_hospitalized, created_at, updated_at, students(id, full_name, classes(id, name))')
+        .eq('class_id', query.classId)
+        .eq('attendance_date', query.attendanceDate)
+        .eq('del_yn', false),
+      8000,
+      { data: null, error: { message: 'Timeout tải điểm danh', details: '', hint: '', code: 'TIMEOUT' } } as any
+    ),
+  ]);
 
   if (studentsResult.error) return { items: [], error: toAppError(studentsResult.error, 'Không tải được danh sách học sinh để điểm danh.') };
-
-  const attendancePromise = supabase
-    .from('attendance')
-    .select('id, student_id, class_id, attendance_date, status, check_in_time, check_out_time, note, meal_included, medicine_instructions, sleep_quality, is_hospitalized, created_at, updated_at, students(id, full_name, classes(id, name))')
-    .eq('class_id', query.classId)
-    .eq('attendance_date', query.attendanceDate)
-    .eq('del_yn', false);
-
-  const attendanceResult = await withSupabaseTimeout(
-    attendancePromise,
-    8000,
-    { data: null, error: { message: 'Timeout tải điểm danh', details: '', hint: '', code: 'TIMEOUT' } } as any
-  );
-
   if (attendanceResult.error) return { items: [], error: toAppError(attendanceResult.error, 'Không tải được dữ liệu điểm danh.') };
 
   const map = new Map<string, AttendanceRow>();
@@ -155,6 +154,10 @@ export async function upsertAttendanceBulk(rows: UpsertAttendanceInput[]): Promi
 
   const error = result.error;
   if (error) return { error: toAppError(error, 'Lưu điểm danh thất bại.') };
+
+  // Invalidate cache for attendance tables
+  invalidateSwCache(['attendance']);
+
   return { error: null };
 }
 

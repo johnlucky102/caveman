@@ -9,6 +9,8 @@ import type {
   UpdateStudentInput,
 } from '@/types/domain';
 import { toAppError } from './supabaseErrors';
+import { invalidateSwCache } from '@/utils/swCacheInvalidate';
+
 
 type StudentRow = {
   id: string;
@@ -163,7 +165,10 @@ export async function createStudent(payload: CreateStudentInput): Promise<{ item
       { data: null, error: { message: 'Timeout creating student', details: '', hint: '', code: 'TIMEOUT' } } as any
     );
 
-    if (!result.error && result.data) return { item: mapStudentRow(result.data as unknown as StudentRow), error: null };
+    if (!result.error && result.data) {
+      invalidateSwCache(['students']);
+      return { item: mapStudentRow(result.data as unknown as StudentRow), error: null };
+    }
     if (!shouldGenerateCode || !isStudentCodeConflict(result.error) || attempt === maxAttempts) {
       return { item: null, error: toAppError(result.error, 'Không thể tạo hồ sơ học sinh.') };
     }
@@ -186,6 +191,7 @@ export async function updateStudent(id: string, payload: UpdateStudentInput): Pr
   );
 
   if (result.error) return { item: null, error: toAppError(result.error, 'Không thể cập nhật hồ sơ học sinh.') };
+  invalidateSwCache(['students']);
   return { item: mapStudentRow(result.data as unknown as StudentRow), error: null };
 }
 
@@ -202,6 +208,7 @@ export async function deleteStudent(id: string): Promise<{ error: AppError | nul
   );
 
   if (result.error) return { error: toAppError(result.error, 'Không thể xóa học sinh.') };
+  invalidateSwCache(['students', 'attendance', 'fee_records']);
   return { error: null };
 }
 

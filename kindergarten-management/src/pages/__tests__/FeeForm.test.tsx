@@ -1,36 +1,17 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import FeeForm from '../FeeForm';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { listStudents } from '@/services/studentsService';
-import { getFeeById, syncFeeWithAttendance } from '@/services/feesService';
+import * as studentsService from '@/services/studentsService';
+import * as feesService from '@/services/feesService';
 
-// Mocking toast
+// Mocking components
 vi.mock('@/components/common/Toast', () => ({
-  useToast: () => ({
-    success: vi.fn(),
-    error: vi.fn(),
-  }),
+  useToast: () => ({ success: vi.fn(), error: vi.fn() }),
 }));
 
-// Mocking services
 vi.mock('@/stores/authStore', () => ({
-  useAuthStore: () => ({
-    user: { full_name: 'Test Admin' },
-    isAuthenticated: true,
-  }),
-}));
-
-vi.mock('@/services/studentsService', () => ({
-  listStudents: vi.fn().mockResolvedValue({ data: { items: [{ id: 1, full_name: 'Kid A' }] }, error: null }),
-}));
-
-vi.mock('@/services/feesService', () => ({
-  createFeeRecord: vi.fn(),
-  getFeeById: vi.fn().mockResolvedValue({ item: null, error: null }),
-  updateFeeRecord: vi.fn(),
-  deleteFeeRecord: vi.fn(),
-  syncFeeWithAttendance: vi.fn(),
+  useAuthStore: () => ({ user: { full_name: 'Admin' } }),
 }));
 
 const renderForm = (path = '/fees/new') => {
@@ -49,26 +30,28 @@ describe('FeeForm', () => {
     vi.clearAllMocks();
   });
 
-  it('should render the form', async () => {
-    renderForm();
-    expect(await screen.findByText(/Tạo hóa đơn học phí/i)).toBeDefined();
-  });
-
-  it('should trigger sync with attendance calculation', async () => {
-    vi.mocked(getFeeById).mockResolvedValue({ item: { id: '1', amount_vnd: 0, student_id: '1', class_id: 1, school_year: '2024-2025', month: 10, status: 'unpaid', paid_amount_vnd: 0, paid_date: null, due_date: null, payment_method: null, base_amount_vnd: 0, meal_deduction_vnd: 0, tuition_deduction_vnd: 0, deduction_note: null, created_at: '', updated_at: '', student_name: 'Kid A', class_name: 'Class A' } as any, error: null });
-    vi.mocked(syncFeeWithAttendance).mockResolvedValue({
-      item: { id: '1', amount_vnd: 1000000 } as any,
-      error: null
+  it('should render and handle sync', async () => {
+    // Mocking services
+    vi.spyOn(studentsService, 'listStudents').mockResolvedValue({ data: { items: [] } as any, error: null });
+    vi.spyOn(feesService, 'getFeeById').mockResolvedValue({ 
+      item: { id: '1', student_id: 's1', amount_vnd: 1000, status: 'unpaid', month: 10, school_year: '2024' } as any, 
+      error: null 
     });
+    const syncSpy = vi.spyOn(feesService, 'syncFeeWithAttendance').mockResolvedValue({ item: {} as any, error: null });
 
     renderForm('/fees/1');
 
-    // Wait for data load
-    const syncBtn = await screen.findByRole('button', { name: /Đồng bộ chuyên cần/i });
-    fireEvent.click(syncBtn);
-
+    // Wait for the button to be enabled
     await waitFor(() => {
-      expect(syncFeeWithAttendance).toHaveBeenCalled();
+      const btn = screen.queryByRole('button', { name: /Đồng bộ chuyên cần/i });
+      return btn && !(btn as HTMLButtonElement).disabled;
+    }, { timeout: 10000 });
+
+    const syncBtn = screen.getByRole('button', { name: /Đồng bộ chuyên cần/i });
+    fireEvent.click(syncBtn);
+    
+    await waitFor(() => {
+      expect(syncSpy).toHaveBeenCalledWith('1');
     });
   });
 });

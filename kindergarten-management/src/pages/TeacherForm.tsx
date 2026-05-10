@@ -1,16 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Save, Upload, X } from 'lucide-react';
+import { ArrowLeft, Save } from 'lucide-react';
 import Card from '@/components/common/Card';
 import Button from '@/components/common/Button';
 import Input from '@/components/common/Input';
 import Select from '@/components/common/Select';
-import Avatar from '@/components/common/Avatar';
+
 import { useToast } from '@/components/common/Toast';
 import { createTeacherProfile, getTeacherById, updateTeacherProfile } from '@/services/usersService';
 
 interface FormState {
-  avatar: string | null;
   full_name: string;
   phone: string;
   email: string;
@@ -45,7 +44,6 @@ export default function TeacherForm() {
   const isEditMode = Boolean(id && id !== 'new');
 
   const [form, setForm] = useState<FormState>({
-    avatar: null,
     full_name: '',
     phone: '',
     email: '',
@@ -72,7 +70,6 @@ export default function TeacherForm() {
         return;
       }
       setForm({
-        avatar: result.item.avatar,
         full_name: result.item.full_name,
         phone: result.item.phone || '',
         email: result.item.email || '',
@@ -92,15 +89,6 @@ export default function TeacherForm() {
     if (errors[field as keyof FormErrors]) setErrors((prev) => ({ ...prev, [field]: undefined }));
   };
 
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setField('avatar', reader.result as string);
-    };
-    reader.readAsDataURL(file);
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -109,7 +97,7 @@ export default function TeacherForm() {
     const payload = {
       full_name: form.full_name.trim(),
       phone: form.phone.trim(),
-      avatar: form.avatar,
+      avatar: null,
       gender: form.gender,
       date_of_birth: form.date_of_birth,
       address: form.address,
@@ -142,28 +130,6 @@ export default function TeacherForm() {
 
       <form onSubmit={handleSubmit}>
         <Card className="space-y-8">
-          <div className="flex flex-col items-center">
-            <div className="relative">
-              <Avatar src={form.avatar} name={form.full_name || 'GV'} size="xl" />
-              {form.avatar && (
-                <button
-                  type="button"
-                  onClick={() => setField('avatar', null)}
-                  className="absolute -top-1 -right-1 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
-                  aria-label="Xóa ảnh"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              )}
-            </div>
-            <label className="mt-3">
-              <input type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
-              <div className="flex items-center gap-2 px-4 py-2 bg-[#F1F5F9] text-[#64748B] rounded-lg cursor-pointer hover:bg-[#E2E8F0] transition-colors text-sm">
-                <Upload className="w-4 h-4" />
-                Tải ảnh lên
-              </div>
-            </label>
-          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <Input

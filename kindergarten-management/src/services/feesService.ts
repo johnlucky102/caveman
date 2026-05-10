@@ -8,6 +8,8 @@ import type {
   ListEnvelope,
 } from '@/types/domain';
 import { toAppError } from './supabaseErrors';
+import { invalidateSwCache } from '@/utils/swCacheInvalidate';
+
 
 
 type FeeRow = {
@@ -238,6 +240,7 @@ export async function createFeeRecord(input: CreateFeeInput): Promise<{ item: Fe
     }
     return { item: null, error: toAppError(result.error, 'Không thể tạo bản ghi học phí.') };
   }
+  invalidateSwCache(['fee_records']);
   return { item: mapFeeRow(result.data as unknown as FeeRow), error: null };
 }
 
@@ -275,6 +278,7 @@ export async function updateFeeRecordStatus(
   );
 
   if (updateResult.error) return { error: toAppError(updateResult.error, 'Không thể cập nhật trạng thái học phí.') };
+  invalidateSwCache(['fee_records']);
   return { error: null };
 }
 
@@ -291,6 +295,7 @@ export async function updateFeeRecord(id: string, payload: Partial<CreateFeeInpu
   );
 
   if (result.error) return { item: null, error: toAppError(result.error, 'Không thể cập nhật bản ghi học phí.') };
+  invalidateSwCache(['fee_records']);
   return { item: mapFeeRow(result.data as unknown as FeeRow), error: null };
 }
 
@@ -302,6 +307,7 @@ export async function deleteFeeRecord(id: string): Promise<{ error: AppError | n
   );
 
   if (result.error) return { error: toAppError(result.error, 'Không thể xóa bản ghi học phí.') };
+  invalidateSwCache(['fee_records']);
   return { error: null };
 }
 
@@ -353,6 +359,7 @@ export async function createClassFees(
     return { error: toAppError(error, 'Lỗi khi tạo học phí hàng loạt.') };
   }
 
+  invalidateSwCache(['fee_records']);
   return { error: null };
 }
 
@@ -370,8 +377,16 @@ export async function syncFeeWithAttendance(feeId: string): Promise<{ item: FeeR
   if (!classConfig) return { item: null, error: { code: 'NOT_FOUND', message: 'Không tìm thấy cấu hình lớp học.' } };
 
   // 2. Load attendance for that month
-  const startDate = `${fee.school_year.split('-')[0]}-${String(fee.month).padStart(2, '0')}-01`;
-  const endDate = new Date(Number(fee.school_year.split('-')[0]), fee.month, 0).toISOString().split('T')[0];
+  // 2. Load attendance for that month
+  const [startYearStr, endYearStr] = fee.school_year.split('-');
+  const startYear = Number(startYearStr);
+  const endYear = Number(endYearStr);
+  
+  // Months 1-8 are usually in the endYear (Spring semester), 9-12 in startYear (Fall)
+  const actualYear = (fee.month >= 1 && fee.month <= 8) ? endYear : startYear;
+  
+  const startDate = `${actualYear}-${String(fee.month).padStart(2, '0')}-01`;
+  const endDate = new Date(actualYear, fee.month, 0).toISOString().split('T')[0];
 
   const attendanceResult = await supabase
     .from('attendance')
@@ -439,5 +454,6 @@ export async function syncFeeWithAttendance(feeId: string): Promise<{ item: FeeR
     .single();
 
   if (updateResult.error) return { item: null, error: toAppError(updateResult.error, 'Lỗi khi cập nhật học phí sau khấu trừ.') };
+  invalidateSwCache(['fee_records']);
   return { item: mapFeeRow(updateResult.data as any), error: null };
 }

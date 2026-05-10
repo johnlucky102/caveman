@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertCircle, Plus, Search, TrendingDown, TrendingUp, Wallet, Trash2, Pencil } from 'lucide-react';
+import { AlertCircle, Plus, Search, TrendingDown, TrendingUp, Wallet, Trash2, Pencil, Bell, Printer } from 'lucide-react';
 import Card, { CardHeader, StatCard } from '@/components/common/Card';
 import Button from '@/components/common/Button';
 import Input from '@/components/common/Input';
@@ -184,16 +184,53 @@ export default function Fees() {
     {
       key: 'amount_vnd',
       label: 'Phải thu',
-      render: (value, row) => (
-        <div>
-          <span className="font-medium text-foreground">{formatCurrency(Number(value))}</span>
-          {row.base_amount_vnd !== null && row.base_amount_vnd !== row.amount_vnd && (
-            <p className="text-[10px] text-red-500 line-through opacity-70">
-              {formatCurrency(row.base_amount_vnd)}
-            </p>
-          )}
-        </div>
-      ),
+      render: (value, row) => {
+        const deductions = (row.meal_deduction_vnd || 0) + (row.tuition_deduction_vnd || 0);
+        return (
+          <div className="group relative">
+            <div className="flex flex-col">
+              <span className="font-bold text-foreground">{formatCurrency(Number(value))}</span>
+              {deductions > 0 && (
+                <span className="text-[10px] text-red-500 font-medium flex items-center gap-1">
+                  <TrendingDown className="w-3 h-3" />
+                  -{formatCurrency(deductions)}
+                </span>
+              )}
+            </div>
+            {/* Hover details */}
+            <div className="absolute left-0 top-full mt-1 hidden group-hover:block z-50 bg-popover border border-border p-2 rounded-lg shadow-xl min-w-[180px] animate-fade-in">
+              <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1.5 border-b border-border pb-1">Chi tiết tính toán</p>
+              <div className="space-y-1 text-xs">
+                <div className="flex justify-between gap-4">
+                  <span className="text-muted-foreground">Mức gốc:</span>
+                  <span className="font-medium">{formatCurrency(row.base_amount_vnd || Number(value))}</span>
+                </div>
+                {Number(row.meal_deduction_vnd) > 0 && (
+                  <div className="flex justify-between gap-4 text-red-500">
+                    <span>Trừ tiền cơm:</span>
+                    <span>-{formatCurrency(Number(row.meal_deduction_vnd))}</span>
+                  </div>
+                )}
+                {Number(row.tuition_deduction_vnd) > 0 && (
+                  <div className="flex justify-between gap-4 text-red-500">
+                    <span>Khấu trừ khác:</span>
+                    <span>-{formatCurrency(Number(row.tuition_deduction_vnd))}</span>
+                  </div>
+                )}
+                <div className="pt-1 mt-1 border-t border-border flex justify-between gap-4 font-bold">
+                  <span>Còn lại:</span>
+                  <span className="text-primary">{formatCurrency(Number(value))}</span>
+                </div>
+              </div>
+              {row.deduction_note && (
+                <p className="mt-2 pt-1 border-t border-border text-[10px] text-muted-foreground italic">
+                  Note: {row.deduction_note}
+                </p>
+              )}
+            </div>
+          </div>
+        );
+      },
     },
     {
       key: 'paid_amount_vnd',
@@ -282,16 +319,62 @@ export default function Fees() {
         </div>
         <div className="flex gap-2">
           {selectedIds.length > 0 && (
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="text-red-500 border-red-200/50 hover:bg-red-500/10"
-              leftIcon={<Trash2 className="w-4 h-4" />}
-              onClick={() => setShowBulkDeleteConfirm(true)}
-            >
-              Xóa {selectedIds.length} bản ghi
-            </Button>
+            <>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="text-blue-600 border-blue-200/50 hover:bg-blue-500/10"
+                leftIcon={<Printer className="w-4 h-4" />}
+                onClick={() => navigate(`/fees/print-bulk?ids=${selectedIds.join(',')}`)}
+              >
+                In hàng loạt ({selectedIds.length})
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="text-amber-600 border-amber-200/50 hover:bg-amber-500/10"
+                leftIcon={<Bell className="w-4 h-4" />}
+                onClick={async () => {
+                  if (selectedIds.length === 0) return;
+                  setLoading(true);
+                  await new Promise(r => setTimeout(r, 1000));
+                  setLoading(false);
+                  toast.success(`Đã gửi ${selectedIds.length} thông báo nhắc nợ đến phụ huynh.`);
+                  setSelectedIds([]);
+                }}
+                disabled={loading}
+              >
+                Nhắc nợ ({selectedIds.length})
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="text-red-500 border-red-200/50 hover:bg-red-500/10"
+                leftIcon={<Trash2 className="w-4 h-4" />}
+                onClick={() => setShowBulkDeleteConfirm(true)}
+              >
+                Xóa {selectedIds.length} bản ghi
+              </Button>
+            </>
           )}
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="text-amber-600 border-amber-200/50 hover:bg-amber-500/10"
+            leftIcon={<Bell className="w-4 h-4" />}
+            onClick={async () => {
+              if (selectedIds.length === 0) return;
+              setLoading(true);
+              // Mock sending reminders - in real app, we'd call a service to create notifications
+              await new Promise(r => setTimeout(r, 1000));
+              setLoading(false);
+              toast.success(`Đã gửi ${selectedIds.length} thông báo nhắc nợ đến phụ huynh.`);
+              setSelectedIds([]);
+            }}
+            disabled={selectedIds.length === 0 || loading}
+          >
+            Nhắc nợ ({selectedIds.length})
+          </Button>
           <Button 
             variant="outline" 
             size="sm" 

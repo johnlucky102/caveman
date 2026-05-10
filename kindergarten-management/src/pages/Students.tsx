@@ -6,7 +6,7 @@ import Button from '@/components/common/Button';
 import Input from '@/components/common/Input';
 import Select from '@/components/common/Select';
 import Table, { type SortState } from '@/components/common/Table';
-import Avatar from '@/components/common/Avatar';
+
 import { ConfirmModal } from '@/components/common/Modal';
 import { useToast } from '@/components/common/Toast';
 import { useAuthStore } from '@/stores/authStore';
@@ -155,19 +155,18 @@ export default function Students() {
 
   const columns: TableColumn<StudentRecord>[] = [
     {
-      key: 'avatar',
-      label: 'Ảnh',
-      width: '64px',
-      render: (value, row) => <Avatar src={String(value || '')} name={row.full_name} size="sm" />,
-    },
-    {
       key: 'full_name',
       label: 'Họ tên',
       sortable: true,
       render: (_value, row) => (
-        <div>
-          <p className="font-medium text-foreground">{row.full_name}</p>
-          <p className="text-xs text-muted-foreground">{row.class_name}</p>
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0">
+            {row.full_name.charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <p className="font-medium text-foreground">{row.full_name}</p>
+            <p className="text-xs text-muted-foreground">{row.class_name}</p>
+          </div>
         </div>
       ),
     },

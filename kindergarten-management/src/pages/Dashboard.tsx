@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Users,
@@ -28,6 +28,7 @@ import { useAppStore } from '../stores/appStore';
 import { StatCard } from '../components/common/Card';
 import { getDashboardStats, getDashboardNotifications, getAttendanceTrend, getFeeStatusSummary, DashboardStats, DashboardNotification, AttendanceTrendPoint, FeeStatusSummary } from '@/services/dashboardService';
 import { getSchoolSettings } from '@/services/settingsService';
+import { useServiceCache } from '@/hooks/useServiceCache';
 
 // ─── Recharts wrappers (React 18 + recharts 2.x compat) ──────────────────────
 const RXAxis = XAxis as any;
@@ -83,39 +84,64 @@ export default function Dashboard() {
   const { setPageTitle } = useAppStore();
   const navigate = useNavigate();
   const [today] = useState(() => formatVietnameseDate(new Date()));
-  
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [notifications, setNotifications] = useState<DashboardNotification[]>([]);
-  const [trendData, setTrendData] = useState<AttendanceTrendPoint[]>([]);
-  const [feeSummary, setFeeSummary] = useState<FeeStatusSummary>({ paid: 0, unpaid: 0, partial: 0 });
-  const [schoolYear, setSchoolYear] = useState('2024 – 2025');
-  const [loading, setLoading] = useState(true);
+
+  // Determine teacherId once per session
+  const teacherId = useMemo(() => {
+    const { role, user } = useAuthStore.getState();
+    return role === 'Teacher' ? user?.id : undefined;
+  }, []);
+
+  // ── Cached service calls ────────────────────────────────────────────────────
+  // Stats: cached 60s – changes only when attendance/fees are updated
+  const { data: statsRes, loading: loadingStats } = useServiceCache(
+    `dashboard-stats-${teacherId ?? 'all'}`,
+    () => getDashboardStats(teacherId),
+    { staleTime: 60_000 }
+  );
+
+  // Notifications: cached 120s
+  const { data: notifyRes, loading: loadingNotify } = useServiceCache(
+    'dashboard-notifications',
+    () => getDashboardNotifications(),
+    { staleTime: 120_000 }
+  );
+
+  // Attendance trend: cached 120s – changes only when attendance is logged
+  const { data: trendRes, loading: loadingTrend } = useServiceCache(
+    'dashboard-trend',
+    () => getAttendanceTrend(),
+    { staleTime: 120_000 }
+  );
+
+  // Fee summary: cached 60s
+  const { data: feeRes, loading: loadingFee } = useServiceCache(
+    'dashboard-fee-summary',
+    () => getFeeStatusSummary(),
+    { staleTime: 60_000 }
+  );
+
+  // Settings: cached 5 minutes – almost never changes
+  const { data: settingsRes } = useServiceCache(
+    'school-settings',
+    () => getSchoolSettings(),
+    { staleTime: 300_000 }
+  );
+
+  const loading = loadingStats || loadingNotify || loadingTrend || loadingFee;
+
+  // ── Derived data ────────────────────────────────────────────────────────────
+  const stats = statsRes?.stats ?? null;
+  const notifications = notifyRes?.items ?? [];
+  const trendData = trendRes?.trend ?? [];
+  const feeSummary: FeeStatusSummary = feeRes?.summary ?? { paid: 0, unpaid: 0, partial: 0 };
+  const schoolYear = settingsRes?.settings?.school_year
+    ? settingsRes.settings.school_year.replace('-', ' – ')
+    : '2024 – 2025';
 
   useEffect(() => {
     setPageTitle('Dashboard');
-    const load = async () => {
-      setLoading(true);
-      const { role, user } = useAuthStore.getState();
-      const teacherId = role === 'Teacher' ? user?.id : undefined;
-      const [statsRes, notifyRes, trendRes, feeRes, settingsRes] = await Promise.all([
-        getDashboardStats(teacherId),
-        getDashboardNotifications(),
-        getAttendanceTrend(),
-        getFeeStatusSummary(),
-        getSchoolSettings(),
-      ]);
-      setLoading(false);
-      
-      if (statsRes.stats) setStats(statsRes.stats);
-      if (notifyRes.items) setNotifications(notifyRes.items);
-      if (trendRes.trend) setTrendData(trendRes.trend);
-      if (feeRes.summary) setFeeSummary(feeRes.summary);
-      if (settingsRes.settings?.school_year) {
-        setSchoolYear(settingsRes.settings.school_year.replace('-', ' – '));
-      }
-    };
-    void load();
   }, [setPageTitle]);
+
 
   const displayName =
     user?.user_metadata?.full_name ||

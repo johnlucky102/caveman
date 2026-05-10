@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { AlertTriangle, ArrowLeft, Edit, Heart, Info, Trash2, Wallet, CalendarCheck } from 'lucide-react';
 import Card, { CardHeader } from '@/components/common/Card';
 import Button from '@/components/common/Button';
-import Avatar from '@/components/common/Avatar';
+
 import Table from '@/components/common/Table';
 import { AttendanceStatusBadge, FeeStatusBadge } from '@/components/common/Badge';
 import { useToast } from '@/components/common/Toast';
@@ -150,7 +150,9 @@ export default function StudentDetail() {
 
       <Card noPadding>
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 p-6">
-          <Avatar src={student.avatar} name={student.full_name} size="xl" />
+          <div className="w-20 h-20 rounded-full bg-primary/10 text-primary flex items-center justify-center text-3xl font-bold shrink-0">
+            {student.full_name.charAt(0).toUpperCase()}
+          </div>
           <div className="flex-1 text-center sm:text-left">
             <h1 className="text-xl font-bold text-foreground">{student.full_name}</h1>
             <p className="text-sm text-muted-foreground mt-1">

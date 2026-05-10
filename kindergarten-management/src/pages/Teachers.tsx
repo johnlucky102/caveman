@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Edit2, Mail, Phone, Search, Trash2, UserPlus } from 'lucide-react';
 import Card from '@/components/common/Card';
 import Button from '@/components/common/Button';
-import Avatar from '@/components/common/Avatar';
+
 import Input from '@/components/common/Input';
 import Table, { type SortState } from '@/components/common/Table';
 import Badge from '@/components/common/Badge';
@@ -105,7 +105,9 @@ export default function Teachers() {
       label: 'Giáo viên',
       render: (_value, row) => (
         <div className="flex items-center gap-3">
-          <Avatar src={row.avatar} name={row.full_name} size="sm" />
+          <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0">
+            {row.full_name.charAt(0).toUpperCase()}
+          </div>
           <div>
             <p className="font-medium text-foreground">{row.full_name}</p>
             <p className="text-xs text-muted-foreground">Giáo viên</p>
