@@ -9,7 +9,7 @@ import { useToast } from '@/components/common/Toast';
 import { listStudents } from '@/services/studentsService';
 import { createFeeRecord, getFeeById, updateFeeRecord, deleteFeeRecord, syncFeeWithAttendance } from '@/services/feesService';
 import { ConfirmModal } from '@/components/common/Modal';
-import { RefreshCw } from 'lucide-react';
+
 import { useAuthStore } from '@/stores/authStore';
 import type { SelectOption } from '@/types';
 import type { CreateFeeInput, FeeRecordP2, FeeStatusValue, StudentRecord } from '@/types/domain';
@@ -500,7 +500,7 @@ export default function FeeForm() {
                 <span className="font-bold">Lớp:</span>
                 <span className="font-medium">{selectedStudent?.class_name}</span>
                 <span className="font-bold">Phụ huynh:</span>
-                <span className="font-medium">{selectedStudent?.parent_name || '—'}</span>
+                <span className="font-medium">{selectedStudent?.parents?.find(p => p.is_primary)?.full_name || selectedStudent?.parents?.[0]?.full_name || '—'}</span>
               </div>
             </div>
             <div className="space-y-3">
