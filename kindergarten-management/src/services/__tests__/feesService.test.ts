@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { syncFeeWithAttendance, createClassFees } from '../feesService';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { syncFeeWithAttendance, createClassFees, deleteFeeRecords } from '../feesService';
 import { supabase } from '@/lib/supabase';
+import * as serviceGuards from '../serviceGuards';
 
 // Mock Supabase
 vi.mock('@/lib/supabase', () => ({
@@ -31,6 +32,7 @@ describe('syncFeeWithAttendance', () => {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       single: vi.fn().mockResolvedValue({ data, error }),
+      maybeSingle: vi.fn().mockResolvedValue({ data, error }),
       update: vi.fn().mockReturnThis(),
       gte: vi.fn().mockReturnThis(),
       lte: vi.fn().mockReturnThis(),
@@ -70,7 +72,7 @@ describe('syncFeeWithAttendance', () => {
     
     // Call 1 & 2: ensureFinancialAccess (users, fee_records)
     fromMock.mockReturnValueOnce(createMockSupabaseChain({ role: 'Admin' }) as any);
-    fromMock.mockReturnValueOnce(createMockSupabaseChain({ status: 'pending' }) as any);
+    fromMock.mockReturnValueOnce(createMockSupabaseChain({ status: 'unpaid', class_id: 1 }) as any);
     // Call 3: Load fee
     fromMock.mockReturnValueOnce(createMockSupabaseChain(mockFee) as any);
     // Call 4: Load attendance
@@ -107,7 +109,7 @@ describe('syncFeeWithAttendance', () => {
     const fromMock = vi.mocked(supabase.from);
     // RBAC
     fromMock.mockReturnValueOnce(createMockSupabaseChain({ role: 'Admin' }) as any);
-    fromMock.mockReturnValueOnce(createMockSupabaseChain({ status: 'pending' }) as any);
+    fromMock.mockReturnValueOnce(createMockSupabaseChain({ status: 'unpaid', class_id: 1 }) as any);
     // Data
     fromMock.mockReturnValueOnce(createMockSupabaseChain(mockFee) as any);
     fromMock.mockReturnValueOnce(createMockSupabaseChain(mockAttendance) as any);
@@ -141,7 +143,7 @@ describe('syncFeeWithAttendance', () => {
     const fromMock = vi.mocked(supabase.from);
     // RBAC
     fromMock.mockReturnValueOnce(createMockSupabaseChain({ role: 'Admin' }) as any);
-    fromMock.mockReturnValueOnce(createMockSupabaseChain({ status: 'pending' }) as any);
+    fromMock.mockReturnValueOnce(createMockSupabaseChain({ status: 'unpaid', class_id: 1 }) as any);
     // Data
     fromMock.mockReturnValueOnce(createMockSupabaseChain(mockFee) as any);
     fromMock.mockReturnValueOnce(createMockSupabaseChain(mockAttendance) as any);
@@ -177,7 +179,7 @@ describe('syncFeeWithAttendance', () => {
     const fromMock = vi.mocked(supabase.from);
     // RBAC
     fromMock.mockReturnValueOnce(createMockSupabaseChain({ role: 'Admin' }) as any);
-    fromMock.mockReturnValueOnce(createMockSupabaseChain({ status: 'pending' }) as any);
+    fromMock.mockReturnValueOnce(createMockSupabaseChain({ status: 'unpaid', class_id: 1 }) as any);
     // Data
     fromMock.mockReturnValueOnce(createMockSupabaseChain(mockFee) as any);
     fromMock.mockReturnValueOnce(createMockSupabaseChain(mockAttendance) as any);
@@ -232,5 +234,64 @@ describe('createClassFees', () => {
 
     const result = await createClassFees(1, 10, '2024-2025', 'Tuition', 3000000);
     expect(result.error?.code).toBe('CONFLICT');
+  });
+});
+
+describe('deleteFeeRecords', () => {
+  let finSpy: ReturnType<typeof vi.spyOn>;
+  let feeModSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    finSpy = vi.spyOn(serviceGuards, 'ensureFinancialAccess').mockResolvedValue({ error: null });
+    feeModSpy = vi.spyOn(serviceGuards, 'ensureFeeModificationAccess').mockResolvedValue({ error: null });
+  });
+
+  afterEach(() => {
+    finSpy.mockRestore();
+    feeModSpy.mockRestore();
+  });
+
+  const chainThen = (data: any, err: any = null) => ({
+    select: vi.fn().mockReturnThis(),
+    in: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    update: vi.fn().mockReturnThis(),
+    then: vi.fn().mockImplementation((cb: any) => cb({ data, error: err })),
+  });
+
+  it('returns FORBIDDEN when ensureFinancialAccess fails', async () => {
+    finSpy.mockResolvedValue({ error: { code: 'FORBIDDEN', message: 'no' } });
+    const fromMock = vi.mocked(supabase.from);
+    const result = await deleteFeeRecords(['a', 'b']);
+    expect(result.error?.code).toBe('FORBIDDEN');
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it('returns NOT_FOUND when some ids are missing', async () => {
+    const fromMock = vi.mocked(supabase.from);
+    fromMock.mockReturnValueOnce(chainThen([{ id: 'a' }]) as any);
+    const result = await deleteFeeRecords(['a', 'b']);
+    expect(result.error?.code).toBe('NOT_FOUND');
+    expect(feeModSpy).not.toHaveBeenCalled();
+  });
+
+  it('returns guard error when ensureFeeModificationAccess fails', async () => {
+    feeModSpy.mockResolvedValue({ error: { code: 'FORBIDDEN', message: 'paid' } });
+    const fromMock = vi.mocked(supabase.from);
+    fromMock.mockReturnValueOnce(chainThen([{ id: 'a' }, { id: 'b' }]) as any);
+    const result = await deleteFeeRecords(['a', 'b']);
+    expect(result.error?.code).toBe('FORBIDDEN');
+  });
+
+  it('soft-deletes all ids when checks pass', async () => {
+    const fromMock = vi.mocked(supabase.from);
+    const updateChain = chainThen(null, null);
+    fromMock.mockReturnValueOnce(chainThen([{ id: 'a' }, { id: 'b' }]) as any);
+    fromMock.mockReturnValueOnce(updateChain as any);
+    const result = await deleteFeeRecords(['a', 'b']);
+    expect(result.error).toBeNull();
+    expect(updateChain.update).toHaveBeenCalledWith({ del_yn: true });
+    expect(feeModSpy).toHaveBeenCalledTimes(2);
   });
 });

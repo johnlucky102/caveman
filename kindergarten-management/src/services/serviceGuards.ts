@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { canManageFinance, canManageStudentOrClass, canAddOrDeleteStudent } from '@/lib/rbac';
+import { canManageFinance } from '@/lib/rbac';
 import type { AppError, AppRole } from '@/types/domain';
 import { normalizeRole } from './usersService';
 
@@ -122,13 +122,31 @@ export async function ensureFeeModificationAccess(feeId: string, isFinancialMuta
   const { role, error } = await getCurrentUser();
   if (error) return { error };
 
+  if (role === 'Parent') {
+    return { error: { code: 'FORBIDDEN', message: 'Bạn không có quyền thay đổi dữ liệu học phí.' } };
+  }
+
   if (isFinancialMutation && !canManageFinance(role)) {
     return { error: { code: 'FORBIDDEN', message: 'Bạn không có quyền thay đổi dữ liệu tài chính. Vui lòng liên hệ Kế toán.' } };
   }
 
-  const { data: fee } = await supabase.from('fee_records').select('status').eq('id', feeId).single();
-  if (fee?.status === 'paid' && role !== 'Admin') {
+  const { data: fee, error: feeError } = await supabase
+    .from('fee_records')
+    .select('status, class_id')
+    .eq('id', feeId)
+    .eq('del_yn', false)
+    .maybeSingle();
+
+  if (feeError || !fee) {
+    return { error: { code: 'NOT_FOUND', message: 'Không tìm thấy bản ghi học phí.' } };
+  }
+
+  if (fee.status === 'paid' && role !== 'Admin') {
     return { error: { code: 'FORBIDDEN', message: 'Bản ghi học phí đã hoàn tất thanh toán (Paid). Không thể thay đổi.' } };
+  }
+
+  if (role === 'Teacher') {
+    return ensureClassOwnership(fee.class_id);
   }
 
   return { error: null };

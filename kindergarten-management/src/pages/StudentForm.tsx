@@ -31,14 +31,11 @@ interface StudentFormData {
   full_name: string;
   date_of_birth: string;
   gender: 'Male' | 'Female' | '';
-  ethnicity: string;
   address: string;
-  class_id: string;
-  enrolled_date: string;
-  height: string;
-  weight: string;
-  blood_type: string;
-  allergies: string;
+  parent_name: string;
+  parent_phone: string;
+  parent_email: string;
+  parent_relation: string;
 }
 
 interface FormErrors {
@@ -55,14 +52,11 @@ function defaultForm(): StudentFormData {
     full_name: '',
     date_of_birth: '',
     gender: '',
-    ethnicity: '',
     address: '',
-    class_id: '',
-    enrolled_date: '',
-    height: '',
-    weight: '',
-    blood_type: '',
-    allergies: '',
+    parent_name: '',
+    parent_phone: '',
+    parent_email: '',
+    parent_relation: '',
   };
 }
 
@@ -145,14 +139,13 @@ export default function StudentForm() {
         full_name: result.item.full_name,
         date_of_birth: result.item.date_of_birth || '',
         gender: result.item.gender || '',
-        ethnicity: result.item.ethnicity || '',
         address: result.item.address || '',
         class_id: String(result.item.class_id),
         enrolled_date: result.item.enrolled_date || '',
-        height: typeof health.height === 'number' || typeof health.height === 'string' ? String(health.height) : '',
-        weight: typeof health.weight === 'number' || typeof health.weight === 'string' ? String(health.weight) : '',
-        blood_type: typeof health.blood_type === 'string' ? health.blood_type : '',
-        allergies: typeof health.allergies === 'string' ? health.allergies : '',
+        parent_name: result.item.parent_info?.full_name || '',
+        parent_phone: result.item.parent_info?.phone || '',
+        parent_email: result.item.parent_info?.email || '',
+        parent_relation: result.item.parent_info?.relationship || '',
       });
     };
     void loadStudent();
@@ -177,16 +170,14 @@ export default function StudentForm() {
       full_name: data.full_name.trim(),
       date_of_birth: data.date_of_birth || null,
       gender: data.gender || null,
-      ethnicity: data.ethnicity || null,
-      nationality: 'Việt Nam',
       address: data.address || null,
       enrolled_date: data.enrolled_date || null,
       avatar: null,
-      health_info: {
-        height: data.height ? Number(data.height) : null,
-        weight: data.weight ? Number(data.weight) : null,
-        blood_type: data.blood_type || null,
-        allergies: data.allergies || null,
+      parent_info: {
+        full_name: data.parent_name.trim(),
+        phone: data.parent_phone.trim(),
+        email: data.parent_email.trim() || null,
+        relationship: data.parent_relation || null,
       },
     };
   }
@@ -218,7 +209,7 @@ export default function StudentForm() {
           Quay lại
         </Button>
         <h1 className="text-lg font-bold text-[#1E293B] absolute left-1/2 -translate-x-1/2">
-          {isEditMode ? (isT ? 'Cập nhật sức khỏe học sinh' : 'Chỉnh sửa học sinh') : 'Thêm học sinh mới'}
+          {isEditMode ? 'Chỉnh sửa học sinh' : 'Thêm học sinh mới'}
         </h1>
         <div className="w-24" />
       </div>
@@ -271,17 +262,6 @@ export default function StudentForm() {
               />
             )}
 
-            {isT ? (
-              <ReadOnlyField label="Dân tộc" value={formData.ethnicity} />
-            ) : (
-              <Input 
-                label="Dân tộc" 
-                name="ethnicity" 
-                value={formData.ethnicity} 
-                onChange={(e) => handleChange('ethnicity', e.target.value)} 
-                placeholder="Ví dụ: Kinh" 
-              />
-            )}
 
             <div className="sm:col-span-2">
               {isT ? (
@@ -329,14 +309,13 @@ export default function StudentForm() {
           </div>
         </Card>
 
-        <Card header={<div className="font-semibold text-[#1E293B]">Thông tin sức khỏe</div>}>
+
+        <Card header={<div className="font-semibold text-[#1E293B]">Thông tin phụ huynh</div>}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input label="Chiều cao (cm)" type="number" min="50" max="200" value={formData.height} onChange={(e) => handleChange('height', e.target.value)} />
-            <Input label="Cân nặng (kg)" type="number" min="5" max="100" value={formData.weight} onChange={(e) => handleChange('weight', e.target.value)} />
-            <Select label="Nhóm máu" value={formData.blood_type} onChange={(v) => handleChange('blood_type', v)} options={bloodTypeOptions} />
-            <div className="sm:col-span-2">
-              <Input label="Dị ứng" value={formData.allergies} onChange={(e) => handleChange('allergies', e.target.value)} placeholder="Liệt kê dị ứng (nếu có)" />
-            </div>
+            <Input label="Họ tên phụ huynh" required value={formData.parent_name} onChange={(e) => handleChange('parent_name', e.target.value)} placeholder="Nhập tên cha/mẹ/người giám hộ" />
+            <Input label="Số điện thoại" required value={formData.parent_phone} onChange={(e) => handleChange('parent_phone', e.target.value)} placeholder="Nhập số điện thoại liên lạc" />
+            <Input label="Email" type="email" value={formData.parent_email} onChange={(e) => handleChange('parent_email', e.target.value)} placeholder="Nhập email (nếu có)" />
+            <Input label="Mối quan hệ" value={formData.parent_relation} onChange={(e) => handleChange('parent_relation', e.target.value)} placeholder="Ví dụ: Mẹ, Cha, Ông bà" />
           </div>
         </Card>
 
@@ -345,7 +324,7 @@ export default function StudentForm() {
             Hủy bỏ
           </Button>
           <Button type="submit" loading={isSaving || loading}>
-            {isEditMode ? (isT ? 'Lưu thông tin sức khỏe' : 'Lưu thay đổi') : 'Tạo học sinh'}
+            {isEditMode ? 'Lưu thay đổi' : 'Tạo học sinh'}
           </Button>
         </div>
       </form>

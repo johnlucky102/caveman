@@ -67,7 +67,7 @@ describe('Security & Permission Controls (Post-Hardening)', () => {
       }
 
       if (table === 'fee_records') {
-          return createMockBuilder({ status: 'pending' });
+          return createMockBuilder({ status: 'unpaid' });
       }
       
       return createMockBuilder([]);

@@ -10,6 +10,7 @@ import type {
 import { toAppError } from './supabaseErrors';
 import { invalidateSwCache } from '@/utils/swCacheInvalidate';
 import { ensureFinancialAccess, ensureFeeModificationAccess } from './serviceGuards';
+import { calendarYearFromSchoolMonth } from '@/utils/schoolYearCalendar';
 
 // Removed local ensureFinancialAccess in favor of centralized serviceGuards.ts
 
@@ -242,24 +243,21 @@ export async function updateFeeRecordStatus(
   const accessError = await ensureFeeModificationAccess(id, true);
   if (accessError.error) return { error: accessError.error };
 
-  const existingResult = await withSupabaseTimeout(
-    supabase.from('fee_records').select('amount_vnd').eq('id', id).eq('del_yn', false).single(),
-    8000,
-    { data: null, error: { message: 'Timeout loading fee record', details: '', hint: '', code: 'TIMEOUT' } } as any
-  );
+  // 1. Auto-sync before payment to ensure deductions are applied
+  const syncResult = await syncFeeWithAttendance(id);
+  const currentAmount = syncResult.item ? syncResult.item.amount_vnd : paidAmount;
 
-  if (existingResult.error) return { error: toAppError(existingResult.error, 'Không thể tải bản ghi học phí.') };
-
-  const amount = Number(existingResult.data?.amount_vnd || 0);
-  const validationError = validatePaidAmount(paidAmount, amount);
+  const amount = Number(currentAmount);
+  const finalPaidAmount = paidAmount > amount ? amount : paidAmount;
+  const validationError = validatePaidAmount(finalPaidAmount, amount);
   if (validationError) return { error: validationError };
 
-  const status = paidAmount <= 0 ? 'unpaid' : paidAmount >= amount ? 'paid' : 'partial';
+  const status = finalPaidAmount <= 0 ? 'unpaid' : finalPaidAmount >= amount ? 'paid' : 'partial';
   const updateResult = await withSupabaseTimeout(
     supabase
       .from('fee_records')
       .update({
-        paid_amount_vnd: paidAmount,
+        paid_amount_vnd: finalPaidAmount,
         paid_date: paidDate,
         payment_method: paymentMethod,
         status,
@@ -312,13 +310,45 @@ export async function deleteFeeRecord(id: string): Promise<{ error: AppError | n
 
 export async function deleteFeeRecords(ids: string[]): Promise<{ error: AppError | null }> {
   if (!ids.length) return { error: null };
+
+  const accessError = await ensureFinancialAccess(true);
+  if (accessError.error) return accessError;
+
+  const uniqueIds = [...new Set(ids)];
+
+  const fetchResult = await withSupabaseTimeout(
+    supabase.from('fee_records').select('id').in('id', uniqueIds).eq('del_yn', false),
+    8000,
+    { data: null, error: { message: 'Timeout tải danh sách học phí', details: '', hint: '', code: 'TIMEOUT' } } as any
+  );
+
+  if (fetchResult.error) {
+    return { error: toAppError(fetchResult.error, 'Không thể tải danh sách học phí để xóa.') };
+  }
+
+  const foundRows = fetchResult.data || [];
+  if (foundRows.length !== uniqueIds.length) {
+    return {
+      error: {
+        code: 'NOT_FOUND',
+        message: 'Một hoặc nhiều bản ghi học phí không tồn tại hoặc đã xóa.',
+      },
+    };
+  }
+
+  for (const id of uniqueIds) {
+    const guard = await ensureFeeModificationAccess(id);
+    if (guard.error) return guard;
+  }
+
   const result = await withSupabaseTimeout(
-    supabase.from('fee_records').update({ del_yn: true }).in('id', ids),
+    supabase.from('fee_records').update({ del_yn: true }).in('id', uniqueIds),
     8000,
     { data: null, error: { message: 'Timeout xóa danh sách học phí', details: '', hint: '', code: 'TIMEOUT' } } as any
   );
 
   if (result.error) return { error: toAppError(result.error, 'Không thể xóa danh sách học phí.') };
+  invalidateSwCache(['fee_records']);
   return { error: null };
 }
 
@@ -340,11 +370,27 @@ export async function createClassFees(
     .eq('del_yn', false);
   
   if (studentsResult.error) return { error: toAppError(studentsResult.error, 'Không tải được học sinh của lớp.') };
-  const students = studentsResult.data || [];
-  if (students.length === 0) return { error: { code: 'NOT_FOUND', message: 'Lớp học hiện chưa có học sinh nào.' } };
+  const allStudents = studentsResult.data || [];
+  if (allStudents.length === 0) return { error: { code: 'NOT_FOUND', message: 'Lớp học hiện chưa có học sinh nào.' } };
 
-  // 2. Create records
-  const payload = students.map(s => ({
+  // 2. Filter out students who already have fee records for this month/year
+  const existingFeesResult = await supabase
+    .from('fee_records')
+    .select('student_id')
+    .eq('class_id', classId)
+    .eq('month', month)
+    .eq('school_year', schoolYear)
+    .eq('del_yn', false);
+
+  const existingStudentIds = new Set((existingFeesResult.data || []).map(f => f.student_id));
+  const newStudents = allStudents.filter(s => !existingStudentIds.has(s.id));
+
+  if (newStudents.length === 0) {
+    return { error: { code: 'CONFLICT', message: 'Tất cả học sinh trong lớp này đã có học phí cho tháng này.' } };
+  }
+
+  // 3. Create records
+  const payload = newStudents.map(s => ({
     student_id: s.id,
     class_id: classId,
     month,
@@ -355,10 +401,22 @@ export async function createClassFees(
     status: 'unpaid'
   }));
 
-  const { error } = await supabase.from('fee_records').insert(payload);
+  const { data: createdRecords, error } = await supabase
+    .from('fee_records')
+    .insert(payload)
+    .select('id');
+
   if (error) {
     if (error.code === '23505') return { error: { code: 'CONFLICT', message: 'Một số học sinh trong lớp đã có học phí cho tháng này.' } };
     return { error: toAppError(error, 'Lỗi khi tạo học phí hàng loạt.') };
+  }
+
+  // 4. Auto-Sync all newly created records with attendance
+  if (createdRecords && createdRecords.length > 0) {
+    // Run sync in background/sequence but wait for completion to ensure correct amounts
+    for (const record of createdRecords) {
+      await syncFeeWithAttendance(record.id);
+    }
   }
 
   invalidateSwCache(['fee_records']);
@@ -382,14 +440,12 @@ export async function syncFeeWithAttendance(feeId: string): Promise<{ item: FeeR
   if (!classConfig) return { item: null, error: { code: 'NOT_FOUND', message: 'Không tìm thấy cấu hình lớp học.' } };
 
   // 2. Load attendance for that month
-  // 2. Load attendance for that month
-  const [startYearStr, endYearStr] = fee.school_year.split('-');
-  const startYear = Number(startYearStr);
-  const endYear = Number(endYearStr);
-  
-  // Months 1-8 are usually in the endYear (Spring semester), 9-12 in startYear (Fall)
-  const actualYear = (fee.month >= 1 && fee.month <= 8) ? endYear : startYear;
-  
+  const actualYear =
+    fee.month != null ? calendarYearFromSchoolMonth(String(fee.school_year), fee.month) : null;
+  if (actualYear == null) {
+    return { item: null, error: { code: 'VALIDATION', message: 'Tháng hoặc năm học không hợp lệ.' } };
+  }
+
   const startDate = `${actualYear}-${String(fee.month).padStart(2, '0')}-01`;
   const endDate = new Date(actualYear, fee.month, 0).toISOString().split('T')[0];
 

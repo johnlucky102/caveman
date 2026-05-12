@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Save } from 'lucide-react';
+import { ArrowLeft, Save, Eye, EyeOff } from 'lucide-react';
 import Card from '@/components/common/Card';
 import Button from '@/components/common/Button';
 import Input from '@/components/common/Input';
@@ -19,7 +19,6 @@ interface FormState {
   address: string;
   qualification: string;
   start_date: string;
-  status: 'Active' | 'Inactive' | 'Resigned';
   password?: string;
 }
 
@@ -53,8 +52,8 @@ export default function TeacherForm() {
     address: '',
     qualification: '',
     start_date: '',
-    status: 'Active',
   });
+  const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -79,7 +78,6 @@ export default function TeacherForm() {
         address: result.item.address || '',
         qualification: result.item.qualification || '',
         start_date: result.item.start_date || '',
-        status: (result.item.status as any) || 'Active',
       });
     };
     void loadTeacher();
@@ -104,7 +102,6 @@ export default function TeacherForm() {
       address: form.address,
       qualification: form.qualification,
       start_date: form.start_date,
-      status: form.status,
       email: form.email,
       password: form.password,
     };
@@ -175,32 +172,6 @@ export default function TeacherForm() {
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <Input
-              label="Email tài khoản"
-              name="email"
-              type="email"
-              value={form.email}
-              disabled={isEditMode}
-              onChange={(e) => setField('email', e.target.value)}
-              error={errors.email}
-              hint="Sử dụng để đăng nhập hệ thống"
-              required={!isEditMode}
-              fullWidth
-            />
-            {!isEditMode && (
-              <Input
-                label="Mật khẩu"
-                name="password"
-                type="password"
-                value={form.password || ''}
-                onChange={(e) => setField('password', e.target.value)}
-                placeholder="Ít nhất 6 ký tự"
-                required
-                fullWidth
-              />
-            )}
-          </div>
 
           <Input
             label="Địa chỉ thường trú"
@@ -227,17 +198,42 @@ export default function TeacherForm() {
               fullWidth
               clearable={false}
             />
-            <Select
-              label="Trạng thái"
-              value={form.status}
-              onChange={(v) => setField('status', v)}
-              options={[
-                { label: 'Đang làm việc', value: 'Active' },
-                { label: 'Tạm nghỉ', value: 'Inactive' },
-                { label: 'Đã nghỉ việc', value: 'Resigned' },
-              ]}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <Input
+              label="Email tài khoản"
+              name="email"
+              type="email"
+              value={form.email}
+              disabled={isEditMode}
+              onChange={(e) => setField('email', e.target.value)}
+              error={errors.email}
+              hint="Sử dụng để đăng nhập hệ thống"
+              required={!isEditMode}
               fullWidth
             />
+            {!isEditMode && (
+              <Input
+                label="Mật khẩu"
+                name="password"
+                type={showPassword ? 'text' : 'password'}
+                value={form.password || ''}
+                onChange={(e) => setField('password', e.target.value)}
+                placeholder="Ít nhất 6 ký tự"
+                required
+                fullWidth
+                rightAddon={
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="p-1 hover:bg-muted rounded-md transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                }
+              />
+            )}
           </div>
 
           <div className="flex items-center justify-end gap-3 pt-2">

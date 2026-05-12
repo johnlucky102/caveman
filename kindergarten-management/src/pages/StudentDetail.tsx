@@ -15,7 +15,7 @@ import { canManageStudentOrClass, canAddOrDeleteStudent, isTeacher } from '@/lib
 import type { StudentRecord, FeeRecordP2, AttendanceRecord } from '@/types/domain';
 import type { TableColumn } from '@/types';
 
-type Tab = 'info' | 'health' | 'fees' | 'attendance';
+type Tab = 'info' | 'fees' | 'attendance';
 
 function formatDate(value?: string | null): string {
   if (!value) return '—';
@@ -115,11 +115,6 @@ export default function StudentDetail() {
     }
   }, [activeTab, id, toast]);
 
-  const health = useMemo(() => (student?.health_info || {}) as Record<string, unknown>, [student?.health_info]);
-  const allergies = typeof health.allergies === 'string' ? health.allergies : '';
-  const height = typeof health.height === 'number' || typeof health.height === 'string' ? String(health.height) : '—';
-  const weight = typeof health.weight === 'number' || typeof health.weight === 'string' ? String(health.weight) : '—';
-  const bloodType = typeof health.blood_type === 'string' ? health.blood_type : '—';
 
   if (loading) {
     return (
@@ -141,7 +136,7 @@ export default function StudentDetail() {
         <div className="flex gap-2">
           {canManage && (
             <Button variant="outline" size="sm" leftIcon={<Edit className="w-4 h-4" />} onClick={() => navigate(`/students/${student.id}/edit`)}>
-              {isT ? 'Cập nhật sức khỏe' : 'Chỉnh sửa'}
+              Chỉnh sửa
             </Button>
           )}
           {canAddDelete && (
@@ -175,7 +170,6 @@ export default function StudentDetail() {
         <div className="flex gap-1 bg-card border border-border rounded-xl p-1">
           {[
             { key: 'info', label: 'Thông tin', icon: <Info className="w-4 h-4" /> },
-            { key: 'health', label: 'Sức khỏe', icon: <Heart className="w-4 h-4" /> },
             ...(!isT ? [{ key: 'fees', label: 'Học phí', icon: <Wallet className="w-4 h-4" /> }] : []),
             { key: 'attendance', label: 'Điểm danh', icon: <CalendarCheck className="w-4 h-4" /> },
           ].map((tab) => (
@@ -216,29 +210,21 @@ export default function StudentDetail() {
 
                 <Card noPadding header={<CardHeader title="Thông tin phụ huynh" />}>
                   <div className="divide-y divide-border">
-                    {student.parents && student.parents.length > 0 ? (
-                      student.parents.map((parent) => (
-                        <div key={parent.id} className="p-5 first:pt-0 last:pb-0">
-                          <div className="flex items-center justify-between mb-2">
-                            <p className="text-sm font-bold text-foreground">{parent.full_name}</p>
-                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase ${
-                              parent.is_primary ? 'bg-blue-500/10 text-blue-500' : 'bg-muted text-muted-foreground'
-                            }`}>
-                              {parent.relationship === 'Father' ? 'Bố' : parent.relationship === 'Mother' ? 'Mẹ' : 'Người giám hộ'}
-                              {parent.is_primary ? ' (Chính)' : ''}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <p>SĐT: {parent.phone}</p>
-                          </div>
-                          <button 
-                            onClick={() => navigate(`/parents/${parent.id}/edit`)}
-                            className="mt-2 text-xs text-primary hover:underline font-medium"
-                          >
-                            Xem chi tiết phụ huynh
-                          </button>
+                    {student.parent_info && student.parent_info.full_name ? (
+                      <div className="p-5">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-sm font-bold text-foreground">{student.parent_info.full_name}</p>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase bg-blue-500/10 text-blue-500">
+                            {student.parent_info.relationship || 'Người giám hộ'} (Chính)
+                          </span>
                         </div>
-                      ))
+                        <div className="space-y-1">
+                          <p className="text-sm text-muted-foreground">SĐT: {student.parent_info.phone}</p>
+                          {student.parent_info.email && (
+                            <p className="text-sm text-muted-foreground">Email: {student.parent_info.email}</p>
+                          )}
+                        </div>
+                      </div>
                     ) : (
                       <div className="p-5 text-center text-sm text-muted-foreground">Chưa có thông tin phụ huynh</div>
                     )}
@@ -248,40 +234,6 @@ export default function StudentDetail() {
             </div>
           )}
 
-          {activeTab === 'health' && (
-            <div className="p-5">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
-                <div className="bg-muted/50 rounded-xl p-4 text-center">
-                  <p className="text-xs text-muted-foreground mb-1">Chiều cao</p>
-                  <p className="text-lg font-bold text-foreground">{height} {height === '—' ? '' : 'cm'}</p>
-                </div>
-                <div className="bg-muted/50 rounded-xl p-4 text-center">
-                  <p className="text-xs text-muted-foreground mb-1">Cân nặng</p>
-                  <p className="text-lg font-bold text-foreground">{weight} {weight === '—' ? '' : 'kg'}</p>
-                </div>
-                <div className="bg-muted/50 rounded-xl p-4 text-center">
-                  <p className="text-xs text-muted-foreground mb-1">Nhóm máu</p>
-                  <p className="text-lg font-bold text-foreground">{bloodType}</p>
-                </div>
-                <div className="bg-muted/50 rounded-xl p-4 text-center">
-                  <p className="text-xs text-muted-foreground mb-1">Dị ứng</p>
-                  <p className="text-sm font-bold text-foreground">{allergies || 'Không'}</p>
-                </div>
-              </div>
-
-              {allergies && (
-                <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 mb-5">
-                  <div className="flex items-start gap-2">
-                    <AlertTriangle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
-                    <div>
-                      <p className="text-sm font-semibold text-red-500">Cảnh báo dị ứng</p>
-                      <p className="text-sm text-red-500/80 mt-0.5">{allergies}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
 
           {activeTab === 'fees' && (
             <div className="p-5">

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { calendarYearFromSchoolMonth, getCurrentSchoolYear } from '@/utils/schoolYearCalendar';
 import { AlertCircle, Plus, Search, TrendingDown, TrendingUp, Wallet, Trash2, Pencil, Bell, Printer } from 'lucide-react';
 import Card, { CardHeader, StatCard } from '@/components/common/Card';
 import Button from '@/components/common/Button';
@@ -45,7 +46,7 @@ export default function Fees() {
   const [showBulkCreateModal, setShowBulkCreateModal] = useState(false);
   const [bulkClassId, setBulkClassId] = useState('');
   const [bulkMonth, setBulkMonth] = useState(new Date().getMonth() + 1);
-  const [bulkSchoolYear, setBulkSchoolYear] = useState('2024-2025');
+  const [bulkSchoolYear, setBulkSchoolYear] = useState(getCurrentSchoolYear());
   const [bulkBaseAmount, setBulkBaseAmount] = useState(3000000);
   const [bulkTitle, setBulkTitle] = useState('Học phí tháng');
   const [classOptions, setClassOptions] = useState<SelectOption[]>([]);
@@ -391,17 +392,20 @@ export default function Fees() {
       </div>
 
       <Card noPadding>
-        <div className="p-4 flex flex-col sm:flex-row gap-3">
-          <Input
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            placeholder="Tìm theo học sinh..."
-            leftAddon={<Search className="w-4 h-4" />}
-          />
-          <div className="w-full sm:w-56">
+        <div className="p-4 grid grid-cols-1 md:grid-cols-12 gap-3">
+          <div className="md:col-span-4 lg:col-span-3">
+            <Input
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+              placeholder="Tìm theo học sinh..."
+              leftAddon={<Search className="w-4 h-4" />}
+              fullWidth
+            />
+          </div>
+          <div className="md:col-span-2 lg:col-span-2">
             <Select
               value={status}
               onChange={(value) => {
@@ -409,9 +413,10 @@ export default function Fees() {
                 setPage(1);
               }}
               options={statusOptions}
+              fullWidth
             />
           </div>
-          <div className="w-full sm:w-48">
+          <div className="md:col-span-2 lg:col-span-2">
             <Select
               value={month}
               onChange={(value) => {
@@ -419,9 +424,10 @@ export default function Fees() {
                 setPage(1);
               }}
               options={monthOptions}
+              fullWidth
             />
           </div>
-          <div className="w-full sm:w-48">
+          <div className="md:col-span-2 lg:col-span-2">
             <Select
               value={classId}
               onChange={(value) => {
@@ -429,9 +435,10 @@ export default function Fees() {
                 setPage(1);
               }}
               options={[{ value: '', label: 'Tất cả lớp' }, ...classOptions]}
+              fullWidth
             />
           </div>
-          <div className="w-full sm:w-64">
+          <div className="md:col-span-2 lg:col-span-3">
             <Input
               value={schoolYear}
               onChange={(e) => {
@@ -439,6 +446,7 @@ export default function Fees() {
                 setPage(1);
               }}
               placeholder="Năm học (VD: 2024-2025)"
+              fullWidth
             />
           </div>
         </div>

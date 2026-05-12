@@ -20,11 +20,10 @@ type StudentRow = {
   full_name: string;
   date_of_birth: string | null;
   gender: 'Male' | 'Female' | null;
-  ethnicity: string | null;
-  nationality: string | null;
   address: string | null;
   enrolled_date: string | null;
-  health_info: Record<string, unknown> | null;
+  parent_info: Record<string, unknown> | null;
+  parent_info: Record<string, unknown> | null;
   avatar: string | null;
   created_at: string;
   updated_at: string;
@@ -32,15 +31,6 @@ type StudentRow = {
     id: number;
     name: string;
   } | null;
-  student_parent?: {
-    is_primary: boolean;
-    relation_type: string;
-    parents: {
-      id: string;
-      full_name: string;
-      phone: string;
-    };
-  }[];
 };
 
 function mapStudentRow(row: StudentRow): StudentRecord {
@@ -52,19 +42,10 @@ function mapStudentRow(row: StudentRow): StudentRecord {
     full_name: row.full_name,
     date_of_birth: row.date_of_birth,
     gender: row.gender,
-    ethnicity: row.ethnicity,
-    nationality: row.nationality,
     address: row.address,
     enrolled_date: row.enrolled_date,
-    health_info: row.health_info || {},
+    parent_info: (row.parent_info as any) || { full_name: '', phone: '' },
     avatar: row.avatar,
-    parents: row.student_parent?.map((sp: any) => ({
-      id: sp.parents?.id,
-      full_name: sp.parents?.full_name,
-      phone: sp.parents?.phone,
-      relationship: sp.relation_type,
-      is_primary: sp.is_primary,
-    })),
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -90,7 +71,7 @@ export async function listStudents(query: StudentListQuery): Promise<{ data: Lis
 
   let statement = supabase
     .from('students')
-    .select('id, class_id, student_code, full_name, date_of_birth, gender, ethnicity, nationality, address, enrolled_date, health_info, avatar, created_at, updated_at, classes(id, name), student_parent(is_primary, relation_type, parents(id, full_name, phone))', { count: 'exact' })
+    .select('id, class_id, student_code, full_name, date_of_birth, gender, ethnicity, nationality, address, enrolled_date, health_info, parent_info, avatar, created_at, updated_at, classes(id, name)', { count: 'exact' })
     .eq('del_yn', false);
 
   if (query.search?.trim()) {
@@ -155,7 +136,7 @@ export async function getStudentById(id: string): Promise<{ item: StudentRecord 
   const result = await withSupabaseTimeout(
     supabase
       .from('students')
-      .select('id, class_id, student_code, full_name, date_of_birth, gender, ethnicity, nationality, address, enrolled_date, health_info, avatar, created_at, updated_at, classes(id, name), student_parent(is_primary, relation_type, parents(id, full_name, phone))')
+      .select('id, class_id, student_code, full_name, date_of_birth, gender, nationality, address, enrolled_date, parent_info, avatar, created_at, updated_at, classes(id, name)')
       .eq('id', id)
       .eq('del_yn', false)
       .maybeSingle(),
@@ -185,7 +166,7 @@ export async function createStudent(payload: CreateStudentInput): Promise<{ item
       supabase
         .from('students')
         .insert(insertPayload)
-        .select('id, class_id, student_code, full_name, date_of_birth, gender, ethnicity, nationality, address, enrolled_date, health_info, avatar, created_at, updated_at, classes(id, name)')
+        .select('id, class_id, student_code, full_name, date_of_birth, gender, nationality, address, enrolled_date, parent_info, avatar, created_at, updated_at, classes(id, name)')
         .single(),
       8000,
       { data: null, error: { message: 'Timeout creating student', details: '', hint: '', code: 'TIMEOUT' } } as any
@@ -216,7 +197,7 @@ export async function updateStudent(id: string, payload: UpdateStudentInput, use
         updated_at: new Date().toISOString()
       })
       .eq('id', id)
-      .select('id, class_id, student_code, full_name, date_of_birth, gender, ethnicity, nationality, address, enrolled_date, health_info, avatar, created_at, updated_at, classes(id, name)')
+      .select('id, class_id, student_code, full_name, date_of_birth, gender, ethnicity, nationality, address, enrolled_date, health_info, parent_info, avatar, created_at, updated_at, classes(id, name)')
       .single(),
     8000,
     { data: null, error: { message: 'Timeout updating student', details: '', hint: '', code: 'TIMEOUT' } } as any

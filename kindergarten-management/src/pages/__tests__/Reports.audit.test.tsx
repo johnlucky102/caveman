@@ -99,11 +99,21 @@ vi.mock('@/lib/supabase', () => ({
   },
 }));
 
-// Mocking dashboardService
 vi.mock('@/services/dashboardService', () => ({
   getFinancialSummary: vi.fn().mockResolvedValue({ data: null, error: null }),
   getDashboardStats: vi.fn().mockResolvedValue({ stats: null, error: null }),
   getAssignedClassIds: vi.fn().mockResolvedValue([]),
+  getAttendanceTrend: vi.fn().mockResolvedValue({ data: [], error: null }),
+}));
+
+vi.mock('@/services/analyticsService', () => ({
+  getRevenueTrend: vi.fn().mockResolvedValue({ data: [], error: null }),
+  getStudentDistribution: vi.fn().mockResolvedValue({ gender: [], grade: [], error: null }),
+  getDebtAging: vi.fn().mockResolvedValue({ data: [], error: null }),
+}));
+
+vi.mock('@/services/attendanceService', () => ({
+  listAttendanceHistory: vi.fn().mockResolvedValue({ items: [], error: null }),
 }));
 
 const renderPage = () => {

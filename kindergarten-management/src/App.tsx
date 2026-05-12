@@ -18,8 +18,6 @@ const ClassDetail    = lazy(() => import('@/pages/ClassDetail'));
 const ClassForm      = lazy(() => import('@/pages/ClassForm'));
 const Teachers       = lazy(() => import('@/pages/Teachers'));
 const TeacherForm    = lazy(() => import('@/pages/TeacherForm'));
-const Parents        = lazy(() => import('@/pages/Parents'));
-const ParentForm     = lazy(() => import('@/pages/ParentForm'));
 const Attendance     = lazy(() => import('@/pages/Attendance'));
 const Fees           = lazy(() => import('@/pages/Fees'));
 const FeeForm        = lazy(() => import('@/pages/FeeForm'));
@@ -84,9 +82,6 @@ export default function App() {
             <Route path="/teachers/new"      element={allow(['Admin'], <TeacherForm />)} />
             <Route path="/teachers/:id/edit" element={allow(['Admin'], <TeacherForm />)} />
 
-            <Route path="/parents"           element={allow(['Admin'], <Parents />)} />
-            <Route path="/parents/new"       element={allow(['Admin'], <ParentForm />)} />
-            <Route path="/parents/:id/edit"  element={allow(['Admin'], <ParentForm />)} />
 
             <Route path="/attendance"        element={allow(['Admin', 'Teacher'], <Attendance />)} />
 

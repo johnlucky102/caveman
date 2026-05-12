@@ -62,8 +62,8 @@ export function DatePicker({
               </span>
             </div>
             {clearable && date && (
-              <X 
-                className="h-3.5 w-3.5 text-muted-foreground/50 hover:text-destructive transition-colors cursor-pointer" 
+              <X
+                className="h-3.5 w-3.5 text-muted-foreground/50 hover:text-destructive transition-colors cursor-pointer"
                 onClick={(e) => {
                   e.stopPropagation();
                   setDate("");

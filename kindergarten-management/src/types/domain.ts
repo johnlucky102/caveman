@@ -101,13 +101,16 @@ export interface StudentRecord {
   full_name: string;
   date_of_birth: string | null;
   gender: 'Male' | 'Female' | null;
-  ethnicity: string | null;
   nationality: string | null;
   address: string | null;
   enrolled_date: string | null;
-  health_info: Record<string, unknown>;
+  parent_info: {
+    full_name: string;
+    phone: string;
+    email?: string;
+    relationship?: string;
+  };
   avatar: string | null;
-  parents?: { id: string; full_name: string; phone: string; relationship: string; is_primary: boolean }[];
   created_at: string;
   updated_at: string;
 }
@@ -128,11 +131,15 @@ export interface CreateStudentInput {
   full_name: string;
   date_of_birth: string | null;
   gender: 'Male' | 'Female' | null;
-  ethnicity: string | null;
   nationality: string | null;
   address: string | null;
   enrolled_date: string | null;
-  health_info: Record<string, unknown>;
+  parent_info: {
+    full_name: string;
+    phone: string;
+    email?: string;
+    relationship?: string;
+  };
   avatar: string | null;
 }
 
@@ -260,31 +267,3 @@ export interface SchoolSettings {
   updated_at?: string;
 }
 
-export interface ParentRecord {
-  id: string;
-  user_id: string | null;
-  full_name: string;
-  phone: string;
-  email: string | null;
-  relationship: 'Father' | 'Mother' | 'Guardian';
-  occupation: string | null;
-  address: string | null;
-  gender?: 'Male' | 'Female' | 'Other' | null;
-  date_of_birth?: string | null;
-  students?: { id: string; full_name: string; class_name: string }[];
-  created_at: string;
-  updated_at: string;
-}
-
-export interface CreateParentInput {
-  full_name: string;
-  phone: string;
-  email: string | null;
-  relationship: 'Father' | 'Mother' | 'Guardian';
-  occupation?: string | null;
-  address?: string | null;
-  gender?: string | null;
-  date_of_birth?: string | null;
-}
-
-export type UpdateParentInput = Partial<CreateParentInput>;

@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { withSupabaseTimeout } from '@/lib/timeout';
 import { toAppError } from './supabaseErrors';
 import type { AppError } from '@/types/domain';
+import { calendarMonthKeyFromSchoolYear } from '@/utils/schoolYearCalendar';
 
 export interface RevenueTrendPoint {
   month: string;
@@ -34,18 +35,13 @@ export async function getRevenueTrend(): Promise<{ data: RevenueTrendPoint[]; er
 
     const records = data || [];
     
-    // Group by month
-    // Note: In real production, we'd filter by month/year in SQL. 
-    // Here we aggregate from all records for the last 6 months for simplicity in this step.
     const trendMap = new Map<string, { revenue: number; debt: number }>();
     
     months.forEach(m => trendMap.set(m, { revenue: 0, debt: 0 }));
 
     records.forEach((r: any) => {
-      // Assuming month is 1-12 and school_year is "2023-2024"
-      // We'll just match the month part for this simplified overview
-      const mKey = `${new Date().getFullYear()}-${String(r.month).padStart(2, '0')}`;
-      if (trendMap.has(mKey)) {
+      const mKey = calendarMonthKeyFromSchoolYear(r.school_year, r.month);
+      if (mKey && trendMap.has(mKey)) {
         const cur = trendMap.get(mKey)!;
         cur.revenue += (r.paid_amount_vnd || 0);
         cur.debt += Math.max(0, (r.amount_vnd || 0) - (r.paid_amount_vnd || 0));
@@ -146,7 +142,11 @@ export async function getDebtAging(): Promise<{ data: AgingBucket[]; error: AppE
       const debt = (r.amount_vnd || 0) - (r.paid_amount_vnd || 0);
       if (debt <= 0) return;
 
+      if (r.due_date == null || r.due_date === '') return;
+
       const dueDate = new Date(r.due_date);
+      if (Number.isNaN(dueDate.getTime())) return;
+
       const diffDays = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 3600 * 24));
 
       if (diffDays <= 30) {

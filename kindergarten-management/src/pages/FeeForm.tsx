@@ -10,6 +10,7 @@ import { DatePicker } from '@/components/common/DatePicker';
 import CurrencyInput from '@/components/common/CurrencyInput';
 import { listStudents } from '@/services/studentsService';
 import { createFeeRecord, getFeeById, updateFeeRecord, deleteFeeRecord, syncFeeWithAttendance } from '@/services/feesService';
+import { calendarYearFromSchoolMonth, getCurrentSchoolYear } from '@/utils/schoolYearCalendar';
 import { ConfirmModal } from '@/components/common/Modal';
 
 import { useAuthStore } from '@/stores/authStore';
@@ -86,8 +87,8 @@ export default function FeeForm() {
       studentId: '',
       title: '',
       amount: '',
-      month: String(currentMonth),
-      schoolYear: `${currentYear}-${currentYear + 1}`,
+      month: String(new Date().getMonth() + 1),
+      schoolYear: getCurrentSchoolYear(),
       paidAmount: '0',
       paymentMethod: '',
       dueDate: lastDayOfMonth,
@@ -116,6 +117,15 @@ export default function FeeForm() {
           } else if (feeResult?.item) {
             const item = feeResult.item;
             setFeeStatus(item.status);
+            
+            // If due_date is missing (old records), default to last day of that month
+            let dueDate = item.due_date || '';
+            if (!dueDate && item.month && item.school_year) {
+              const [startYear] = item.school_year.split('-').map(Number);
+              const year = item.month >= 8 ? startYear : startYear + 1;
+              dueDate = new Date(year, item.month, 0).toISOString().split('T')[0];
+            }
+
             setFormData({
               studentId: item.student_id,
               title: item.title || '',
@@ -124,7 +134,7 @@ export default function FeeForm() {
               schoolYear: item.school_year,
               paidAmount: String(item.paid_amount_vnd),
               paymentMethod: item.payment_method || '',
-              dueDate: item.due_date || '',
+              dueDate: dueDate,
               paidDate: item.paid_date || '',
               baseAmount: String(item.base_amount_vnd || item.amount_vnd),
               mealDeduction: String(item.meal_deduction_vnd || 0),
@@ -253,7 +263,8 @@ export default function FeeForm() {
 
   const isTeacher = role === 'Teacher';
   const isPaid = feeStatus === 'paid';
-  const isFinancialReadOnly = isTeacher || (isEdit && isPaid);
+  const isLocked = isEdit && isPaid;
+  const isFinancialReadOnly = isTeacher || isLocked;
 
   return (
     <div className="space-y-5">
@@ -320,6 +331,7 @@ export default function FeeForm() {
                 className="text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/20"
                 leftIcon={<Trash2 className="w-4 h-4" />}
                 onClick={() => setShowDeleteConfirm(true)}
+                disabled={isLocked}
               >
                 Xóa
               </Button>
@@ -365,6 +377,8 @@ export default function FeeForm() {
                 value={formData.title}
                 onChange={(event) => updateField('title', event.target.value)}
                 placeholder="VD: Học phí tháng 10"
+                readOnly={isLocked}
+                disabled={isLocked}
               />
 
               <div className="grid grid-cols-2 gap-4">
@@ -408,12 +422,14 @@ export default function FeeForm() {
                     value={formData.deductionNote}
                     onChange={(event) => updateField('deductionNote', event.target.value)}
                     placeholder="VD: Trừ 5 ngày cơm..."
+                    readOnly={isLocked}
+                    disabled={isLocked}
                   />
                 </div>
               )}
 
               <div className="grid grid-cols-2 gap-4">
-                <Select label="Tháng" options={monthOptions} value={formData.month} onChange={(value) => updateField('month', value)} required error={errors.month} />
+                <Select label="Tháng" options={monthOptions} value={formData.month} onChange={(value) => updateField('month', value)} required error={errors.month} disabled={isLocked} />
                 <Select
                   label="Năm học"
                   options={schoolYearOptions}
@@ -421,6 +437,7 @@ export default function FeeForm() {
                   onChange={(value) => updateField('schoolYear', value)}
                   required
                   error={errors.schoolYear}
+                  disabled={isLocked}
                 />
               </div>
 
@@ -448,11 +465,13 @@ export default function FeeForm() {
                   date={formData.dueDate}
                   setDate={(d) => updateField('dueDate', d)}
                   required
+                  disabled={isLocked}
                 />
                 <DatePicker
                   label="Ngày thu (nếu đã nộp)"
                   date={formData.paidDate}
                   setDate={(d) => updateField('paidDate', d)}
+                  disabled={isLocked}
                 />
               </div>
             </div>
@@ -461,8 +480,8 @@ export default function FeeForm() {
               <Button variant="outline" onClick={() => navigate('/fees')}>
                 Hủy
               </Button>
-              <Button leftIcon={<Save className="w-4 h-4" />} onClick={submit} loading={saving || loading} disabled={isPaid && !isTeacher && role !== 'Admin'}>
-                {(isEdit && isPaid) ? 'Đã thanh toán (Khóa)' : (isEdit ? 'Lưu thay đổi' : 'Lưu bản ghi')}
+              <Button leftIcon={<Save className="w-4 h-4" />} onClick={submit} loading={saving || loading} disabled={isLocked}>
+                {isLocked ? 'Đã thanh toán (Khóa)' : (isEdit ? 'Lưu thay đổi' : 'Lưu bản ghi')}
               </Button>
             </div>
           </Card>

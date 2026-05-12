@@ -355,11 +355,18 @@ export default function Reports() {
   const loadFinancialDetails = useCallback(async () => {
     setLoading(true);
     try {
-      // 1. Load Summary
       const summaryRes = await getFinancialSummary(role || '');
-      if (summaryRes.data) setFinancialSummary(summaryRes.data);
+      if (summaryRes.error || !summaryRes.data) {
+        setFinancialSummary(null);
+        setDeductionLogs([]);
+        if (summaryRes.error?.code === 'FORBIDDEN') {
+          toast.error('Truy cập bị chặn', summaryRes.error.message);
+        }
+        return;
+      }
 
-      // 2. Load Deduction Logs
+      setFinancialSummary(summaryRes.data);
+
       const { data, error } = await withSupabaseTimeout(
         supabase
           .from('fee_records')
@@ -375,8 +382,9 @@ export default function Reports() {
       setDeductionLogs(data || []);
     } catch (err: any) {
       toast.error('Lỗi', err.message || 'Không tải được báo cáo tài chính');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [toast, role]);
 
   useEffect(() => {

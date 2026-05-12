@@ -24,6 +24,9 @@ vi.mock('@/lib/timeout', () => ({
 
 vi.mock('@/lib/supabase', () => ({
   supabase: {
+    auth: {
+      getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'test-admin' } } }),
+    },
     from: vi.fn().mockReturnValue(mockQuery),
   },
 }));
@@ -33,9 +36,15 @@ vi.mock('@/utils/swCacheInvalidate', () => ({
 }));
 
 describe('Fees Service - Phase 5 Business Logic (Integer Currency)', () => {
+  /** Matches ensureFeeModificationAccess + getCurrentUser order before fee queries. */
+  function primeAdminFeeGuard() {
+    mockQuery.single.mockResolvedValueOnce({ data: { role: 'Admin' }, error: null });
+    mockQuery.maybeSingle.mockResolvedValueOnce({ data: { status: 'unpaid', class_id: 1 }, error: null });
+  }
+
   beforeEach(() => {
     vi.clearAllMocks();
-    
+
     // Setup chaining: methods that return a builder must return mockQuery
     mockQuery.select.mockReturnValue(mockQuery);
     mockQuery.eq.mockReturnValue(mockQuery);
@@ -47,10 +56,8 @@ describe('Fees Service - Phase 5 Business Logic (Integer Currency)', () => {
     mockQuery.in.mockReturnValue(mockQuery);
     mockQuery.range.mockReturnValue(mockQuery);
 
-    // Terminal methods return results
-    mockQuery.single.mockResolvedValue({ data: null, error: null });
-    mockQuery.maybeSingle.mockResolvedValue({ data: null, error: null });
-    // Note: select() can also be terminal in some contexts, but here it's usually chained
+    mockQuery.single.mockReset();
+    mockQuery.maybeSingle.mockReset();
   });
 
   it('BIZ-01: Calculates correctly with zero deductions', async () => {
@@ -63,6 +70,8 @@ describe('Fees Service - Phase 5 Business Logic (Integer Currency)', () => {
     // 1. feeResult = supabase.from().select().eq().single()
     // 2. attendanceResult = supabase.from().select().eq().gte().lte().eq()
     // 3. updateResult = supabase.from().update().eq().select().single()
+
+    primeAdminFeeGuard();
 
     mockQuery.single
       .mockResolvedValueOnce({ data: feeData, error: null }) // feeResult
@@ -93,6 +102,8 @@ describe('Fees Service - Phase 5 Business Logic (Integer Currency)', () => {
       { status: 'center_cancelled' }, { status: 'absent' }
     ];
     
+    primeAdminFeeGuard();
+
     mockQuery.single
       .mockResolvedValueOnce({ data: feeData, error: null })
       .mockResolvedValueOnce({ data: { ...feeData, amount_vnd: 2900000, meal_deduction_vnd: 100000 }, error: null });
@@ -116,6 +127,8 @@ describe('Fees Service - Phase 5 Business Logic (Integer Currency)', () => {
     };
     const attendanceData = [{ is_hospitalized: true }];
     
+    primeAdminFeeGuard();
+
     mockQuery.single
       .mockResolvedValueOnce({ data: feeData, error: null })
       .mockResolvedValueOnce({ data: { ...feeData, tuition_deduction_vnd: 6820, amount_vnd: 1500501 - 6820 }, error: null });
@@ -133,6 +146,7 @@ describe('Fees Service - Phase 5 Business Logic (Integer Currency)', () => {
   });
 
   it('DB-Integrity: Prevents paid_amount exceeding amount', async () => {
+    primeAdminFeeGuard();
     mockQuery.single.mockResolvedValueOnce({ data: { amount_vnd: 1000000 }, error: null });
 
     const { error } = await updateFeeRecordStatus('f1', 1500000, null, 'cash');
@@ -141,6 +155,7 @@ describe('Fees Service - Phase 5 Business Logic (Integer Currency)', () => {
   });
 
   it('DB-Integrity: Prevents negative paid_amount', async () => {
+    primeAdminFeeGuard();
     mockQuery.single.mockResolvedValueOnce({ data: { amount_vnd: 1000000 }, error: null });
 
     const { error } = await updateFeeRecordStatus('f1', -500, null, 'cash');

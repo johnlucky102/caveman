@@ -51,8 +51,7 @@ export default function Teachers() {
       return (
         teacher.full_name.toLowerCase().includes(term) ||
         (teacher.email || '').toLowerCase().includes(term) ||
-        (teacher.phone || '').includes(term) ||
-        (teacher.teacher_code || '').toLowerCase().includes(term)
+        (teacher.phone || '').includes(term)
       );
     });
   }, [search, teachers]);
@@ -116,11 +115,6 @@ export default function Teachers() {
       ),
     },
     {
-      key: 'teacher_code',
-      label: 'Mã GV',
-      render: (value) => <span className="font-mono text-xs text-muted-foreground">{String(value || '—')}</span>,
-    },
-    {
       key: 'phone',
       label: 'Điện thoại',
       render: (value) => (
@@ -131,21 +125,11 @@ export default function Teachers() {
       ),
     },
     {
-      key: 'status',
-      label: 'Trạng thái',
-      render: (value) => {
-        const s = String(value || 'Active');
-        const variant = s === 'Active' ? 'success' : s === 'Inactive' ? 'warning' : 'neutral';
-        const label = s === 'Active' ? 'Đang làm việc' : s === 'Inactive' ? 'Tạm nghỉ' : 'Đã nghỉ việc';
-        return <Badge variant={variant} size="sm">{label}</Badge>;
-      },
-    },
-    {
       key: 'actions',
       label: 'Thao tác',
       width: '100px',
       render: (_value, row) => (
-        <div className="flex items-center justify-end gap-1">
+        <div className="flex items-center justify-start gap-1">
           <button
             onClick={(e) => {
               e.stopPropagation();
