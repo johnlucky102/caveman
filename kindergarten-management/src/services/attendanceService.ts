@@ -9,6 +9,7 @@ import type {
 } from '@/types/domain';
 import { toAppError } from './supabaseErrors';
 import { invalidateSwCache } from '@/utils/swCacheInvalidate';
+import { ensureClassOwnership } from './serviceGuards';
 
 
 type AttendanceRow = {
@@ -154,6 +155,13 @@ export async function listAttendanceByClassAndDate(query: AttendanceListQuery): 
 
 export async function upsertAttendanceBulk(rows: UpsertAttendanceInput[]): Promise<{ error: AppError | null }> {
   if (rows.length === 0) return { error: null };
+
+  // 1. Verify ownership for all unique classes in the request
+  const uniqueClassIds = Array.from(new Set(rows.map(r => r.class_id)));
+  for (const classId of uniqueClassIds) {
+    const ownership = await ensureClassOwnership(classId);
+    if (ownership.error) return { error: ownership.error };
+  }
 
   const payload = rows.map((row) => {
     // Logic Guard: If student is off, they don't eat or sleep at the center

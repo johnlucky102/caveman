@@ -9,6 +9,7 @@ interface CurrencyInputProps extends Omit<React.InputHTMLAttributes<HTMLInputEle
   hint?: string;
   required?: boolean;
   suffix?: string;
+  fullWidth?: boolean;
 }
 
 export default function CurrencyInput({
@@ -21,6 +22,7 @@ export default function CurrencyInput({
   suffix = 'đ',
   className,
   id,
+  fullWidth = true,
   ...rest
 }: CurrencyInputProps) {
   const [displayValue, setDisplayValue] = useState('');

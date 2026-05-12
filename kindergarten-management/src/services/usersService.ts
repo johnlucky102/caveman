@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { withSupabaseTimeout } from '@/lib/timeout';
 import type { AppError, AppRole, CreateParentInput, ParentRecord, UpdateParentInput, UserProfile } from '@/types/domain';
 import { toAppError } from './supabaseErrors';
+import { ensureRole } from './serviceGuards';
 
 export interface TeacherProfileInput {
   full_name: string;
@@ -281,6 +282,9 @@ export async function getParentById(id: string): Promise<{ item: ParentRecord | 
 }
 
 export async function createParent(payload: CreateParentInput): Promise<{ item: ParentRecord | null; error: AppError | null }> {
+  const accessError = await ensureRole(['Admin', 'Teacher']);
+  if (accessError.error) return { item: null, error: accessError.error };
+
   const result = await withSupabaseTimeout(
     supabase.from('parents').insert(payload).select().single(),
     8000,
@@ -292,6 +296,9 @@ export async function createParent(payload: CreateParentInput): Promise<{ item: 
 }
 
 export async function updateParent(id: string, payload: UpdateParentInput): Promise<{ item: ParentRecord | null; error: AppError | null }> {
+  const accessError = await ensureRole(['Admin', 'Teacher']);
+  if (accessError.error) return { item: null, error: accessError.error };
+
   const result = await withSupabaseTimeout(
     supabase.from('parents').update(payload).eq('id', id).select().single(),
     8000,
@@ -303,6 +310,9 @@ export async function updateParent(id: string, payload: UpdateParentInput): Prom
 }
 
 export async function deleteParent(id: string): Promise<{ error: AppError | null }> {
+  const accessError = await ensureRole(['Admin']);
+  if (accessError.error) return { error: accessError.error };
+
   const result = await withSupabaseTimeout(
     supabase.from('parents').update({ del_yn: true }).eq('id', id),
     8000,
@@ -326,6 +336,9 @@ export async function deleteParentBulk(ids: string[]): Promise<{ error: AppError
 }
 
 export async function linkParentToStudent(parentId: string, studentId: string, relationship: string, isPrimary = false): Promise<{ error: AppError | null }> {
+  const accessError = await ensureRole(['Admin', 'Teacher']);
+  if (accessError.error) return { error: accessError.error };
+
   const result = await withSupabaseTimeout(
     supabase.from('student_parent').upsert({
       parent_id: parentId,

@@ -10,6 +10,7 @@ import type {
 } from '@/types/domain';
 import { toAppError } from './supabaseErrors';
 import { invalidateSwCache } from '@/utils/swCacheInvalidate';
+import { ensureRole, ensureStudentOwnership } from './serviceGuards';
 
 
 type StudentRow = {
@@ -168,6 +169,9 @@ export async function getStudentById(id: string): Promise<{ item: StudentRecord 
 }
 
 export async function createStudent(payload: CreateStudentInput): Promise<{ item: StudentRecord | null; error: AppError | null }> {
+  const accessError = await ensureRole(['Admin']);
+  if (accessError.error) return { item: null, error: accessError.error };
+
   const shouldGenerateCode = !payload.student_code?.trim();
   const maxAttempts = shouldGenerateCode ? 5 : 1;
 
@@ -200,6 +204,9 @@ export async function createStudent(payload: CreateStudentInput): Promise<{ item
 }
 
 export async function updateStudent(id: string, payload: UpdateStudentInput, userId?: string): Promise<{ item: StudentRecord | null; error: AppError | null }> {
+  const ownership = await ensureStudentOwnership(id);
+  if (ownership.error) return { item: null, error: ownership.error };
+
   const { student_code: _studentCode, ...safePayload } = payload;
   const result = await withSupabaseTimeout(
     supabase
@@ -221,6 +228,9 @@ export async function updateStudent(id: string, payload: UpdateStudentInput, use
 }
 
 export async function deleteStudent(id: string): Promise<{ error: AppError | null }> {
+  const accessError = await ensureRole(['Admin']);
+  if (accessError.error) return { error: accessError.error };
+
   // Soft delete related records first
   await supabase.from('attendance').update({ del_yn: true }).eq('student_id', id);
   await supabase.from('fee_records').update({ del_yn: true }).eq('student_id', id);
@@ -238,6 +248,9 @@ export async function deleteStudent(id: string): Promise<{ error: AppError | nul
 }
 
 export async function deleteStudents(ids: string[]): Promise<{ error: AppError | null }> {
+  const accessError = await ensureRole(['Admin']);
+  if (accessError.error) return { error: accessError.error };
+
   if (!ids.length) return { error: null };
   await supabase.from('attendance').update({ del_yn: true }).in('student_id', ids);
   await supabase.from('fee_records').update({ del_yn: true }).in('student_id', ids);

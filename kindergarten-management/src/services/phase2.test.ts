@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   delete: vi.fn(),
   maybeSingle: vi.fn(),
   range: vi.fn(),
+  getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'test-admin' } } }),
 }));
 
 vi.mock('@/lib/timeout', () => ({
@@ -23,6 +24,9 @@ vi.mock('@/lib/timeout', () => ({
 vi.mock('@/lib/supabase', () => ({
   supabase: {
     from: mocks.from,
+    auth: {
+      getUser: mocks.getUser,
+    },
   },
 }));
 
@@ -63,7 +67,16 @@ describe('Phase 2 Service Functions', () => {
       delete: mocks.delete,
     };
 
-    mocks.from.mockReturnValue(builder);
+    mocks.from.mockImplementation((table) => {
+      if (table === 'users') {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({ data: { role: 'Admin' }, error: null }),
+        } as any;
+      }
+      return builder;
+    });
     mocks.select.mockReturnValue(builder);
     mocks.order.mockReturnValue(builder);
     mocks.limit.mockReturnValue(builder);
@@ -78,6 +91,13 @@ describe('Phase 2 Service Functions', () => {
     const { getDashboardStats } = await import('./dashboardService');
     
     mocks.from.mockImplementation((table) => {
+      if (table === 'users') {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({ data: { role: 'Admin' }, error: null }),
+        } as any;
+      }
       const b: any = {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
@@ -161,13 +181,22 @@ describe('Phase 2 Service Functions', () => {
       const { getDashboardStats } = await import('./dashboardService');
       const mockError = { message: 'Database error', code: '500' };
       
-      mocks.from.mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        neq: vi.fn().mockReturnThis(),
-        order: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockReturnThis(),
-        then: (onFullfilled: any) => Promise.resolve({ data: null, error: mockError }).then(onFullfilled),
+      mocks.from.mockImplementation((table) => {
+        if (table === 'users') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({ data: { role: 'Admin' }, error: null }),
+          } as any;
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          neq: vi.fn().mockReturnThis(),
+          order: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
+          then: (onFullfilled: any) => Promise.resolve({ data: null, error: mockError }).then(onFullfilled),
+        };
       });
 
       const { stats, error } = await getDashboardStats();

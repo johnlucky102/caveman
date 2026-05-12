@@ -148,7 +148,6 @@ export default function ClassDetail() {
             <div className="grid grid-cols-2 gap-4 text-sm">
               {[
                 ['Mã lớp', `LOP${classItem.id}`],
-                ['Giáo viên chủ nhiệm', classItem.teacher_name || 'Chưa phân công'],
                 ['Phòng học', classItem.room || '—'],
                 ['Sĩ số', `${classItem.student_count}/${classItem.max_students} học sinh`],
                 ['Ngày tạo', new Date(classItem.created_at).toLocaleDateString('vi-VN')],
@@ -159,6 +158,30 @@ export default function ClassDetail() {
                   <p className="font-medium text-foreground">{value}</p>
                 </div>
               ))}
+            </div>
+
+            <div className="mt-5 pt-5 border-t border-border">
+              <p className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+                <Users className="w-4 h-4 text-primary" />
+                Đội ngũ giáo viên ({classItem.teachers?.length || 0})
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {classItem.teachers && classItem.teachers.length > 0 ? (
+                  classItem.teachers.map((t) => (
+                    <div key={t.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-muted/30 border border-border/50">
+                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary shrink-0">
+                        {t.teacher_name.split(' ').pop()?.charAt(0)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-foreground truncate">{t.teacher_name}</p>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{t.role}</p>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-muted-foreground italic">Chưa có giáo viên được phân công.</p>
+                )}
+              </div>
             </div>
           </Card>
 

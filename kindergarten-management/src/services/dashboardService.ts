@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { withSupabaseTimeout } from '@/lib/timeout';
 import { toAppError } from './supabaseErrors';
 import type { AppError } from '@/types/domain';
+import { getCurrentUser } from './serviceGuards';
 
 export interface DashboardStats {
   totalStudents: number;
@@ -43,13 +44,16 @@ async function getAssignedClassIds(teacherId: string): Promise<number[]> {
 }
 
 export async function getDashboardStats(teacherId?: string): Promise<{ stats: DashboardStats | null; error: AppError | null }> {
+  const { userId, role, error: authError } = await getCurrentUser();
+  if (authError) return { stats: null, error: authError };
+
   const today = new Date().toISOString().split('T')[0];
 
   try {
     // 1. Resolve assigned classes first (Security First)
     let assignedClassIds: number[] = [];
-    if (teacherId) {
-      assignedClassIds = await getAssignedClassIds(teacherId);
+    if (role === 'Teacher') {
+      assignedClassIds = await getAssignedClassIds(userId);
       // If teacher has no classes, return empty stats immediately to avoid unnecessary broad queries
       if (assignedClassIds.length === 0) {
         return {
@@ -71,7 +75,7 @@ export async function getDashboardStats(teacherId?: string): Promise<{ stats: Da
     let attendanceQuery = supabase.from('attendance').select('status, class_id, medicine_instructions').eq('attendance_date', today).eq('del_yn', false);
     let studentDataQuery = supabase.from('students').select('id, class_id, classes(id, name)').eq('del_yn', false);
     
-    if (teacherId) {
+    if (role === 'Teacher') {
       studentsCountQuery = studentsCountQuery.in('class_id', assignedClassIds);
       attendanceQuery = attendanceQuery.in('class_id', assignedClassIds);
       studentDataQuery = studentDataQuery.in('class_id', assignedClassIds);
@@ -136,7 +140,7 @@ export async function getDashboardStats(teacherId?: string): Promise<{ stats: Da
 
     return {
       stats: {
-        totalStudents: teacherId ? students.length : (studentsCountRes.count || 0),
+        totalStudents: role === 'Teacher' ? students.length : (studentsCountRes.count || 0),
         totalDebt: 0, 
         attendanceToday: { present: presentCount, absent: absentCount, total: totalAttendance },
         attendanceByClass,
@@ -165,6 +169,9 @@ const DAY_LABELS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 
 export async function getAttendanceTrend(teacherId?: string): Promise<{ trend: AttendanceTrendPoint[]; error: AppError | null }> {
   try {
+    const { userId, role, error: authError } = await getCurrentUser();
+    if (authError) return { trend: [], error: authError };
+
     const today = new Date();
     const dates: string[] = [];
     for (let i = 6; i >= 0; i--) {
@@ -182,8 +189,8 @@ export async function getAttendanceTrend(teacherId?: string): Promise<{ trend: A
       .lte('attendance_date', dates[dates.length - 1])
       .eq('del_yn', false);
 
-    if (teacherId) {
-      const assignedIds = await getAssignedClassIds(teacherId);
+    if (role === 'Teacher') {
+      const assignedIds = await getAssignedClassIds(userId);
       if (assignedIds.length === 0) return { trend: [], error: null };
       attendanceQuery = attendanceQuery.in('class_id', assignedIds);
     }
@@ -228,13 +235,16 @@ export interface FeeStatusSummary {
 
 export async function getFeeStatusSummary(teacherId?: string): Promise<{ summary: FeeStatusSummary; error: AppError | null }> {
   try {
+    const { userId, role, error: authError } = await getCurrentUser();
+    if (authError) return { summary: { paid: 0, unpaid: 0, partial: 0 }, error: authError };
+
     let query = supabase
       .from('fee_records')
       .select('status, student_id, students!inner(class_id)')
       .eq('del_yn', false);
     
-    if (teacherId) {
-      const assignedIds = await getAssignedClassIds(teacherId);
+    if (role === 'Teacher') {
+      const assignedIds = await getAssignedClassIds(userId);
       query = query.in('students.class_id', assignedIds);
     }
 
@@ -265,9 +275,12 @@ export interface FinancialSummaryData {
 
 export async function getFinancialSummary(userRole?: string): Promise<{ data: FinancialSummaryData | null; error: AppError | null }> {
   try {
+    const { role, error: authError } = await getCurrentUser();
+    if (authError) return { data: null, error: authError };
+
     // App-level Guard: Only Admin and Accountant can access aggregate financial stats
-    if (userRole && !['Admin', 'Accountant'].includes(userRole)) {
-       return { data: null, error: toAppError(new Error('Unauthorized'), 'Truy cập bị từ chối: Chỉ quản trị viên và kế toán mới có quyền xem báo cáo này.') };
+    if (!['Admin', 'Accountant'].includes(role)) {
+       return { data: null, error: { code: 'FORBIDDEN', message: 'Truy cập bị từ chối: Chỉ quản trị viên và kế toán mới có quyền xem báo cáo này.' } };
     }
 
     const today = new Date().toISOString().split('T')[0];
@@ -306,8 +319,11 @@ export interface TeacherWidgetsData {
 
 export async function getTeacherWidgets(teacherId: string): Promise<{ data: TeacherWidgetsData | null; error: AppError | null }> {
   try {
+    const { userId, role, error: authError } = await getCurrentUser();
+    if (authError) return { data: null, error: authError };
+
     // 1. Get assigned classes
-    const assignedIds = await getAssignedClassIds(teacherId);
+    const assignedIds = await getAssignedClassIds(userId);
     if (!assignedIds.length) return { data: { birthdays: [], medications: [] }, error: null };
 
     // 2. Get birthdays in current month

@@ -9,28 +9,9 @@ import type {
 } from '@/types/domain';
 import { toAppError } from './supabaseErrors';
 import { invalidateSwCache } from '@/utils/swCacheInvalidate';
+import { ensureFinancialAccess, ensureFeeModificationAccess } from './serviceGuards';
 
-async function ensureFinancialAccess(id?: string, isFinancialMutation = false): Promise<AppError | null> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { code: 'UNAUTHORIZED', message: 'Vui lòng đăng nhập lại.' };
-
-  const { data: profile } = await supabase.from('users').select('role').eq('id', user.id).single();
-  const role = profile?.role;
-  const isController = role === 'Admin' || role === 'Accountant';
-
-  if (isFinancialMutation && !isController) {
-    return { code: 'FORBIDDEN', message: 'Bạn không có quyền thay đổi dữ liệu tài chính (Số tiền). Vui lòng liên hệ Kế toán.' };
-  }
-
-  if (id) {
-    const { data: fee } = await supabase.from('fee_records').select('status').eq('id', id).single();
-    if (fee?.status === 'paid' && role !== 'Admin') {
-      return { code: 'FORBIDDEN', message: 'Bản ghi học phí đã hoàn tất thanh toán (Paid). Không thể thay đổi.' };
-    }
-  }
-
-  return null;
-}
+// Removed local ensureFinancialAccess in favor of centralized serviceGuards.ts
 
 
 
@@ -113,66 +94,14 @@ export async function listFees(query: FeeListQuery): Promise<{ data: ListEnvelop
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  // 1. Build filter conditions
-  let filterBuilder = supabase.from('fee_records').select('id', { count: 'exact', head: true }).eq('del_yn', false);
-
-  if (query.status) {
-    filterBuilder = filterBuilder.eq('status', query.status);
-  }
-
-  if (query.studentId) {
-    filterBuilder = filterBuilder.eq('student_id', query.studentId);
-  }
-
-  if (query.month) {
-    filterBuilder = filterBuilder.eq('month', query.month);
-  }
-
-  if (query.schoolYear) {
-    filterBuilder = filterBuilder.eq('school_year', query.schoolYear);
-  }
-
-  if (query.classId) {
-    filterBuilder = filterBuilder.eq('class_id', query.classId);
-  }
-
-  if (query.search?.trim()) {
-    const filters = await getFeeSearchFilters(query.search.trim());
-    if (filters.error) {
-      return { data: { items: [], total: 0, page, pageSize }, error: filters.error };
-    }
-    if (filters.studentIds.length === 0) {
-      return { data: { items: [], total: 0, page, pageSize }, error: null };
-    }
-    
-    const orFilter = [];
-    if (filters.studentIds.length > 0) orFilter.push(`student_id.in.(${filters.studentIds.join(',')})`);
-    filterBuilder = filterBuilder.or(orFilter.join(','));
-  }
-
-  // 2. Get Total Count
-  const countResult = await withSupabaseTimeout(
-    filterBuilder,
-    5000,
-    { data: null, count: 0, error: { message: 'Timeout loading fee count', details: '', hint: '', code: 'TIMEOUT' } } as any
-  );
-
-  if (countResult.error) {
-    return { data: { items: [], total: 0, page, pageSize }, error: toAppError(countResult.error, 'Không thể đếm số lượng học phí.') };
-  }
-
-  const total = countResult.count || 0;
-  if (total === 0) {
-    return { data: { items: [], total: 0, page, pageSize }, error: null };
-  }
-
-  // 3. Get Paginated Data
+  // 1. Build Query with Join
   let dataQuery = supabase
     .from('fee_records')
-    .select('id, student_id, class_id, title, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, base_amount_vnd, meal_deduction_vnd, tuition_deduction_vnd, deduction_note, created_at, updated_at, students(id, full_name, classes(id, name))')
-    .eq('del_yn', false)
-    .order('created_at', { ascending: false })
-    .range(from, to);
+    .select(
+      'id, student_id, class_id, title, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, base_amount_vnd, meal_deduction_vnd, tuition_deduction_vnd, deduction_note, created_at, updated_at, students!inner(id, full_name, classes(id, name))',
+      { count: 'exact' }
+    )
+    .eq('del_yn', false);
 
   if (query.status) {
     dataQuery = dataQuery.eq('status', query.status);
@@ -195,26 +124,24 @@ export async function listFees(query: FeeListQuery): Promise<{ data: ListEnvelop
   }
 
   if (query.search?.trim()) {
-    const filters = await getFeeSearchFilters(query.search.trim());
-    const orFilter = [];
-    if (filters.studentIds.length > 0) orFilter.push(`student_id.in.(${filters.studentIds.join(',')})`);
-    if (orFilter.length > 0) {
-      dataQuery = dataQuery.or(orFilter.join(','));
-    }
+    dataQuery = dataQuery.ilike('students.full_name', `%${query.search.trim()}%`);
   }
 
+  // 2. Fetch Data
   const result = await withSupabaseTimeout(
-    dataQuery,
+    dataQuery.order('created_at', { ascending: false }).range(from, to),
     8000,
-    { data: null, error: { message: 'Timeout loading fees', details: '', hint: '', code: 'TIMEOUT' } } as any
+    { data: null, count: 0, error: { message: 'Timeout loading fees', details: '', hint: '', code: 'TIMEOUT' } } as any
   );
 
   if (result.error) {
     return {
-      data: { items: [], total, page, pageSize },
+      data: { items: [], total: 0, page, pageSize },
       error: toAppError(result.error, 'Không thể tải danh sách học phí.'),
     };
   }
+
+  const total = result.count || 0;
 
   return {
     data: {
@@ -226,6 +153,34 @@ export async function listFees(query: FeeListQuery): Promise<{ data: ListEnvelop
     error: null,
   };
 }
+
+export async function getFeeSummary(query: FeeListQuery): Promise<{ data: { totalAmount: number; totalPaid: number; totalDebt: number; debtCount: number }; error: AppError | null }> {
+  const result = await withSupabaseTimeout(
+    supabase.rpc('get_fee_summary', {
+      p_search: query.search?.trim() || null,
+      p_status: query.status || null,
+      p_month: query.month || null,
+      p_class_id: query.classId || null,
+      p_school_year: query.schoolYear || null,
+      p_student_id: query.studentId || null,
+    }),
+    8000,
+    { data: null, error: { message: 'Timeout loading fee summary', details: '', hint: '', code: 'TIMEOUT' } } as any
+  );
+
+  if (result.error) {
+    return {
+      data: { totalAmount: 0, totalPaid: 0, totalDebt: 0, debtCount: 0 },
+      error: toAppError(result.error, 'Không thể tải tổng quan học phí.'),
+    };
+  }
+
+  return {
+    data: result.data as { totalAmount: number; totalPaid: number; totalDebt: number; debtCount: number },
+    error: null,
+  };
+}
+
 
 export async function getFeeById(id: string): Promise<{ item: FeeRecordP2 | null; error: AppError | null }> {
   const result = await withSupabaseTimeout(
@@ -245,8 +200,8 @@ export async function getFeeById(id: string): Promise<{ item: FeeRecordP2 | null
 }
 
 export async function createFeeRecord(input: CreateFeeInput): Promise<{ item: FeeRecordP2 | null; error: AppError | null }> {
-  const accessError = await ensureFinancialAccess(undefined, true);
-  if (accessError) return { item: null, error: accessError };
+  const accessError = await ensureFinancialAccess(true);
+  if (accessError.error) return { item: null, error: accessError.error };
 
   const validationError = validatePaidAmount(input.paid_amount_vnd, input.amount_vnd);
   if (validationError) return { item: null, error: validationError };
@@ -284,8 +239,8 @@ export async function updateFeeRecordStatus(
   paidDate: string | null,
   paymentMethod: 'cash' | 'bank_transfer' | null
 ): Promise<{ error: AppError | null }> {
-  const accessError = await ensureFinancialAccess(id, true);
-  if (accessError) return { error: accessError };
+  const accessError = await ensureFeeModificationAccess(id, true);
+  if (accessError.error) return { error: accessError.error };
 
   const existingResult = await withSupabaseTimeout(
     supabase.from('fee_records').select('amount_vnd').eq('id', id).eq('del_yn', false).single(),
@@ -321,8 +276,8 @@ export async function updateFeeRecordStatus(
 
 export async function updateFeeRecord(id: string, payload: Partial<CreateFeeInput>): Promise<{ item: FeeRecordP2 | null; error: AppError | null }> {
   const isMoneyUpdate = 'amount_vnd' in payload || 'paid_amount_vnd' in payload || 'base_amount_vnd' in payload;
-  const accessError = await ensureFinancialAccess(id, isMoneyUpdate);
-  if (accessError) return { item: null, error: accessError };
+  const accessError = await ensureFeeModificationAccess(id, isMoneyUpdate);
+  if (accessError.error) return { item: null, error: accessError.error };
 
   const result = await withSupabaseTimeout(
     supabase
@@ -341,8 +296,8 @@ export async function updateFeeRecord(id: string, payload: Partial<CreateFeeInpu
 }
 
 export async function deleteFeeRecord(id: string): Promise<{ error: AppError | null }> {
-  const accessError = await ensureFinancialAccess(id);
-  if (accessError) return { error: accessError };
+  const accessError = await ensureFeeModificationAccess(id);
+  if (accessError.error) return { error: accessError.error };
 
   const result = await withSupabaseTimeout(
     supabase.from('fee_records').update({ del_yn: true }).eq('id', id),
@@ -374,6 +329,9 @@ export async function createClassFees(
   title: string,
   baseAmount: number
 ): Promise<{ error: AppError | null }> {
+  const accessError = await ensureFinancialAccess(true);
+  if (accessError.error) return { error: accessError.error };
+
   // 1. Get all students in class
   const studentsResult = await supabase
     .from('students')
@@ -408,8 +366,8 @@ export async function createClassFees(
 }
 
 export async function syncFeeWithAttendance(feeId: string): Promise<{ item: FeeRecordP2 | null; error: AppError | null }> {
-  const accessError = await ensureFinancialAccess(feeId);
-  if (accessError) return { item: null, error: accessError };
+  const accessError = await ensureFeeModificationAccess(feeId);
+  if (accessError.error) return { item: null, error: accessError.error };
 
   // 1. Load fee with class config
   const feeResult = await supabase

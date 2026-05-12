@@ -115,6 +115,7 @@ describe('Reports Page Suite', () => {
         attendanceToday: { present: 0, absent: 0, total: 0 },
         attendanceByClass: [],
         studentsByGrade: [],
+        attentionCount: 0,
       },
       error: null
     });
@@ -128,6 +129,7 @@ describe('Reports Page Suite', () => {
         attendanceToday: { present: 100, absent: 10, total: 110 },
         attendanceByClass: [],
         studentsByGrade: [],
+        attentionCount: 5,
       },
       error: null,
     });

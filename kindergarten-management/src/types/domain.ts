@@ -75,6 +75,7 @@ export interface ClassListQuery {
   search?: string;
   sortBy?: 'name' | 'created_at' | 'max_students';
   sortDirection?: SortDirection;
+  teacherId?: string;
 }
 
 export interface CreateClassInput {

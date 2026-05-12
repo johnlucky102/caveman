@@ -9,7 +9,7 @@ import Table from '@/components/common/Table';
 import { FeeStatusBadge } from '@/components/common/Badge';
 import { useToast } from '@/components/common/Toast';
 import CurrencyInput from '@/components/common/CurrencyInput';
-import { listFees, updateFeeRecordStatus, deleteFeeRecord, deleteFeeRecords, createClassFees, syncFeeWithAttendance } from '@/services/feesService';
+import { listFees, getFeeSummary, updateFeeRecordStatus, deleteFeeRecord, deleteFeeRecords, createClassFees, syncFeeWithAttendance } from '@/services/feesService';
 import { listClasses } from '@/services/classesService';
 import Modal, { ConfirmModal } from '@/components/common/Modal';
 import { RefreshCw, ClipboardList } from 'lucide-react';
@@ -51,6 +51,7 @@ export default function Fees() {
   const [classOptions, setClassOptions] = useState<SelectOption[]>([]);
   const [bulkCreating, setBulkCreating] = useState(false);
   const [syncingId, setSyncingId] = useState<string | null>(null);
+  const [summary, setSummary] = useState({ totalAmount: 0, totalPaid: 0, totalDebt: 0, debtCount: 0 });
   const pageSize = 10;
 
   useEffect(() => {
@@ -97,9 +98,23 @@ export default function Fees() {
     setTotal(result.data.total);
   }, [page, pageSize, debouncedSearch, status, month, classId, schoolYear, toast]);
 
+  const loadSummary = useCallback(async () => {
+    const result = await getFeeSummary({
+      search: debouncedSearch,
+      status: status || undefined,
+      month: month ? Number(month) : undefined,
+      classId: classId ? Number(classId) : undefined,
+      schoolYear: schoolYear || undefined,
+    });
+    if (result.data) {
+      setSummary(result.data);
+    }
+  }, [debouncedSearch, status, month, classId, schoolYear]);
+
   useEffect(() => {
     void loadFees();
-  }, [loadFees]);
+    void loadSummary();
+  }, [loadFees, loadSummary]);
 
   useEffect(() => {
     const loadClasses = async () => {
@@ -163,13 +178,7 @@ export default function Fees() {
     }
   };
 
-  const summary = useMemo(() => {
-    const totalAmount = items.reduce((sum, item) => sum + item.amount_vnd, 0);
-    const totalPaid = items.reduce((sum, item) => sum + item.paid_amount_vnd, 0);
-    const totalDebt = totalAmount - totalPaid;
-    const debtCount = items.filter((item) => item.status !== 'paid').length;
-    return { totalAmount, totalPaid, totalDebt, debtCount };
-  }, [items]);
+  // Summary is now loaded from server via loadSummary and stored in state
 
   const columns: TableColumn<FeeRecordP2>[] = [
     {

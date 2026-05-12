@@ -9,6 +9,7 @@ import type {
   UpdateClassInput,
 } from '@/types/domain';
 import { toAppError } from './supabaseErrors';
+import { ensureRole, ensureClassOwnership, ensureFinancialAccess } from './serviceGuards';
 
 type ClassRow = {
   id: number;
@@ -175,6 +176,9 @@ export async function getClassById(id: number): Promise<{ item: ClassRecord | nu
 }
 
 export async function createClass(payload: CreateClassInput): Promise<{ item: ClassRecord | null; error: AppError | null }> {
+  const accessError = await ensureRole(['Admin', 'Accountant']);
+  if (accessError.error) return { item: null, error: accessError.error };
+
   const result = await withSupabaseTimeout(
     supabase
       .from('classes')
@@ -190,6 +194,19 @@ export async function createClass(payload: CreateClassInput): Promise<{ item: Cl
 }
 
 export async function updateClass(id: number, payload: UpdateClassInput): Promise<{ item: ClassRecord | null; error: AppError | null }> {
+  // 1. Ownership check
+  const ownership = await ensureClassOwnership(id);
+  if (ownership.error) return { item: null, error: ownership.error };
+
+  // 2. Financial field check
+  const financialFields: (keyof UpdateClassInput)[] = ['meal_rate', 'cancel_rate', 'hospital_deduction_type', 'hospital_deduction_value'];
+  const isChangingFinance = financialFields.some(field => field in payload);
+  
+  if (isChangingFinance) {
+    const finAccess = await ensureFinancialAccess(true);
+    if (finAccess.error) return { item: null, error: finAccess.error };
+  }
+
   const currentCounts = await getStudentCounts([id]);
   const currentStudentCount = currentCounts.get(id) || 0;
   if (payload.max_students != null && payload.max_students < currentStudentCount) {
@@ -219,6 +236,9 @@ export async function updateClass(id: number, payload: UpdateClassInput): Promis
 }
 
 export async function deleteClass(id: number): Promise<{ error: AppError | null }> {
+  const accessError = await ensureRole(['Admin']);
+  if (accessError.error) return { error: accessError.error };
+
   const counts = await getStudentCounts([id]);
   const studentCount = counts.get(id) || 0;
   if (studentCount > 0) {
@@ -236,6 +256,9 @@ export async function deleteClass(id: number): Promise<{ error: AppError | null 
 }
 
 export async function deleteClasses(ids: number[]): Promise<{ error: AppError | null }> {
+  const accessError = await ensureRole(['Admin']);
+  if (accessError.error) return { error: accessError.error };
+
   if (!ids.length) return { error: null };
   const counts = await getStudentCounts(ids);
   const hasStudents = Array.from(counts.values()).some((count) => count > 0);
@@ -254,6 +277,9 @@ export async function deleteClasses(ids: number[]): Promise<{ error: AppError | 
 }
 
 export async function assignTeacherToClass(classId: number, teacherId: string, role: string): Promise<{ error: AppError | null }> {
+  const accessError = await ensureRole(['Admin', 'Accountant']);
+  if (accessError.error) return { error: accessError.error };
+
   const { error } = await supabase
     .from('class_teachers')
     .upsert({ class_id: classId, teacher_id: teacherId, role }, { onConflict: 'class_id,teacher_id' });
@@ -263,6 +289,9 @@ export async function assignTeacherToClass(classId: number, teacherId: string, r
 }
 
 export async function removeTeacherFromClass(classTeacherId: string): Promise<{ error: AppError | null }> {
+  const accessError = await ensureRole(['Admin', 'Accountant']);
+  if (accessError.error) return { error: accessError.error };
+
   const { error } = await supabase
     .from('class_teachers')
     .delete()

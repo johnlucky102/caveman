@@ -17,6 +17,7 @@ export interface DatePickerProps {
   error?: string;
   required?: boolean;
   clearable?: boolean;
+  fullWidth?: boolean;
 }
 
 export function DatePicker({
@@ -28,6 +29,7 @@ export function DatePicker({
   error,
   required,
   clearable = true,
+  fullWidth = true,
 }: DatePickerProps) {
   const selectedDate = date ? new Date(date) : undefined;
 

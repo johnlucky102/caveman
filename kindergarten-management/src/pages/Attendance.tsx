@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CalendarCheck, Check, ChevronLeft, ChevronRight, Clock, Filter, History, Search, X, AlertTriangle, Utensils, Pill, Moon, Stethoscope, UserCheck, AlertCircle, FileCheck, MessageSquare, ClipboardCheck } from 'lucide-react';
+import { CalendarCheck, Check, ChevronLeft, ChevronRight, Clock, Filter, History, Search, X, AlertTriangle, Utensils, Pill, Moon, Stethoscope, UserCheck, AlertCircle, FileCheck, MessageSquare, ClipboardCheck, XCircle } from 'lucide-react';
 import Card, { CardHeader } from '@/components/common/Card';
 import Button from '@/components/common/Button';
 import Input from '@/components/common/Input';
@@ -50,6 +50,7 @@ export default function Attendance() {
   });
   const [historyTo, setHistoryTo] = useState(() => new Date().toISOString().split('T')[0]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     const loadClasses = async () => {
@@ -459,6 +460,15 @@ export default function Attendance() {
                         title="Nghỉ có phép"
                       >
                         <ClipboardCheck className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleStatusChange(student.student_id, 'center_cancelled')}
+                        className={`p-2 rounded-lg transition-all ${
+                          student.status === 'center_cancelled' ? 'bg-slate-700 text-white shadow-sm' : 'text-muted-foreground hover:bg-slate-700/10'
+                        }`}
+                        title="Trung tâm nghỉ/Hủy buổi"
+                      >
+                        <XCircle className="w-4 h-4" />
                       </button>
                     </div>
 

@@ -19,11 +19,33 @@ vi.mock('@/stores/authStore', () => ({
   }),
 }));
 
+// Mocking supabase
+vi.mock('@/lib/supabase', () => ({
+  supabase: {
+    from: vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: { role: 'Admin' }, error: null }),
+    }),
+    auth: {
+      getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'test-admin' } } }),
+    },
+  },
+}));
+
 // Mocking services
 vi.mock('@/services/feesService', () => ({
   listFees: vi.fn(),
+  getFeeSummary: vi.fn().mockResolvedValue({ data: { totalAmount: 100, totalPaid: 0, totalDebt: 100, debtCount: 1 }, error: null }),
   deleteFeeRecord: vi.fn(),
+  deleteFeeRecords: vi.fn(),
+  createClassFees: vi.fn(),
+  syncFeeWithAttendance: vi.fn(),
   sendBulkPaymentReminders: vi.fn(),
+}));
+
+vi.mock('@/services/classesService', () => ({
+  listClasses: vi.fn().mockResolvedValue({ data: { items: [], total: 0 }, error: null }),
 }));
 
 const renderPage = () => {
@@ -79,8 +101,8 @@ describe('Fees List Page', () => {
 
     renderPage();
     
-    // The main "Tạo bản ghi phí" button should always be there
-    expect(screen.getByText(/Tạo bản ghi phí/i)).toBeDefined();
+    // The main "Tạo mới" button should always be there
+    expect(screen.getByText(/Tạo mới/i)).toBeDefined();
     // "Tạo theo lớp" should also be there
     expect(screen.getByText(/Tạo theo lớp/i)).toBeDefined();
   });

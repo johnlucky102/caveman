@@ -5,13 +5,18 @@ import { supabase } from '@/lib/supabase';
 // Mock Supabase
 vi.mock('@/lib/supabase', () => ({
   supabase: {
+    auth: {
+      getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'test-user' } } }),
+    },
     from: vi.fn(() => ({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       single: vi.fn(),
       update: vi.fn().mockReturnThis(),
+      insert: vi.fn().mockReturnThis(),
       gte: vi.fn().mockReturnThis(),
       lte: vi.fn().mockReturnThis(),
+      then: vi.fn().mockResolvedValue({ data: [], error: null }),
     })),
   },
 }));
@@ -63,11 +68,14 @@ describe('syncFeeWithAttendance', () => {
 
     const fromMock = vi.mocked(supabase.from);
     
-    // Call 1: Load fee
+    // Call 1 & 2: ensureFinancialAccess (users, fee_records)
+    fromMock.mockReturnValueOnce(createMockSupabaseChain({ role: 'Admin' }) as any);
+    fromMock.mockReturnValueOnce(createMockSupabaseChain({ status: 'pending' }) as any);
+    // Call 3: Load fee
     fromMock.mockReturnValueOnce(createMockSupabaseChain(mockFee) as any);
-    // Call 2: Load attendance
+    // Call 4: Load attendance
     fromMock.mockReturnValueOnce(createMockSupabaseChain(mockAttendance) as any);
-    // Call 3: Update
+    // Call 5: Update
     const updateChain = createMockSupabaseChain({ ...mockFee, amount_vnd: 2900000 });
     fromMock.mockReturnValueOnce(updateChain as any);
 
@@ -97,6 +105,10 @@ describe('syncFeeWithAttendance', () => {
     const mockAttendance = [{ status: 'absent', is_hospitalized: true }];
 
     const fromMock = vi.mocked(supabase.from);
+    // RBAC
+    fromMock.mockReturnValueOnce(createMockSupabaseChain({ role: 'Admin' }) as any);
+    fromMock.mockReturnValueOnce(createMockSupabaseChain({ status: 'pending' }) as any);
+    // Data
     fromMock.mockReturnValueOnce(createMockSupabaseChain(mockFee) as any);
     fromMock.mockReturnValueOnce(createMockSupabaseChain(mockAttendance) as any);
     const updateChain = createMockSupabaseChain({});
@@ -127,6 +139,10 @@ describe('syncFeeWithAttendance', () => {
     const mockAttendance = [{ status: 'absent', is_hospitalized: true }];
 
     const fromMock = vi.mocked(supabase.from);
+    // RBAC
+    fromMock.mockReturnValueOnce(createMockSupabaseChain({ role: 'Admin' }) as any);
+    fromMock.mockReturnValueOnce(createMockSupabaseChain({ status: 'pending' }) as any);
+    // Data
     fromMock.mockReturnValueOnce(createMockSupabaseChain(mockFee) as any);
     fromMock.mockReturnValueOnce(createMockSupabaseChain(mockAttendance) as any);
     const updateChain = createMockSupabaseChain({});
@@ -159,6 +175,10 @@ describe('syncFeeWithAttendance', () => {
     ];
 
     const fromMock = vi.mocked(supabase.from);
+    // RBAC
+    fromMock.mockReturnValueOnce(createMockSupabaseChain({ role: 'Admin' }) as any);
+    fromMock.mockReturnValueOnce(createMockSupabaseChain({ status: 'pending' }) as any);
+    // Data
     fromMock.mockReturnValueOnce(createMockSupabaseChain(mockFee) as any);
     fromMock.mockReturnValueOnce(createMockSupabaseChain(mockAttendance) as any);
     const updateChain = createMockSupabaseChain({});
@@ -183,6 +203,8 @@ describe('createClassFees', () => {
     return {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data, error }),
+      maybeSingle: vi.fn().mockResolvedValue({ data, error }),
       insert: vi.fn().mockResolvedValue({ error }),
       then: vi.fn().mockImplementation((cb) => cb({ data, error })),
     };
@@ -190,7 +212,10 @@ describe('createClassFees', () => {
 
   it('should return error if no students in class', async () => {
     const fromMock = vi.mocked(supabase.from);
-    fromMock.mockReturnValueOnce(createMockSupabaseChain([]) as any); // Students query
+    // RBAC check
+    fromMock.mockReturnValueOnce(createMockSupabaseChain({ role: 'Admin' }) as any); // users
+    // Students query
+    fromMock.mockReturnValueOnce(createMockSupabaseChain([]) as any); // students
 
     const result = await createClassFees(1, 10, '2024-2025', 'Tuition', 3000000);
     expect(result.error?.message).toBe('Lớp học hiện chưa có học sinh nào.');
@@ -198,7 +223,11 @@ describe('createClassFees', () => {
 
   it('should return CONFLICT error if records already exist', async () => {
     const fromMock = vi.mocked(supabase.from);
+    // RBAC
+    fromMock.mockReturnValueOnce(createMockSupabaseChain({ role: 'Admin' }) as any); // users
+    // Students query
     fromMock.mockReturnValueOnce(createMockSupabaseChain([{ id: 'std-1' }]) as any); // Students query
+    // Insert query
     fromMock.mockReturnValueOnce(createMockSupabaseChain(null, { code: '23505' }) as any); // Insert query
 
     const result = await createClassFees(1, 10, '2024-2025', 'Tuition', 3000000);
