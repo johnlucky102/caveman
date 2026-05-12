@@ -101,6 +101,8 @@ export default function Fees() {
 
   const loadSummary = useCallback(async () => {
     const result = await getFeeSummary({
+      page: 1,
+      pageSize: 9999,
       search: debouncedSearch,
       status: status || undefined,
       month: month ? Number(month) : undefined,

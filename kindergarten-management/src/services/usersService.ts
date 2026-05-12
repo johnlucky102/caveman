@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { withSupabaseTimeout } from '@/lib/timeout';
-import type { AppError, AppRole, CreateParentInput, ParentRecord, UpdateParentInput, UserProfile } from '@/types/domain';
+import type { AppError, AppRole, UserProfile } from '@/types/domain';
 import { toAppError } from './supabaseErrors';
 import { ensureRole } from './serviceGuards';
 

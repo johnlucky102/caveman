@@ -154,27 +154,7 @@ describe('Phase 2 Service Functions', () => {
     expect(mocks.eq).toHaveBeenCalledWith('student_id', 'student-123');
   });
 
-  it('usersService.listParents fetches parents with students', async () => {
-    const { listParents } = await import('./usersService');
-    const mockParents = [
-      { 
-        id: 'p1', 
-        full_name: 'Parent A', 
-        relationship: 'Father',
-        student_parent: [
-          { student_id: 's1', students: { full_name: 'Child A', classes: { name: 'Class 1' } } }
-        ] 
-      }
-    ];
 
-    mocks.order.mockResolvedValue({ data: mockParents, error: null });
-
-    const { items, error } = await listParents();
-    
-    expect(error).toBeNull();
-    expect(items[0].full_name).toBe('Parent A');
-    expect(items[0].students[0].full_name).toBe('Child A');
-  });
 
   describe('Error Handling', () => {
     it('dashboardService.getDashboardStats handles Supabase errors', async () => {

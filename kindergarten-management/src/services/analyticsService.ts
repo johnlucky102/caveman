@@ -28,7 +28,7 @@ export async function getRevenueTrend(): Promise<{ data: RevenueTrendPoint[]; er
         .select('month, school_year, paid_amount_vnd, amount_vnd, status')
         .eq('del_yn', false),
       8000,
-      { data: [], error: null }
+{ data: [], error: null } as any
     );
 
     if (error) throw error;
@@ -74,7 +74,7 @@ export async function getStudentDistribution(): Promise<{
         .select('gender, classes(name)')
         .eq('del_yn', false),
       8000,
-      { data: [], error: null }
+{ data: [], error: null } as any
     );
 
     if (error) throw error;
@@ -123,7 +123,7 @@ export async function getDebtAging(): Promise<{ data: AgingBucket[]; error: AppE
         .eq('del_yn', false)
         .in('status', ['unpaid', 'partial']),
       8000,
-      { data: [], error: null }
+{ data: [], error: null } as any
     );
 
     if (error) throw error;

@@ -20,9 +20,9 @@ type StudentRow = {
   full_name: string;
   date_of_birth: string | null;
   gender: 'Male' | 'Female' | null;
+  nationality: string | null;
   address: string | null;
   enrolled_date: string | null;
-  parent_info: Record<string, unknown> | null;
   parent_info: Record<string, unknown> | null;
   avatar: string | null;
   created_at: string;
@@ -42,6 +42,7 @@ function mapStudentRow(row: StudentRow): StudentRecord {
     full_name: row.full_name,
     date_of_birth: row.date_of_birth,
     gender: row.gender,
+    nationality: row.nationality || null,
     address: row.address,
     enrolled_date: row.enrolled_date,
     parent_info: (row.parent_info as any) || { full_name: '', phone: '' },
@@ -71,7 +72,7 @@ export async function listStudents(query: StudentListQuery): Promise<{ data: Lis
 
   let statement = supabase
     .from('students')
-    .select('id, class_id, student_code, full_name, date_of_birth, gender, ethnicity, nationality, address, enrolled_date, health_info, parent_info, avatar, created_at, updated_at, classes(id, name)', { count: 'exact' })
+    .select('id, class_id, student_code, full_name, date_of_birth, gender, nationality, address, enrolled_date, parent_info, avatar, created_at, updated_at, classes(id, name)', { count: 'exact' })
     .eq('del_yn', false);
 
   if (query.search?.trim()) {
@@ -197,7 +198,7 @@ export async function updateStudent(id: string, payload: UpdateStudentInput, use
         updated_at: new Date().toISOString()
       })
       .eq('id', id)
-      .select('id, class_id, student_code, full_name, date_of_birth, gender, ethnicity, nationality, address, enrolled_date, health_info, parent_info, avatar, created_at, updated_at, classes(id, name)')
+      .select('id, class_id, student_code, full_name, date_of_birth, gender, nationality, address, enrolled_date, parent_info, avatar, created_at, updated_at, classes(id, name)')
       .single(),
     8000,
     { data: null, error: { message: 'Timeout updating student', details: '', hint: '', code: 'TIMEOUT' } } as any

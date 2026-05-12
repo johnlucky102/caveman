@@ -574,7 +574,7 @@ export default function FeeForm() {
                 <span className="font-bold">Lớp:</span>
                 <span className="font-medium">{selectedStudent?.class_name}</span>
                 <span className="font-bold">Phụ huynh:</span>
-                <span className="font-medium">{selectedStudent?.parents?.find(p => p.is_primary)?.full_name || selectedStudent?.parents?.[0]?.full_name || '—'}</span>
+                <span className="font-medium">{selectedStudent?.parent_info?.full_name || '—'}</span>
               </div>
             </div>
             <div className="space-y-3">

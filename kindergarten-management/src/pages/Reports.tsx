@@ -128,7 +128,7 @@ const attendanceDetailColumns: TableColumn<AttendanceDetail>[] = [
     }
   },
   { key: 'check_in_time', label: 'Giờ đến', render: (val) => val ? String(val).substring(0, 5) : '-' },
-  { key: 'note', label: 'Ghi chú', render: (val) => <span className="text-xs italic text-muted-foreground">{val || '-'}</span> },
+  { key: 'note', label: 'Ghi chú', render: (val) => <span className="text-xs italic text-muted-foreground">{String(val ?? '-')}</span> },
 ];
 
 // ─── Component ─────────────────────────────────────────────────────────────
@@ -232,7 +232,7 @@ export default function Reports() {
           .select('student_id, status')
           .gte('attendance_date', thirtyDaysAgo.toISOString().split('T')[0]),
         8000,
-        { data: [], error: null }
+{ data: [], error: null } as any
       );
 
       const attMap = new Map<string, { total: number; present: number }>();
@@ -249,7 +249,7 @@ export default function Reports() {
           .from('fee_records')
           .select('student_id, status'),
         8000,
-        { data: [], error: null }
+{ data: [], error: null } as any
       );
 
       const feeMap = new Map<string, string>();
@@ -310,7 +310,7 @@ export default function Reports() {
           query = query.gte('attendance_date', sevenDaysAgo.toISOString().split('T')[0]);
         }
 
-        const { data, error } = await withSupabaseTimeout(query, 8000, { data: [], error: null });
+        const { data, error } = await withSupabaseTimeout(query, 8000,{ data: [], error: null } as any);
         if (error) throw error;
 
         // Group by date
@@ -375,7 +375,7 @@ export default function Reports() {
           .eq('del_yn', false)
           .order('created_at', { ascending: false }),
         8000,
-        { data: [], error: null }
+{ data: [], error: null } as any
       );
 
       if (error) throw error;
@@ -492,8 +492,8 @@ export default function Reports() {
           <p className="text-muted-foreground text-sm">Phân tích dữ liệu & Kết quả vận hành</p>
         </div>
         <div className="flex gap-3">
-           <Button variant="outline" icon={<FileText className="w-4 h-4" />} onClick={() => window.print()}>In báo cáo</Button>
-           {!isT && <Button icon={<Download className="w-4 h-4" />} onClick={exportFullReport}>Xuất tổng hợp</Button>}
+           <Button variant="outline" leftIcon={<FileText className="w-4 h-4" />} onClick={() => window.print()}>In báo cáo</Button>
+           {!isT && <Button leftIcon={<Download className="w-4 h-4" />} onClick={exportFullReport}>Xuất tổng hợp</Button>}
         </div>
       </div>
 
@@ -730,7 +730,7 @@ export default function Reports() {
               columns={(attSubTab === 'summary' ? attendanceColumns : attendanceDetailColumns) as unknown as TableColumn<Record<string, unknown>>[]}
               data={(attSubTab === 'summary' ? attendanceReports : attendanceDetails) as unknown as Record<string, unknown>[]}
               rowKey="id" loading={loading} emptyMessage="Không có dữ liệu điểm danh"
-              pagination
+
             />
           </Card>
         </div>

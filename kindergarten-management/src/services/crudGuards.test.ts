@@ -80,7 +80,7 @@ function makeBuilder(table: string) {
         error: mocks.nextError,
       };
     }),
-    maybeSingle: vi.fn(() => builder.single()),
+    maybeSingle: vi.fn(() => (builder.single as any)()),
   };
   return builder;
 }

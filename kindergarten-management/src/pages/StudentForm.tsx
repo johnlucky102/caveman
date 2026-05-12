@@ -32,6 +32,9 @@ interface StudentFormData {
   date_of_birth: string;
   gender: 'Male' | 'Female' | '';
   address: string;
+  enrolled_date: string;
+  class_id: string;
+  nationality: string;
   parent_name: string;
   parent_phone: string;
   parent_email: string;
@@ -53,6 +56,9 @@ function defaultForm(): StudentFormData {
     date_of_birth: '',
     gender: '',
     address: '',
+    enrolled_date: '',
+    class_id: '',
+    nationality: '',
     parent_name: '',
     parent_phone: '',
     parent_email: '',
@@ -133,7 +139,6 @@ export default function StudentForm() {
         return;
       }
 
-      const health = result.item.health_info || {};
       setFormData({
         student_code: result.item.student_code,
         full_name: result.item.full_name,
@@ -142,6 +147,7 @@ export default function StudentForm() {
         address: result.item.address || '',
         class_id: String(result.item.class_id),
         enrolled_date: result.item.enrolled_date || '',
+        nationality: result.item.nationality || '',
         parent_name: result.item.parent_info?.full_name || '',
         parent_phone: result.item.parent_info?.phone || '',
         parent_email: result.item.parent_info?.email || '',
@@ -170,14 +176,15 @@ export default function StudentForm() {
       full_name: data.full_name.trim(),
       date_of_birth: data.date_of_birth || null,
       gender: data.gender || null,
+      nationality: data.nationality || null,
       address: data.address || null,
       enrolled_date: data.enrolled_date || null,
       avatar: null,
       parent_info: {
         full_name: data.parent_name.trim(),
         phone: data.parent_phone.trim(),
-        email: data.parent_email.trim() || null,
-        relationship: data.parent_relation || null,
+        email: data.parent_email.trim() || undefined,
+        relationship: data.parent_relation || undefined,
       },
     };
   }

@@ -54,7 +54,7 @@ describe('Comprehensive Soft Delete & Bulk Operations', () => {
   });
 
   it('TC03: deleteStudent should perform soft-delete and cascade', async () => {
-    const mockChain = createMockChain({ data: null, error: null });
+    const mockChain = createMockChain({ data: null, count: 0, error: null } as any);
     vi.mocked(supabase.from).mockReturnValue(mockChain as any);
 
     // Mock ensureRole to pass
@@ -77,7 +77,7 @@ describe('Comprehensive Soft Delete & Bulk Operations', () => {
   });
 
   it('TC04: deleteStudents (Bulk) should perform soft-delete for list and cascade', async () => {
-    const mockChain = createMockChain({ data: null, error: null });
+    const mockChain = createMockChain({ data: null, count: 0, error: null } as any);
     vi.mocked(supabase.from).mockReturnValue(mockChain as any);
 
     const ids = ['id1', 'id2', 'id3'];

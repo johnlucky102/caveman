@@ -33,12 +33,11 @@ describe('studentsService', () => {
         class_id: 1,
         date_of_birth: '2020-01-01',
         gender: 'Male',
-        ethnicity: 'Kinh',
         nationality: 'Việt Nam',
         address: 'Hà Nội',
         enrolled_date: '2024-09-01',
         avatar: null,
-        health_info: {}
+        parent_info: { full_name: 'Parent Name', phone: '0123456789' },
       });
 
       expect(result.item?.full_name).toBe('Test Student');

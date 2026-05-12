@@ -18,6 +18,7 @@ export interface DatePickerProps {
   required?: boolean;
   clearable?: boolean;
   fullWidth?: boolean;
+  disabled?: boolean;
 }
 
 export function DatePicker({
@@ -30,6 +31,7 @@ export function DatePicker({
   required,
   clearable = true,
   fullWidth = true,
+  disabled = false,
 }: DatePickerProps) {
   const selectedDate = date ? new Date(date) : undefined;
 
@@ -48,8 +50,10 @@ export function DatePicker({
             className={cn(
               "flex h-10 w-full items-center justify-between rounded-xl border border-border bg-background px-3 py-2 text-sm transition-all duration-150 outline-none hover:border-primary/50 focus:border-primary focus:ring-2 focus:ring-primary/10",
               !date && "text-muted-foreground",
-              error && "border-destructive focus:border-destructive focus:ring-destructive/10"
+              error && "border-destructive focus:border-destructive focus:ring-destructive/10",
+              disabled && "opacity-60 cursor-not-allowed bg-muted pointer-events-none"
             )}
+            disabled={disabled}
           >
             <div className="flex items-center gap-2 overflow-hidden">
               <CalendarIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
