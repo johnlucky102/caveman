@@ -133,7 +133,9 @@ export default function ClassForm() {
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
+    if (saving) return;
     setSaving(true);
+
     const payload = {
       name: form.name.trim(),
       teacher_id: form.teacher_id || null,

@@ -92,6 +92,7 @@ export default function TeacherForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const nextErrors = validate(form);
+    if (saving) return;
     setSaving(true);
     const payload = {
       full_name: form.full_name.trim(),

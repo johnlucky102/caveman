@@ -228,6 +228,7 @@ export default function FeeForm() {
       deduction_note: formData.deductionNote,
     };
 
+    if (saving) return;
     setSaving(true);
     const result = isEdit 
       ? await updateFeeRecord(id!, payload) 

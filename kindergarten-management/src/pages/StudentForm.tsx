@@ -195,6 +195,7 @@ export default function StudentForm() {
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
+    if (isSaving) return;
     setIsSaving(true);
     const payload = toPayload(formData);
     const result = isEditMode && id ? await updateStudent(id, payload, useAuthStore.getState().user?.id) : await createStudent(payload);
