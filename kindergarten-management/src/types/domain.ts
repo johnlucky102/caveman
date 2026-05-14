@@ -60,8 +60,6 @@ export interface ClassFinanceConfig {
   class_type: 'Daycare' | 'Evening';
   meal_rate: number;
   cancel_rate: number;
-  hospital_deduction_type: 'Fixed' | 'Daily';
-  hospital_deduction_value: number;
   del_yn: boolean;
   created_at: string;
   updated_at: string;
@@ -100,8 +98,6 @@ export interface CreateFinanceConfigInput {
   class_type: 'Daycare' | 'Evening';
   meal_rate: number;
   cancel_rate: number;
-  hospital_deduction_type: 'Fixed' | 'Daily';
-  hospital_deduction_value: number;
 }
 
 export type UpdateFinanceConfigInput = Partial<CreateFinanceConfigInput>;
@@ -168,7 +164,7 @@ export interface CreateStudentInput {
 
 export type UpdateStudentInput = Partial<CreateStudentInput>;
 
-export type AttendanceStatusValue = 'present' | 'absent' | 'late' | 'excused' | 'center_cancelled';
+export type AttendanceStatusValue = 'present' | 'absent';
 
 export interface AttendanceRecord {
   id: string;
@@ -180,11 +176,7 @@ export interface AttendanceRecord {
   status: AttendanceStatusValue;
   check_in_time: string | null;
   check_out_time: string | null;
-  note: string | null;
   meal_included: boolean;
-  medicine_instructions: string | null;
-  sleep_quality: 'Good' | 'Fair' | 'Poor' | null;
-  is_hospitalized: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -202,11 +194,7 @@ export interface UpsertAttendanceInput {
   status: AttendanceStatusValue;
   check_in_time?: string | null;
   check_out_time?: string | null;
-  note?: string | null;
   meal_included?: boolean;
-  medicine_instructions?: string | null;
-  sleep_quality?: 'Good' | 'Fair' | 'Poor' | null;
-  is_hospitalized?: boolean;
   created_by?: string | null;
 }
 
@@ -289,4 +277,3 @@ export interface SchoolSettings {
   created_at?: string;
   updated_at?: string;
 }
-

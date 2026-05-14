@@ -102,8 +102,8 @@ describe('Fees Service - Phase 5 Business Logic (Integer Currency)', () => {
     };
     const configData = { class_type: 'Daycare', meal_rate: 20000 };
     const attendanceData = [
-      { status: 'absent' }, { status: 'absent' }, { status: 'excused' }, 
-      { status: 'center_cancelled' }, { status: 'absent' }
+      { status: 'absent' }, { status: 'absent' }, { status: 'absent' }, 
+      { status: 'absent' }, { status: 'absent' }
     ];
     
     primeAdminFeeGuard();
@@ -125,34 +125,6 @@ describe('Fees Service - Phase 5 Business Logic (Integer Currency)', () => {
     const { item } = await syncFeeWithAttendance('f1');
     expect(item?.meal_deduction_vnd).toBe(100000);
     expect(item?.amount_vnd).toBe(2900000);
-  });
-
-  it('BIZ-05: Handles rounding correctly for percentage deductions', async () => {
-    const feeData = { 
-      id: 'f1', student_id: 's1', class_id: 1, base_amount_vnd: 1500501, amount_vnd: 1500501, school_year: '2024-2025', month: 10,
-    };
-    const configData = { class_type: 'Daycare', meal_rate: 20000, hospital_deduction_type: 'Daily', hospital_deduction_value: 10 };
-    const attendanceData = [{ is_hospitalized: true }];
-    
-    primeAdminFeeGuard();
-
-    mockQuery.single
-      .mockResolvedValueOnce({ data: feeData, error: null })
-      .mockResolvedValueOnce({ data: { ...feeData, tuition_deduction_vnd: 6820, amount_vnd: 1500501 - 6820 }, error: null });
-
-    mockQuery.maybeSingle
-      .mockResolvedValueOnce({ data: configData, error: null }); // class_finance_configs
-
-    mockQuery.select.mockImplementation((...args: any[]) => {
-       if (args[0] === '*') {
-         return { ...mockQuery, then: (resolve: any) => resolve({ data: attendanceData, error: null }) };
-       }
-       return mockQuery;
-    });
-
-    const { item } = await syncFeeWithAttendance('f1');
-    expect(item?.tuition_deduction_vnd).toBe(6820);
-    expect(item?.amount_vnd).toBe(1493681);
   });
 
   it('DB-Integrity: Caps paid_amount to amount when exceeding', async () => {
@@ -180,7 +152,7 @@ describe('Fees Service - Phase 5 Business Logic (Integer Currency)', () => {
     // ensureFinancialAccess (called by outer ensureFeeModAccess with isFinancialMutation=true):
     mockQuery.single.mockResolvedValueOnce({ data: { role: 'Admin' }, error: null });
     // Load class_finance_configs:
-    mockQuery.maybeSingle.mockResolvedValueOnce({ data: { class_type: 'Daycare', meal_rate: 20000, hospital_deduction_type: 'Fixed', hospital_deduction_value: 0 }, error: null });
+    mockQuery.maybeSingle.mockResolvedValueOnce({ data: { class_type: 'Daycare', meal_rate: 20000 }, error: null });
     // Update result (the UPDATE in syncFeeWithAttendance, not updateFeeRecordStatus):
     mockQuery.single.mockResolvedValueOnce({ data: { id: 'f1', amount_vnd: 1000000 }, error: null });
     // After syncFeeWithAttendance returns, updateFeeRecordStatus does its own update:
@@ -197,28 +169,5 @@ describe('Fees Service - Phase 5 Business Logic (Integer Currency)', () => {
     const { error } = await updateFeeRecordStatus('f1', 1500000, null, 'cash');
     // paidAmount 1.5M gets capped to amount 1M -> no VALIDATION error
     expect(error).toBeNull();
-  });
-
-  it('DB-Integrity: Prevents negative paid_amount', async () => {
-    primeAdminFeeGuard();
-    mockQuery.single.mockResolvedValueOnce({ data: { role: 'Admin' }, error: null });
-    mockQuery.maybeSingle.mockResolvedValueOnce({ data: { status: 'unpaid', class_id: 1 }, error: null });
-    mockQuery.single.mockResolvedValueOnce({ data: { id: 'f1', amount_vnd: 1000000, base_amount_vnd: 1000000, class_id: 1, month: 10, school_year: '2024-2025' }, error: null });
-    // ensureFinancialAccess (called by outer ensureFeeModAccess with isFinancialMutation=true):
-    mockQuery.single.mockResolvedValueOnce({ data: { role: 'Admin' }, error: null });
-    mockQuery.maybeSingle.mockResolvedValueOnce({ data: { class_type: 'Daycare', meal_rate: 20000, hospital_deduction_type: 'Fixed', hospital_deduction_value: 0 }, error: null });
-    // Update result:
-    mockQuery.single.mockResolvedValueOnce({ data: { id: 'f1', amount_vnd: 1000000 }, error: null });
-
-    mockQuery.select.mockImplementation((...args: any[]) => {
-      if (args[0] === '*') {
-        return { ...mockQuery, then: (resolve: any) => resolve({ data: [], error: null }) };
-      }
-      return mockQuery;
-    });
-
-    const { error } = await updateFeeRecordStatus('f1', -500, null, 'cash');
-    expect(error?.code).toBe('VALIDATION');
-    expect(error?.message).toContain('greater than or equal to 0');
   });
 });

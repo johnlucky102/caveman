@@ -125,9 +125,6 @@ const teacherStatusMap: Record<string, { label: string; variant: BadgeVariant }>
 const attendanceStatusMap: Record<string, { label: string; variant: BadgeVariant }> = {
   present: { label: 'Có mặt',   variant: 'success' },
   absent:  { label: 'Vắng mặt', variant: 'danger' },
-  late:    { label: 'Đi muộn',  variant: 'warning' },
-  excused: { label: 'Có phép',  variant: 'info' },
-  center_cancelled: { label: 'TT Nghỉ', variant: 'secondary' },
 };
 
 const feeStatusMap: Record<string, { label: string; variant: BadgeVariant }> = {

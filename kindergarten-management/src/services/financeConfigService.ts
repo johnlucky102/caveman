@@ -15,8 +15,6 @@ type FinanceConfigRow = {
   class_type: string;
   meal_rate: number;
   cancel_rate: number;
-  hospital_deduction_type: string;
-  hospital_deduction_value: number;
   del_yn: boolean;
   created_at: string;
   updated_at: string;
@@ -31,8 +29,6 @@ function mapFinanceConfigRow(row: FinanceConfigRow): ClassFinanceConfig {
     class_type: row.class_type as 'Daycare' | 'Evening',
     meal_rate: row.meal_rate,
     cancel_rate: row.cancel_rate,
-    hospital_deduction_type: row.hospital_deduction_type as 'Fixed' | 'Daily',
-    hospital_deduction_value: row.hospital_deduction_value,
     del_yn: row.del_yn,
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -108,8 +104,6 @@ export async function createFinanceConfig(
       class_type: input.class_type,
       meal_rate: input.meal_rate,
       cancel_rate: input.cancel_rate,
-      hospital_deduction_type: input.hospital_deduction_type,
-      hospital_deduction_value: input.hospital_deduction_value,
     })
     .select('*, classes!inner(name)')
     .single();
@@ -173,8 +167,6 @@ export async function ensureFinanceConfigExists(
     class_type: 'Daycare',
     meal_rate: 20000,
     cancel_rate: 50000,
-    hospital_deduction_type: 'Fixed',
-    hospital_deduction_value: 0,
   };
 
   const { error } = await createFinanceConfig(defaultConfig);

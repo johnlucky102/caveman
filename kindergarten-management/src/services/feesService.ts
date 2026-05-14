@@ -16,7 +16,6 @@ import { calendarYearFromSchoolMonth } from '@/utils/schoolYearCalendar';
 
 
 
-
 type FeeRow = {
   id: string;
   student_id: string;
@@ -197,6 +196,7 @@ export async function getFeeById(id: string): Promise<{ item: FeeRecordP2 | null
 
   if (result.error) return { item: null, error: toAppError(result.error, 'Không thể tải bản ghi học phí.') };
   if (!result.data) return { item: null, error: null };
+
   return { item: mapFeeRow(result.data as unknown as FeeRow), error: null };
 }
 
@@ -204,270 +204,135 @@ export async function createFeeRecord(input: CreateFeeInput): Promise<{ item: Fe
   const accessError = await ensureFinancialAccess(true);
   if (accessError.error) return { item: null, error: accessError.error };
 
-  const validationError = validatePaidAmount(input.paid_amount_vnd, input.amount_vnd);
-  if (validationError) return { item: null, error: validationError };
-
-  const result = await withSupabaseTimeout(
-    supabase
-      .from('fee_records')
-      .insert(input)
-      .select('id, student_id, class_id, title, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, base_amount_vnd, meal_deduction_vnd, tuition_deduction_vnd, deduction_note, created_at, updated_at, students(id, full_name, classes(id, name))')
-      .single(),
-    8000,
-    { data: null, error: { message: 'Timeout creating fee record', details: '', hint: '', code: 'TIMEOUT' } } as any
-  );
-
-  if (result.error) {
-    const err = result.error as any;
-    if (err.code === '23505') {
-      return {
-        item: null,
-        error: {
-          code: 'CONFLICT',
-          message: `Học sinh này đã có bản ghi học phí trong tháng ${input.month || ''} năm học ${input.school_year}.`,
-        },
-      };
-    }
-    return { item: null, error: toAppError(result.error, 'Không thể tạo bản ghi học phí.') };
-  }
-  invalidateSwCache(['fee_records']);
-  return { item: mapFeeRow(result.data as unknown as FeeRow), error: null };
-}
-
-export async function updateFeeRecordStatus(
-  id: string,
-  paidAmount: number,
-  paidDate: string | null,
-  paymentMethod: 'cash' | 'bank_transfer' | null
-): Promise<{ error: AppError | null }> {
-  const accessError = await ensureFeeModificationAccess(id, true);
-  if (accessError.error) return { error: accessError.error };
-
-  // 1. Auto-sync before payment to ensure deductions are applied
-  const syncResult = await syncFeeWithAttendance(id);
-  const currentAmount = syncResult.item ? syncResult.item.amount_vnd : paidAmount;
-
-  const amount = Number(currentAmount);
-  const finalPaidAmount = paidAmount > amount ? amount : paidAmount;
-  const validationError = validatePaidAmount(finalPaidAmount, amount);
-  if (validationError) return { error: validationError };
-
-  const status = finalPaidAmount <= 0 ? 'unpaid' : finalPaidAmount >= amount ? 'paid' : 'partial';
-  const updateResult = await withSupabaseTimeout(
-    supabase
-      .from('fee_records')
-      .update({
-        paid_amount_vnd: finalPaidAmount,
-        paid_date: paidDate,
-        payment_method: paymentMethod,
-        status,
-      })
-      .eq('id', id),
-    8000,
-    { data: null, error: { message: 'Timeout updating fee record', details: '', hint: '', code: 'TIMEOUT' } } as any
-  );
-
-  if (updateResult.error) return { error: toAppError(updateResult.error, 'Không thể cập nhật trạng thái học phí.') };
-  invalidateSwCache(['fee_records']);
-  return { error: null };
-}
-
-export async function updateFeeRecord(id: string, payload: Partial<CreateFeeInput>): Promise<{ item: FeeRecordP2 | null; error: AppError | null }> {
-  const isMoneyUpdate = 'amount_vnd' in payload || 'paid_amount_vnd' in payload || 'base_amount_vnd' in payload;
-  const accessError = await ensureFeeModificationAccess(id, isMoneyUpdate);
-  if (accessError.error) return { item: null, error: accessError.error };
-
-  const result = await withSupabaseTimeout(
-    supabase
-      .from('fee_records')
-      .update(payload)
-      .eq('id', id)
-      .select('id, student_id, class_id, title, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, base_amount_vnd, meal_deduction_vnd, tuition_deduction_vnd, deduction_note, created_at, updated_at, students(id, full_name, classes(id, name))')
-      .single(),
-    8000,
-    { data: null, error: { message: 'Timeout cập nhật học phí', details: '', hint: '', code: 'TIMEOUT' } } as any
-  );
-
-  if (result.error) return { item: null, error: toAppError(result.error, 'Không thể cập nhật bản ghi học phí.') };
-  invalidateSwCache(['fee_records']);
-  return { item: mapFeeRow(result.data as unknown as FeeRow), error: null };
-}
-
-export async function deleteFeeRecord(id: string): Promise<{ error: AppError | null }> {
-  const accessError = await ensureFeeModificationAccess(id);
-  if (accessError.error) return { error: accessError.error };
-
-  const result = await withSupabaseTimeout(
-    supabase.from('fee_records').update({ del_yn: true }).eq('id', id),
-    8000,
-    { data: null, error: { message: 'Timeout xóa học phí', details: '', hint: '', code: 'TIMEOUT' } } as any
-  );
-
-  if (result.error) return { error: toAppError(result.error, 'Không thể xóa bản ghi học phí.') };
-  invalidateSwCache(['fee_records']);
-  return { error: null };
-}
-
-export async function deleteFeeRecords(ids: string[]): Promise<{ error: AppError | null }> {
-  if (!ids.length) return { error: null };
-
-  const accessError = await ensureFinancialAccess(true);
-  if (accessError.error) return accessError;
-
-  const uniqueIds = [...new Set(ids)];
-
-  const fetchResult = await withSupabaseTimeout(
-    supabase.from('fee_records').select('id').in('id', uniqueIds).eq('del_yn', false),
-    8000,
-    { data: null, error: { message: 'Timeout tải danh sách học phí', details: '', hint: '', code: 'TIMEOUT' } } as any
-  );
-
-  if (fetchResult.error) {
-    return { error: toAppError(fetchResult.error, 'Không thể tải danh sách học phí để xóa.') };
-  }
-
-  const foundRows = fetchResult.data || [];
-  if (foundRows.length !== uniqueIds.length) {
-    return {
-      error: {
-        code: 'NOT_FOUND',
-        message: 'Một hoặc nhiều bản ghi học phí không tồn tại hoặc đã xóa.',
-      },
-    };
-  }
-
-  for (const id of uniqueIds) {
-    const guard = await ensureFeeModificationAccess(id);
-    if (guard.error) return guard;
-  }
-
-  const result = await withSupabaseTimeout(
-    supabase.from('fee_records').update({ del_yn: true }).in('id', uniqueIds),
-    8000,
-    { data: null, error: { message: 'Timeout xóa danh sách học phí', details: '', hint: '', code: 'TIMEOUT' } } as any
-  );
-
-  if (result.error) return { error: toAppError(result.error, 'Không thể xóa danh sách học phí.') };
-  invalidateSwCache(['fee_records']);
-  return { error: null };
-}
-
-export async function createClassFees(
-  classId: number,
-  month: number,
-  schoolYear: string,
-  title: string,
-  baseAmount: number
-): Promise<{ error: AppError | null }> {
-  const accessError = await ensureFinancialAccess(true);
-  if (accessError.error) return { error: accessError.error };
-
-  // 1. Get all students in class
-  const studentsResult = await supabase
-    .from('students')
-    .select('id')
-    .eq('class_id', classId)
-    .eq('del_yn', false);
-  
-  if (studentsResult.error) return { error: toAppError(studentsResult.error, 'Không tải được học sinh của lớp.') };
-  const allStudents = studentsResult.data || [];
-  if (allStudents.length === 0) return { error: { code: 'NOT_FOUND', message: 'Lớp học hiện chưa có học sinh nào.' } };
-
-  // 2. Filter out students who already have fee records for this month/year
-  const existingFeesResult = await supabase
+  const { data, error } = await supabase
     .from('fee_records')
-    .select('student_id')
-    .eq('class_id', classId)
-    .eq('month', month)
-    .eq('school_year', schoolYear)
-    .eq('del_yn', false);
-
-  const existingStudentIds = new Set((existingFeesResult.data || []).map(f => f.student_id));
-  const newStudents = allStudents.filter(s => !existingStudentIds.has(s.id));
-
-  if (newStudents.length === 0) {
-    return { error: { code: 'CONFLICT', message: 'Tất cả học sinh trong lớp này đã có học phí cho tháng này.' } };
-  }
-
-  // 3. Create records
-  const payload = newStudents.map(s => ({
-    student_id: s.id,
-    class_id: classId,
-    month,
-    school_year: schoolYear,
-    title,
-    base_amount_vnd: baseAmount,
-    amount_vnd: baseAmount,
-    status: 'unpaid'
-  }));
-
-  const { data: createdRecords, error } = await supabase
-    .from('fee_records')
-    .insert(payload)
-    .select('id');
+    .insert({
+      student_id: input.student_id,
+      class_id: input.class_id,
+      title: input.title || 'Học phí',
+      school_year: input.school_year,
+      month: input.month,
+      amount_vnd: input.amount_vnd,
+      paid_amount_vnd: input.paid_amount_vnd,
+      paid_date: input.paid_date,
+      due_date: input.due_date,
+      payment_method: input.payment_method,
+      status: input.status,
+      base_amount_vnd: input.base_amount_vnd,
+      meal_deduction_vnd: input.meal_deduction_vnd,
+      tuition_deduction_vnd: input.tuition_deduction_vnd,
+      deduction_note: input.deduction_note,
+    })
+    .select('id, student_id, class_id, title, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, base_amount_vnd, meal_deduction_vnd, tuition_deduction_vnd, deduction_note, created_at, updated_at, students(id, full_name, classes(id, name))')
+    .single();
 
   if (error) {
-    if (error.code === '23505') return { error: { code: 'CONFLICT', message: 'Một số học sinh trong lớp đã có học phí cho tháng này.' } };
-    return { error: toAppError(error, 'Lỗi khi tạo học phí hàng loạt.') };
+    return { item: null, error: toAppError(error, 'Không thể tạo học phí.') };
   }
 
-  // 4. Auto-Sync all newly created records with attendance
-  if (createdRecords && createdRecords.length > 0) {
-    // Run sync in background/sequence but wait for completion to ensure correct amounts
-    for (const record of createdRecords) {
-      await syncFeeWithAttendance(record.id);
-    }
+  invalidateSwCache(['fees', 'dashboard']);
+
+  return { item: mapFeeRow(data as unknown as FeeRow), error: null };
+}
+
+export async function updateFeeRecord(
+  id: string,
+  input: Partial<CreateFeeInput>,
+): Promise<{ item: FeeRecordP2 | null; error: AppError | null }> {
+  const accessError = await ensureFinancialAccess(true);
+  if (accessError.error) return { item: null, error: accessError.error };
+
+  const { data, error } = await supabase
+    .from('fee_records')
+    .update(input)
+    .eq('id', id)
+    .eq('del_yn', false)
+    .select('id, student_id, class_id, title, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, base_amount_vnd, meal_deduction_vnd, tuition_deduction_vnd, deduction_note, created_at, updated_at, students(id, full_name, classes(id, name))')
+    .single();
+
+  if (error) {
+    return { item: null, error: toAppError(error, 'Không thể cập nhật học phí.') };
   }
 
-  invalidateSwCache(['fee_records']);
+  invalidateSwCache(['fees', 'dashboard']);
+
+  return { item: mapFeeRow(data as unknown as FeeRow), error: null };
+}
+
+export async function deleteFeeRecord(feeId: string): Promise<{ error: AppError | null }> {
+  return deleteFeeRecords([feeId]);
+}
+
+export async function deleteFeeRecords(feeIds: string[]): Promise<{ error: AppError | null }> {
+  if (feeIds.length === 0) return { error: null };
+
+  const accessError = await ensureFinancialAccess(true);
+  if (accessError.error) return { error: accessError.error };
+
+  const { error } = await supabase
+    .from('fee_records')
+    .update({ del_yn: true })
+    .in('id', feeIds)
+    .eq('del_yn', false);
+
+  if (error) {
+    return { error: toAppError(error, 'Không thể xóa học phí.') };
+  }
+
+  invalidateSwCache(['fees', 'dashboard']);
+
   return { error: null };
 }
 
 export async function syncFeeWithAttendance(feeId: string): Promise<{ item: FeeRecordP2 | null; error: AppError | null }> {
-  const accessError = await ensureFeeModificationAccess(feeId);
-  if (accessError.error) return { item: null, error: accessError.error };
+  // Get current user
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { item: null, error: { code: 'UNAUTHORIZED', message: 'Bạn chưa đăng nhập.' } };
 
-  // 1. Load fee
+  // 1. Load the fee record
   const feeResult = await supabase
     .from('fee_records')
-    .select('*, students(id, full_name)')
+    .select('id, student_id, class_id, title, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, base_amount_vnd, meal_deduction_vnd, tuition_deduction_vnd, deduction_note, created_at, updated_at, students(id, full_name, classes(id, name))')
     .eq('id', feeId)
     .single();
-  
-  if (feeResult.error) return { item: null, error: toAppError(feeResult.error, 'Không tải được bản ghi học phí.') };
-  const fee = feeResult.data;
-  if (!fee) return { item: null, error: { code: 'NOT_FOUND', message: 'Không tìm thấy bản ghi học phí.' } };
 
-  // 1b. Load finance config từ class_finance_configs
+  if (feeResult.error || !feeResult.data) {
+    return { item: null, error: toAppError(feeResult.error || { message: 'Fee not found', code: 'NOT_FOUND' }, 'Không tìm thấy bản ghi học phí.') };
+  }
+  const fee = feeResult.data;
+
+  // 2. Load class finance config
   const configResult = await supabase
     .from('class_finance_configs')
-    .select('class_type, meal_rate, cancel_rate, hospital_deduction_type, hospital_deduction_value')
+    .select('class_type, meal_rate, cancel_rate')
     .eq('class_id', fee.class_id)
     .eq('del_yn', false)
     .maybeSingle();
 
-  if (configResult.error) return { item: null, error: toAppError(configResult.error, 'Không tải được cấu hình tài chính.') };
-  const classConfig = configResult.data;
-  if (!classConfig) return { item: null, error: { code: 'NOT_FOUND', message: 'Không tìm thấy cấu hình tài chính cho lớp học này.' } };
-
-  // 2. Load attendance for that month
-  const actualYear =
-    fee.month != null ? calendarYearFromSchoolMonth(String(fee.school_year), fee.month) : null;
-  if (actualYear == null) {
-    return { item: null, error: { code: 'VALIDATION', message: 'Tháng hoặc năm học không hợp lệ.' } };
+  if (configResult.error || !configResult.data) {
+    return { item: null, error: toAppError(configResult.error || { message: 'Config not found', code: 'NOT_FOUND' }, 'Không tìm thấy cấu hình tài chính cho lớp này.') };
   }
+  const classConfig = configResult.data;
 
-  const startDate = `${actualYear}-${String(fee.month).padStart(2, '0')}-01`;
-  const endDate = new Date(actualYear, fee.month, 0).toISOString().split('T')[0];
+  // 3. Load attendance for this student's month
+  const { month, school_year } = fee;
+  if (!month || !school_year) {
+    return { item: null, error: { code: 'VALIDATION', message: 'Học phí không có tháng để đồng bộ chuyên cần.' } };
+  }
+  const { year: calendarYear } = calendarYearFromSchoolMonth(school_year, month);
+  const startDate = `${calendarYear}-${String(month).padStart(2, '0')}-01`;
+  const endDateObj = new Date(calendarYear, month, 0);
+  const endDate = `${endDateObj.getFullYear()}-${String(endDateObj.getMonth() + 1).padStart(2, '0')}-${String(endDateObj.getDate()).padStart(2, '0')}`;
 
   const attendanceResult = await supabase
     .from('attendance')
-    .select('*')
+    .select('status')
     .eq('student_id', fee.student_id)
+    .eq('class_id', fee.class_id as number) // class_id is stored in fee_records
     .gte('attendance_date', startDate)
     .lte('attendance_date', endDate)
     .eq('del_yn', false);
-  
+
   if (attendanceResult.error) return { item: null, error: toAppError(attendanceResult.error, 'Không tải được dữ liệu điểm danh.') };
   const attendance = attendanceResult.data || [];
 
@@ -478,36 +343,21 @@ export async function syncFeeWithAttendance(feeId: string): Promise<{ item: FeeR
 
   const mealRate = classConfig.meal_rate || 20000;
   const cancelRate = classConfig.cancel_rate || 50000;
-  const hospitalType = classConfig.hospital_deduction_type; // 'Fixed' | 'Daily'
-  const hospitalVal = classConfig.hospital_deduction_value || 0;
 
   attendance.forEach(record => {
     // A. Meal deduction (Daycare only)
-    if (classConfig.class_type === 'Daycare') {
-      if (record.status === 'absent' || record.status === 'excused' || record.status === 'center_cancelled') {
-        mealDeduction += mealRate;
-      }
+    if (classConfig.class_type === 'Daycare' && record.status === 'absent') {
+      mealDeduction += mealRate;
     }
 
-    // B. Hospital deduction (Daycare only)
-    if (classConfig.class_type === 'Daycare' && record.is_hospitalized) {
-      if (hospitalType === 'Fixed') {
-        tuitionDeduction += hospitalVal;
-      } else {
-        // Daily rate based on 22 working days
-        const dailyTuition = ((fee.base_amount_vnd || fee.amount_vnd) || 0) / 22;
-        tuitionDeduction += Math.round((dailyTuition * hospitalVal) / 100);
-      }
-    }
-
-    // C. Center Cancelled (Evening class only)
-    if (classConfig.class_type === 'Evening' && record.status === 'center_cancelled') {
+    // B. Cancel deduction (Evening class only)
+    if (classConfig.class_type === 'Evening' && record.status === 'absent') {
       tuitionDeduction += cancelRate;
     }
   });
 
-  if (mealDeduction > 0) notes.push(`Trừ ${attendance.filter(r => (r.status === 'absent' || r.status === 'excused' || r.status === 'center_cancelled') && classConfig.class_type === 'Daycare').length} ngày cơm`);
-  if (tuitionDeduction > 0) notes.push(`Khấu trừ học phí (Nằm viện/TT nghỉ)`);
+  if (mealDeduction > 0) notes.push(`Trừ ${attendance.filter(r => r.status === 'absent' && classConfig.class_type === 'Daycare').length} ngày cơm`);
+  if (tuitionDeduction > 0) notes.push(`Khấu trừ học phí (Vắng tối)`);
 
   const baseAmount = fee.base_amount_vnd || fee.amount_vnd;
   const finalAmount = Math.max(0, baseAmount - mealDeduction - tuitionDeduction);
@@ -526,6 +376,86 @@ export async function syncFeeWithAttendance(feeId: string): Promise<{ item: FeeR
     .single();
 
   if (updateResult.error) return { item: null, error: toAppError(updateResult.error, 'Lỗi khi cập nhật học phí sau khấu trừ.') };
-  invalidateSwCache(['fee_records']);
-  return { item: mapFeeRow(updateResult.data as any), error: null };
+
+  return { item: mapFeeRow(updateResult.data as unknown as FeeRow), error: null };
+}
+
+export async function createClassFees(
+  config: { classId: number; month: number; schoolYear: string },
+  feeTypeId: number,
+  baseAmount: number,
+  students: { studentId: string }[],
+): Promise<{ items: FeeRecordP2[]; error: AppError | null }> {
+  const fees: FeeRecordP2[] = [];
+
+  for (const student of students) {
+    const { item, error } = await createFeeRecord({
+      student_id: student.studentId,
+      class_id: config.classId,
+      school_year: config.schoolYear,
+      month: config.month,
+      amount_vnd: baseAmount,
+      paid_amount_vnd: 0,
+      paid_date: null,
+      due_date: null,
+      payment_method: null,
+      status: 'unpaid',
+      base_amount_vnd: baseAmount,
+      deduction_note: '',
+    });
+
+    if (error) {
+      return { items: fees, error };
+    }
+
+    if (item) fees.push(item);
+  }
+
+  return { items: fees, error: null };
+}
+
+export async function updateFeeRecordStatus(
+  id: string,
+  paidAmount: number,
+  paidDate: string | null,
+  paymentMethod: 'cash' | 'bank_transfer' | null,
+): Promise<{ item: FeeRecordP2 | null; error: AppError | null }> {
+  // Validate
+  let fee = await syncFeeWithAttendance(id);
+  if (fee.error) return { item: null, error: fee.error };
+  if (!fee.item) return { item: null, error: { code: 'NOT_FOUND', message: 'Fee not found' } };
+
+  // Cap paid amount to total amount
+  const cappedPaid = Math.min(paidAmount, fee.item.amount_vnd);
+
+  const validationError = validatePaidAmount(cappedPaid, fee.item.amount_vnd);
+  if (validationError) return { item: null, error: validationError };
+
+  let status: 'unpaid' | 'partial' | 'paid';
+  if (cappedPaid <= 0) {
+    status = 'unpaid';
+  } else if (cappedPaid < fee.item.amount_vnd) {
+    status = 'partial';
+  } else {
+    status = 'paid';
+  }
+
+  const { data, error } = await supabase
+    .from('fee_records')
+    .update({
+      paid_amount_vnd: cappedPaid,
+      paid_date: paidDate,
+      payment_method: paymentMethod,
+      status,
+    })
+    .eq('id', id)
+    .eq('del_yn', false)
+    .select('id, student_id, class_id, title, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, base_amount_vnd, meal_deduction_vnd, tuition_deduction_vnd, deduction_note, created_at, updated_at, students(id, full_name, classes(id, name))')
+    .single();
+
+  if (error) return { item: null, error: toAppError(error, 'Không thể cập nhật trạng thái học phí.') };
+
+  invalidateSwCache(['fees', 'dashboard']);
+
+  return { item: mapFeeRow(data as unknown as FeeRow), error: null };
 }
