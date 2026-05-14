@@ -15,6 +15,7 @@ export const ROLE_ROUTE_ACCESS: Record<string, AppRole[]> = {
   '/parents': ['Admin', 'Teacher'],
   '/attendance': ['Admin', 'Teacher'],
   '/fees': ['Admin', 'Accountant'],
+  '/finance-config': ['Admin', 'Accountant'],
 
   '/reports': ['Admin', 'Accountant'],
   '/settings': ['Admin'],

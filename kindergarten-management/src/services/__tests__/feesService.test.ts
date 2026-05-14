@@ -50,13 +50,13 @@ describe('syncFeeWithAttendance', () => {
       base_amount_vnd: 3000000,
       month: 10,
       school_year: '2024-2025',
-      classes: {
-        id: 'cls-1',
-        class_type: 'Daycare',
-        meal_rate: 20000,
-        hospital_deduction_type: 'Fixed',
-        hospital_deduction_value: 0
-      }
+    };
+
+    const mockConfig = {
+      class_type: 'Daycare',
+      meal_rate: 20000,
+      hospital_deduction_type: 'Fixed',
+      hospital_deduction_value: 0
     };
 
     const mockAttendance = [
@@ -75,9 +75,11 @@ describe('syncFeeWithAttendance', () => {
     fromMock.mockReturnValueOnce(createMockSupabaseChain({ status: 'unpaid', class_id: 1 }) as any);
     // Call 3: Load fee
     fromMock.mockReturnValueOnce(createMockSupabaseChain(mockFee) as any);
-    // Call 4: Load attendance
+    // Call 4: Load finance config from class_finance_configs
+    fromMock.mockReturnValueOnce(createMockSupabaseChain(mockConfig) as any);
+    // Call 5: Load attendance
     fromMock.mockReturnValueOnce(createMockSupabaseChain(mockAttendance) as any);
-    // Call 5: Update
+    // Call 6: Update
     const updateChain = createMockSupabaseChain({ ...mockFee, amount_vnd: 2900000 });
     fromMock.mockReturnValueOnce(updateChain as any);
 
@@ -97,12 +99,12 @@ describe('syncFeeWithAttendance', () => {
       base_amount_vnd: 3000000,
       month: 10,
       school_year: '2024-2025',
-      classes: {
-        class_type: 'Daycare',
-        meal_rate: 20000,
-        hospital_deduction_type: 'Fixed',
-        hospital_deduction_value: 500000
-      }
+    };
+    const mockConfig = {
+      class_type: 'Daycare',
+      meal_rate: 20000,
+      hospital_deduction_type: 'Fixed',
+      hospital_deduction_value: 500000
     };
     const mockAttendance = [{ status: 'absent', is_hospitalized: true }];
 
@@ -110,8 +112,11 @@ describe('syncFeeWithAttendance', () => {
     // RBAC
     fromMock.mockReturnValueOnce(createMockSupabaseChain({ role: 'Admin' }) as any);
     fromMock.mockReturnValueOnce(createMockSupabaseChain({ status: 'unpaid', class_id: 1 }) as any);
-    // Data
+    // Data: fee
     fromMock.mockReturnValueOnce(createMockSupabaseChain(mockFee) as any);
+    // Data: class_finance_configs
+    fromMock.mockReturnValueOnce(createMockSupabaseChain(mockConfig) as any);
+    // Data: attendance
     fromMock.mockReturnValueOnce(createMockSupabaseChain(mockAttendance) as any);
     const updateChain = createMockSupabaseChain({});
     fromMock.mockReturnValueOnce(updateChain as any);
@@ -131,12 +136,12 @@ describe('syncFeeWithAttendance', () => {
       base_amount_vnd: 2200000,
       month: 10,
       school_year: '2024-2025',
-      classes: {
-        class_type: 'Daycare',
-        meal_rate: 20000,
-        hospital_deduction_type: 'Daily',
-        hospital_deduction_value: 50
-      }
+    };
+    const mockConfig = {
+      class_type: 'Daycare',
+      meal_rate: 20000,
+      hospital_deduction_type: 'Daily',
+      hospital_deduction_value: 50
     };
     const mockAttendance = [{ status: 'absent', is_hospitalized: true }];
 
@@ -144,8 +149,11 @@ describe('syncFeeWithAttendance', () => {
     // RBAC
     fromMock.mockReturnValueOnce(createMockSupabaseChain({ role: 'Admin' }) as any);
     fromMock.mockReturnValueOnce(createMockSupabaseChain({ status: 'unpaid', class_id: 1 }) as any);
-    // Data
+    // Data: fee
     fromMock.mockReturnValueOnce(createMockSupabaseChain(mockFee) as any);
+    // Data: class_finance_configs
+    fromMock.mockReturnValueOnce(createMockSupabaseChain(mockConfig) as any);
+    // Data: attendance
     fromMock.mockReturnValueOnce(createMockSupabaseChain(mockAttendance) as any);
     const updateChain = createMockSupabaseChain({});
     fromMock.mockReturnValueOnce(updateChain as any);
@@ -166,10 +174,10 @@ describe('syncFeeWithAttendance', () => {
       base_amount_vnd: 1200000,
       month: 10,
       school_year: '2024-2025',
-      classes: {
-        class_type: 'Evening',
-        cancel_rate: 50000
-      }
+    };
+    const mockConfig = {
+      class_type: 'Evening',
+      cancel_rate: 50000
     };
     const mockAttendance = [
       { status: 'center_cancelled', is_hospitalized: false },
@@ -180,8 +188,11 @@ describe('syncFeeWithAttendance', () => {
     // RBAC
     fromMock.mockReturnValueOnce(createMockSupabaseChain({ role: 'Admin' }) as any);
     fromMock.mockReturnValueOnce(createMockSupabaseChain({ status: 'unpaid', class_id: 1 }) as any);
-    // Data
+    // Data: fee
     fromMock.mockReturnValueOnce(createMockSupabaseChain(mockFee) as any);
+    // Data: class_finance_configs
+    fromMock.mockReturnValueOnce(createMockSupabaseChain(mockConfig) as any);
+    // Data: attendance
     fromMock.mockReturnValueOnce(createMockSupabaseChain(mockAttendance) as any);
     const updateChain = createMockSupabaseChain({});
     fromMock.mockReturnValueOnce(updateChain as any);
@@ -207,7 +218,7 @@ describe('createClassFees', () => {
       eq: vi.fn().mockReturnThis(),
       single: vi.fn().mockResolvedValue({ data, error }),
       maybeSingle: vi.fn().mockResolvedValue({ data, error }),
-      insert: vi.fn().mockResolvedValue({ error }),
+      insert: vi.fn().mockReturnThis(),
       then: vi.fn().mockImplementation((cb) => cb({ data, error })),
     };
   };
@@ -225,12 +236,14 @@ describe('createClassFees', () => {
 
   it('should return CONFLICT error if records already exist', async () => {
     const fromMock = vi.mocked(supabase.from);
-    // RBAC
-    fromMock.mockReturnValueOnce(createMockSupabaseChain({ role: 'Admin' }) as any); // users
+    // RBAC (users)
+    fromMock.mockReturnValueOnce(createMockSupabaseChain({ role: 'Admin' }) as any);
     // Students query
-    fromMock.mockReturnValueOnce(createMockSupabaseChain([{ id: 'std-1' }]) as any); // Students query
+    fromMock.mockReturnValueOnce(createMockSupabaseChain([{ id: 'std-1' }]) as any);
+    // Existing fees query (check for duplicates before insert)
+    fromMock.mockReturnValueOnce(createMockSupabaseChain([]) as any);
     // Insert query
-    fromMock.mockReturnValueOnce(createMockSupabaseChain(null, { code: '23505' }) as any); // Insert query
+    fromMock.mockReturnValueOnce(createMockSupabaseChain(null, { code: '23505' }) as any);
 
     const result = await createClassFees(1, 10, '2024-2025', 'Tuition', 3000000);
     expect(result.error?.code).toBe('CONFLICT');

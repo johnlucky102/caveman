@@ -427,17 +427,28 @@ export async function syncFeeWithAttendance(feeId: string): Promise<{ item: FeeR
   const accessError = await ensureFeeModificationAccess(feeId);
   if (accessError.error) return { item: null, error: accessError.error };
 
-  // 1. Load fee with class config
+  // 1. Load fee
   const feeResult = await supabase
     .from('fee_records')
-    .select('*, students(id, full_name), classes(*)')
+    .select('*, students(id, full_name)')
     .eq('id', feeId)
     .single();
   
   if (feeResult.error) return { item: null, error: toAppError(feeResult.error, 'Không tải được bản ghi học phí.') };
   const fee = feeResult.data;
-  const classConfig = fee.classes;
-  if (!classConfig) return { item: null, error: { code: 'NOT_FOUND', message: 'Không tìm thấy cấu hình lớp học.' } };
+  if (!fee) return { item: null, error: { code: 'NOT_FOUND', message: 'Không tìm thấy bản ghi học phí.' } };
+
+  // 1b. Load finance config từ class_finance_configs
+  const configResult = await supabase
+    .from('class_finance_configs')
+    .select('class_type, meal_rate, cancel_rate, hospital_deduction_type, hospital_deduction_value')
+    .eq('class_id', fee.class_id)
+    .eq('del_yn', false)
+    .maybeSingle();
+
+  if (configResult.error) return { item: null, error: toAppError(configResult.error, 'Không tải được cấu hình tài chính.') };
+  const classConfig = configResult.data;
+  if (!classConfig) return { item: null, error: { code: 'NOT_FOUND', message: 'Không tìm thấy cấu hình tài chính cho lớp học này.' } };
 
   // 2. Load attendance for that month
   const actualYear =

@@ -3,6 +3,7 @@ import { updateClass } from '../classesService';
 import { updateStudent, createStudent } from '../studentsService';
 import { upsertAttendanceBulk } from '../attendanceService';
 import { createClassFees } from '../feesService';
+import { updateFinanceConfig } from '../financeConfigService';
 import { supabase } from '@/lib/supabase';
 
 // Mock Supabase with a more robust chainable builder
@@ -69,15 +70,19 @@ describe('Security & Permission Controls (Post-Hardening)', () => {
       if (table === 'fee_records') {
           return createMockBuilder({ status: 'unpaid' });
       }
+
+      if (table === 'class_finance_configs') {
+        return createMockBuilder({ id: 1, class_id: 1, class_type: 'Daycare', meal_rate: 50000 });
+      }
       
       return createMockBuilder([]);
     });
   };
 
   describe('Financial Controls', () => {
-    it('Teacher should REJECT financial updates in classes', async () => {
+    it('Teacher should REJECT financial config updates', async () => {
       setupContext('teacher-1', 'Teacher');
-      const result = await updateClass(1, { meal_rate: 50000 } as any);
+      const result = await updateFinanceConfig(1, { meal_rate: 50000 });
       expect(result.error?.code).toBe('FORBIDDEN');
     });
 
@@ -87,9 +92,9 @@ describe('Security & Permission Controls (Post-Hardening)', () => {
       expect(result.error?.code).toBe('FORBIDDEN');
     });
 
-    it('Admin should ALLOW financial updates', async () => {
+    it('Admin should ALLOW financial config updates', async () => {
       setupContext('admin-1', 'Admin');
-      const result = await updateClass(1, { meal_rate: 50000 } as any);
+      const result = await updateFinanceConfig(1, { meal_rate: 50000 });
       expect(result.error).toBeNull();
     });
   });

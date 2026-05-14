@@ -37,7 +37,29 @@ async function seed() {
   const classId = existingClasses[0].id;
   console.log(`Using class: ${existingClasses[0].name} (${classId})`);
 
-  // 2. Create Students
+  // 2. Create Finance Configs for each class
+  const classFinanceConfigs = existingClasses.map((c) => ({
+    class_id: c.id,
+    class_type: 'Daycare',
+    meal_rate: 20000,
+    tuition_fixed_deduction: 0,
+    tuition_daily_percent: 0,
+    hospital_fixed_deduction: 0,
+    hospital_daily_percent: 0,
+    del_yn: false,
+  }));
+
+  const { error: configError } = await supabase
+    .from('class_finance_configs')
+    .insert(classFinanceConfigs);
+
+  if (configError) {
+    console.error('Error seeding finance configs:', configError);
+  } else {
+    console.log(`Created ${classFinanceConfigs.length} finance configs`);
+  }
+
+  // 3. Create Students
   const { data: students, error: studentError } = await supabase
     .from('students')
     .insert([
@@ -70,7 +92,7 @@ async function seed() {
 
   const { data: existingStudents } = await supabase.from('students').select('id, full_name');
 
-  // 3. Create Parents
+  // 4. Create Parents
   const { data: parents, error: parentError } = await supabase
     .from('parents')
     .insert([
@@ -87,7 +109,7 @@ async function seed() {
 
   const { data: existingParents } = await supabase.from('parents').select('id, full_name');
 
-  // 4. Link Parents to Students
+  // 5. Link Parents to Students
   if (existingStudents && existingParents && existingStudents.length >= 2 && existingParents.length >= 2) {
     const { error: linkError } = await supabase
       .from('student_parent')
@@ -103,7 +125,7 @@ async function seed() {
     }
   }
 
-  // 5. Create Fees
+  // 6. Create Fees
   if (existingStudents && existingStudents.length > 0) {
     const { error: feeError } = await supabase
       .from('fee_records')
@@ -128,7 +150,7 @@ async function seed() {
     }
   }
 
-  // 6. Create Notifications
+  // 7. Create Notifications
   const { error: notifError } = await supabase
     .from('notifications')
     .insert([

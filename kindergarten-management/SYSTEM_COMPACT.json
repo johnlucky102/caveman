@@ -55,6 +55,7 @@
       "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\services\\studentsService.ts",
       "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\services\\attendanceService.ts",
       "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\services\\feesService.ts",
+      "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\services\\financeConfigService.ts",
       "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\services\\supabaseErrors.ts"
     ],
     "domain_types": "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\types\\domain.ts"
@@ -156,6 +157,10 @@
         "Teacher",
         "Accountant"
       ],
+      "/finance-config": [
+        "Admin",
+        "Accountant"
+      ],
       "/settings": [
         "Admin"
       ]
@@ -164,6 +169,9 @@
   "database_alignment": {
     "schema_file": "C:\\AI\\project\\package\\caveman\\kindergarten-management\\supabase\\schema.sql",
     "rls_patch_file": "C:\\AI\\project\\package\\caveman\\kindergarten-management\\supabase\\rls_p1_alignment.sql",
+    "migration_files": [
+      "C:\\AI\\project\\package\\caveman\\kindergarten-management\\supabase\\migrations\\20260513_create_class_finance_configs.sql"
+    ],
     "applied_note": "User confirmed rls_p1_alignment.sql applied",
     "core_tables": [
       "users",
@@ -172,7 +180,8 @@
       "students",
       "attendance",
       "fee_types",
-      "fee_records"
+      "fee_records",
+      "class_finance_configs"
     ],
     "key_constraints": {
       "users_role_check": "role IN ('Admin','Teacher','Accountant','Parent')",
@@ -236,6 +245,17 @@
           "Dashboard debt cards aggregate from current page only, not global aggregate query",
           "Unique conflict UX for (student_id,fee_type_id,school_year,month) not explicitly mapped to field-level message"
         ]
+      },
+      "finance_configs": {
+        "done": [
+          "Bảng class_finance_configs riêng với UNIQUE FK -> classes + ON DELETE CASCADE",
+          "financeConfigService.ts với CRUD + RBAC (Admin/Accountant only)",
+          "FinanceConfigPage.tsx (list/edit/search)",
+          "ClassDetail.tsx: link button đến /finance-config thay vì financial card",
+          "ClassForm.tsx: tự động tạo config mặc định khi tạo class mới",
+          "syncFeeWithAttendance đọc từ class_finance_configs thay vì classes(*) join",
+          "Migration DROP cột financial khỏi bảng classes"
+        ]
       }
     },
     "out_of_scope_or_mock_modules": [
@@ -260,6 +280,7 @@
       "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\pages\\Attendance.tsx",
       "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\pages\\Fees.tsx",
       "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\pages\\FeeForm.tsx",
+      "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\pages\\FinanceConfigPage.tsx",
       "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\pages\\Login.tsx",
       "C:\\AI\\project\\package\\caveman\\kindergarten-management\\src\\pages\\SignUp.tsx"
     ],

@@ -9,7 +9,8 @@ import type {
   UpdateClassInput,
 } from '@/types/domain';
 import { toAppError } from './supabaseErrors';
-import { ensureRole, ensureClassOwnership, ensureFinancialAccess } from './serviceGuards';
+import { ensureRole, ensureClassOwnership } from './serviceGuards';
+import { ensureFinanceConfigExists } from './financeConfigService';
 
 type ClassRow = {
   id: number;
@@ -20,11 +21,6 @@ type ClassRow = {
   created_at: string;
   updated_at: string;
   description: string | null;
-  class_type: 'Daycare' | 'Evening';
-  meal_rate: number;
-  cancel_rate: number;
-  hospital_deduction_type: 'Fixed' | 'Daily';
-  hospital_deduction_value: number;
   users: { id: string; full_name: string } | null;
   class_teachers: {
     id: string;
@@ -44,11 +40,6 @@ function mapClassRow(row: ClassRow, studentCount: number): ClassRecord {
     max_students: row.max_students,
     student_count: studentCount,
     description: row.description,
-    class_type: row.class_type,
-    meal_rate: row.meal_rate,
-    cancel_rate: row.cancel_rate,
-    hospital_deduction_type: row.hospital_deduction_type,
-    hospital_deduction_value: row.hospital_deduction_value,
     teachers: (row.class_teachers || []).map(ct => ({
       id: ct.id,
       class_id: row.id,
@@ -92,7 +83,7 @@ export async function listClasses(query: ClassListQuery): Promise<{ data: ListEn
 
   let statement = supabase
     .from('classes')
-    .select('id, name, teacher_id, room, max_students, description, created_at, updated_at, class_type, meal_rate, cancel_rate, hospital_deduction_type, hospital_deduction_value, users(id, full_name), class_teachers(id, teacher_id, role, users(full_name))', { count: 'exact' })
+    .select('id, name, teacher_id, room, max_students, description, created_at, updated_at, users(id, full_name), class_teachers(id, teacher_id, role, users(full_name))', { count: 'exact' })
     .eq('del_yn', false);
 
   if (query.search?.trim()) {
@@ -160,7 +151,7 @@ export async function getClassById(id: number): Promise<{ item: ClassRecord | nu
   const result = await withSupabaseTimeout(
     supabase
       .from('classes')
-      .select('id, name, teacher_id, room, max_students, description, created_at, updated_at, class_type, meal_rate, cancel_rate, hospital_deduction_type, hospital_deduction_value, users(id, full_name), class_teachers(id, teacher_id, role, users(full_name))')
+      .select('id, name, teacher_id, room, max_students, description, created_at, updated_at, users(id, full_name), class_teachers(id, teacher_id, role, users(full_name))')
       .eq('id', id)
       .eq('del_yn', false)
       .maybeSingle(),
@@ -183,29 +174,30 @@ export async function createClass(payload: CreateClassInput): Promise<{ item: Cl
     supabase
       .from('classes')
       .insert(payload)
-      .select('id, name, teacher_id, room, max_students, description, created_at, updated_at, class_type, meal_rate, cancel_rate, hospital_deduction_type, hospital_deduction_value, users(id, full_name)')
+      .select('id, name, teacher_id, room, max_students, description, created_at, updated_at, users(id, full_name)')
       .single(),
     8000,
     { data: null, error: { message: 'Timeout creating class', details: '', hint: '', code: 'TIMEOUT' } } as any
   );
 
-  if (!result.error && result.data) return { item: mapClassRow(result.data as unknown as ClassRow, 0), error: null };
-  return { item: null, error: toAppError(result.error, 'Không thể tạo lớp học.') };
+  if (result.error || !result.data) return { item: null, error: toAppError(result.error, 'Không thể tạo lớp học.') };
+
+  const classItem = mapClassRow(result.data as unknown as ClassRow, 0);
+
+  // Tự động tạo finance config với default values
+  const { error: configError } = await ensureFinanceConfigExists(classItem.id);
+  if (configError) {
+    // Log nhưng không block - class vẫn được tạo
+    console.warn('[classesService] Không thể tạo finance config mặc định:', configError.message);
+  }
+
+  return { item: classItem, error: null };
 }
 
 export async function updateClass(id: number, payload: UpdateClassInput): Promise<{ item: ClassRecord | null; error: AppError | null }> {
   // 1. Ownership check
   const ownership = await ensureClassOwnership(id);
   if (ownership.error) return { item: null, error: ownership.error };
-
-  // 2. Financial field check
-  const financialFields: (keyof UpdateClassInput)[] = ['meal_rate', 'cancel_rate', 'hospital_deduction_type', 'hospital_deduction_value'];
-  const isChangingFinance = financialFields.some(field => field in payload);
-  
-  if (isChangingFinance) {
-    const finAccess = await ensureFinancialAccess(true);
-    if (finAccess.error) return { item: null, error: finAccess.error };
-  }
 
   const currentCounts = await getStudentCounts([id]);
   const currentStudentCount = currentCounts.get(id) || 0;
@@ -225,7 +217,7 @@ export async function updateClass(id: number, payload: UpdateClassInput): Promis
       .from('classes')
       .update(payload)
       .eq('id', id)
-      .select('id, name, teacher_id, room, max_students, description, created_at, updated_at, class_type, meal_rate, cancel_rate, hospital_deduction_type, hospital_deduction_value, users(id, full_name)')
+      .select('id, name, teacher_id, room, max_students, description, created_at, updated_at, users(id, full_name)')
       .single(),
     8000,
     { data: null, error: { message: 'Timeout updating class', details: '', hint: '', code: 'TIMEOUT' } } as any

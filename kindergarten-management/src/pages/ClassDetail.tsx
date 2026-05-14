@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Edit, Info, Users } from 'lucide-react';
+import { ArrowLeft, Calculator, Edit, Info, Users } from 'lucide-react';
 import Card, { CardHeader } from '@/components/common/Card';
 import Button from '@/components/common/Button';
 import Avatar from '@/components/common/Avatar';
@@ -183,47 +183,24 @@ export default function ClassDetail() {
                 )}
               </div>
             </div>
+
+            {classItem.description && (
+              <div className="mt-4 pt-4 border-t border-border">
+                <p className="text-xs text-muted-foreground mb-1">Mô tả</p>
+                <p className="text-sm text-foreground">{classItem.description}</p>
+              </div>
+            )}
           </Card>
 
           {hasFinanceAccess && (
-            <Card header={<CardHeader title="Cấu hình tài chính (Khấu trừ)" />}>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <p className="text-xs text-muted-foreground mb-0.5">Loại lớp học</p>
-                  <p className="font-medium text-foreground">{classItem.class_type === 'Daycare' ? 'Lớp Bán trú' : 'Lớp Tối'}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground mb-0.5">
-                    {classItem.class_type === 'Daycare' ? 'Tiền cơm/ngày' : 'Tiền nghỉ/buổi'}
-                  </p>
-                  <p className="font-medium text-foreground">
-                    {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
-                      classItem.class_type === 'Daycare' ? classItem.meal_rate : classItem.cancel_rate
-                    )}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground mb-0.5">Kiểu khấu trừ nằm viện</p>
-                  <p className="font-medium text-foreground">
-                    {classItem.hospital_deduction_type === 'Fixed' ? 'Số tiền cố định' : 'Tỷ lệ theo ngày công'}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground mb-0.5">Giá trị khấu trừ viện</p>
-                  <p className="font-medium text-foreground text-red-500">
-                    - {classItem.hospital_deduction_type === 'Fixed' 
-                        ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(classItem.hospital_deduction_value)
-                        : `${classItem.hospital_deduction_value}% học phí ngày`}
-                  </p>
-                </div>
-              </div>
-              {classItem.description && (
-                <div className="mt-4 pt-4 border-t border-border">
-                  <p className="text-xs text-muted-foreground mb-1">Mô tả</p>
-                  <p className="text-sm text-foreground">{classItem.description}</p>
-                </div>
-              )}
-            </Card>
+            <Button
+              variant="outline"
+              size="sm"
+              leftIcon={<Calculator className="w-4 h-4" />}
+              onClick={() => navigate(`/finance-config?classId=${classItem.id}`)}
+            >
+              Quản lý cấu hình tài chính
+            </Button>
           )}
         </div>
       )}

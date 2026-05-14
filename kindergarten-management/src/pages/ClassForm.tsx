@@ -1,16 +1,16 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Save, X, Calculator } from 'lucide-react';
+import { ArrowLeft, Save, X } from 'lucide-react';
 import Card from '@/components/common/Card';
 import Button from '@/components/common/Button';
 import Input from '@/components/common/Input';
 import Select from '@/components/common/Select';
 import { useToast } from '@/components/common/Toast';
-import CurrencyInput from '@/components/common/CurrencyInput';
 import { assignTeacherToClass, createClass, getClassById, removeTeacherFromClass, updateClass } from '@/services/classesService';
 import { listTeachers } from '@/services/usersService';
-import { canManageFinance, canCreateClass } from '@/lib/rbac';
+import { canCreateClass } from '@/lib/rbac';
 import { useAuthStore } from '@/stores/authStore';
+import { ensureFinanceConfigExists } from '@/services/financeConfigService';
 import type { ClassTeacherRecord } from '@/types/domain';
 import type { SelectOption } from '@/types';
 
@@ -20,11 +20,6 @@ interface FormState {
   max_students: string;
   room: string;
   description: string;
-  class_type: 'Daycare' | 'Evening';
-  meal_rate: string;
-  cancel_rate: string;
-  hospital_deduction_type: 'Fixed' | 'Daily';
-  hospital_deduction_value: string;
 }
 
 interface FormErrors {
@@ -49,7 +44,6 @@ export default function ClassForm() {
   const toast = useToast();
   const { role } = useAuthStore();
   const isEditMode = Boolean(id && id !== 'new');
-  const canManageFin = canManageFinance(role);
   const canCreate = canCreateClass(role);
 
   const [form, setForm] = useState<FormState>({
@@ -58,11 +52,6 @@ export default function ClassForm() {
     max_students: '30',
     room: '',
     description: '',
-    class_type: 'Daycare',
-    meal_rate: '20000',
-    cancel_rate: '50000',
-    hospital_deduction_type: 'Fixed',
-    hospital_deduction_value: '0',
   });
   const [studentCount, setStudentCount] = useState(0);
   const [errors, setErrors] = useState<FormErrors>({});
@@ -109,11 +98,6 @@ export default function ClassForm() {
         max_students: String(result.item.max_students),
         room: result.item.room || '',
         description: result.item.description || '',
-        class_type: result.item.class_type || 'Daycare',
-        meal_rate: String(result.item.meal_rate || 20000),
-        cancel_rate: String(result.item.cancel_rate || 50000),
-        hospital_deduction_type: result.item.hospital_deduction_type || 'Fixed',
-        hospital_deduction_value: String(result.item.hospital_deduction_value || 0),
       });
       setClassTeachers(result.item.teachers || []);
     };
@@ -142,11 +126,6 @@ export default function ClassForm() {
       max_students: Number(form.max_students),
       room: form.room.trim(),
       description: form.description.trim() || null,
-      class_type: form.class_type,
-      meal_rate: Number(form.meal_rate),
-      cancel_rate: Number(form.cancel_rate),
-      hospital_deduction_type: form.hospital_deduction_type,
-      hospital_deduction_value: Number(form.hospital_deduction_value),
     };
 
     const result = isEditMode && id ? await updateClass(Number(id), payload) : await createClass(payload);
@@ -156,6 +135,14 @@ export default function ClassForm() {
       toast.error(isEditMode ? 'Cập nhật lớp học thất bại' : 'Tạo lớp học thất bại', result.error.message);
       if (result.error.field === 'max_students') setErrors((prev) => ({ ...prev, max_students: result.error?.message }));
       return;
+    }
+
+    // Tự động tạo finance config mặc định khi tạo class mới
+    if (!isEditMode && result.item) {
+      const { error: configError } = await ensureFinanceConfigExists(result.item.id);
+      if (configError) {
+        console.warn('[ClassForm] Không thể tạo finance config mặc định:', configError.message);
+      }
     }
 
     toast.success(isEditMode ? 'Cập nhật lớp học thành công' : 'Tạo lớp học thành công');
@@ -261,78 +248,6 @@ export default function ClassForm() {
             />
           </div>
 
-          {canManageFin && (
-            <div className="pt-4 border-t border-border">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
-                  <Calculator className="w-4 h-4" />
-                </div>
-                <h2 className="text-sm font-bold text-foreground">Cấu hình tài chính (Khấu trừ)</h2>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Select
-                  label="Loại lớp học"
-                  value={form.class_type}
-                  onChange={(v) => setField('class_type', v as any)}
-                  options={[
-                    { value: 'Daycare', label: 'Lớp Bán trú' },
-                    { value: 'Evening', label: 'Lớp Tối' },
-                  ]}
-                  fullWidth
-                />
-
-                {form.class_type === 'Daycare' ? (
-                  <CurrencyInput
-                    label="Tiền cơm/ngày"
-                    value={form.meal_rate}
-                    onChange={(val) => setField('meal_rate', val)}
-                    hint="Trừ tiền cơm khi vắng mặt"
-                    fullWidth
-                  />
-                ) : (
-                  <CurrencyInput
-                    label="Tiền nghỉ/buổi"
-                    value={form.cancel_rate}
-                    onChange={(val) => setField('cancel_rate', val)}
-                    hint="Trừ tiền khi trung tâm cho nghỉ"
-                    fullWidth
-                  />
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-                <Select
-                  label="Kiểu khấu trừ nằm viện"
-                  value={form.hospital_deduction_type}
-                  onChange={(v) => setField('hospital_deduction_type', v as any)}
-                  options={[
-                    { value: 'Fixed', label: 'Số tiền cố định' },
-                    { value: 'Daily', label: 'Tỷ lệ theo ngày công' },
-                  ]}
-                  fullWidth
-                />
-                {form.hospital_deduction_type === 'Fixed' ? (
-                  <CurrencyInput
-                    label="Số tiền trừ/ngày"
-                    value={form.hospital_deduction_value}
-                    onChange={(val) => setField('hospital_deduction_value', val)}
-                    hint="VD: 100.000"
-                    fullWidth
-                  />
-                ) : (
-                  <Input
-                    label="Tỷ lệ trừ (%)"
-                    type="number"
-                    value={form.hospital_deduction_value}
-                    onChange={(e) => setField('hospital_deduction_value', e.target.value)}
-                    hint="VD: 100 (trừ 100%)"
-                    fullWidth
-                  />
-                )}
-              </div>
-            </div>
-          )}
 
           <div className="flex items-center justify-end gap-3 pt-2">
             <Button variant="outline" type="button" onClick={() => navigate('/classes')}>

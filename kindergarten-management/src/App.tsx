@@ -23,6 +23,7 @@ const Fees           = lazy(() => import('@/pages/Fees'));
 const FeeForm        = lazy(() => import('@/pages/FeeForm'));
 const Reports        = lazy(() => import('@/pages/Reports'));
 const BulkPrintFees  = lazy(() => import('@/pages/BulkPrintFees'));
+const FinanceConfigPage = lazy(() => import('@/pages/FinanceConfigPage'));
 const Settings       = lazy(() => import('@/pages/Settings'));
 
 
@@ -89,6 +90,8 @@ export default function App() {
             <Route path="/fees/new"          element={allow(['Admin', 'Accountant'], <FeeForm />)} />
             <Route path="/fees/:id/edit"     element={allow(['Admin', 'Accountant'], <FeeForm />)} />
             <Route path="/fees/print-bulk"   element={allow(['Admin', 'Accountant'], <BulkPrintFees />)} />
+
+            <Route path="/finance-config"    element={allow(['Admin', 'Accountant'], <FinanceConfigPage />)} />
 
             <Route path="/reports"           element={allow(['Admin', 'Accountant'], <Reports />)} />
 

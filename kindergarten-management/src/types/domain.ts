@@ -51,11 +51,20 @@ export interface ClassRecord {
   teachers?: ClassTeacherRecord[];
   created_at: string;
   updated_at: string;
+}
+
+export interface ClassFinanceConfig {
+  id: number;
+  class_id: number;
+  class_name?: string;
   class_type: 'Daycare' | 'Evening';
   meal_rate: number;
   cancel_rate: number;
   hospital_deduction_type: 'Fixed' | 'Daily';
   hospital_deduction_value: number;
+  del_yn: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export type ClassTeacherRole = 'Lead' | 'Assistant' | 'Nanny';
@@ -84,11 +93,25 @@ export interface CreateClassInput {
   room: string | null;
   max_students: number;
   description: string | null;
-  class_type?: 'Daycare' | 'Evening';
-  meal_rate?: number;
-  cancel_rate?: number;
-  hospital_deduction_type?: 'Fixed' | 'Daily';
-  hospital_deduction_value?: number;
+}
+
+export interface CreateFinanceConfigInput {
+  class_id: number;
+  class_type: 'Daycare' | 'Evening';
+  meal_rate: number;
+  cancel_rate: number;
+  hospital_deduction_type: 'Fixed' | 'Daily';
+  hospital_deduction_value: number;
+}
+
+export type UpdateFinanceConfigInput = Partial<CreateFinanceConfigInput>;
+
+export interface FinanceConfigListQuery {
+  page: number;
+  pageSize: number;
+  search?: string;
+  sortBy?: 'class_name' | 'class_type' | 'created_at';
+  sortDirection?: SortDirection;
 }
 
 export type UpdateClassInput = Partial<CreateClassInput>;

@@ -2,37 +2,78 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { syncFeeWithAttendance } from '../feesService';
 import { supabase } from '@/lib/supabase';
 
-// Mock Supabase
-vi.mock('@/lib/supabase', () => {
-  const mockFrom = vi.fn();
-  return {
-    supabase: {
-      from: mockFrom,
-    },
+const { mockQuery } = vi.hoisted(() => {
+  const q = {
+    select: vi.fn(),
+    eq: vi.fn(),
+    gte: vi.fn(),
+    lte: vi.fn(),
+    single: vi.fn(),
+    maybeSingle: vi.fn(),
+    update: vi.fn(),
+    insert: vi.fn(),
+    order: vi.fn(),
+    range: vi.fn(),
+    in: vi.fn(),
   };
+  return { mockQuery: q };
 });
+
+vi.mock('@/lib/timeout', () => ({
+  withSupabaseTimeout: vi.fn(async (query) => query),
+}));
+
+vi.mock('@/lib/supabase', () => ({
+  supabase: {
+    auth: {
+      getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'test-admin' } } }),
+    },
+    from: vi.fn().mockReturnValue(mockQuery),
+  },
+}));
+
+vi.mock('@/utils/swCacheInvalidate', () => ({
+  invalidateSwCache: vi.fn(),
+}));
 
 describe('Attendance to Fee Sync Integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+
+    // Setup chaining
+    mockQuery.select.mockReturnValue(mockQuery);
+    mockQuery.eq.mockReturnValue(mockQuery);
+    mockQuery.gte.mockReturnValue(mockQuery);
+    mockQuery.lte.mockReturnValue(mockQuery);
+    mockQuery.update.mockReturnValue(mockQuery);
+    mockQuery.insert.mockReturnValue(mockQuery);
+    mockQuery.order.mockReturnValue(mockQuery);
+    mockQuery.in.mockReturnValue(mockQuery);
+    mockQuery.range.mockReturnValue(mockQuery);
+
+    mockQuery.single.mockReset();
+    mockQuery.maybeSingle.mockReset();
   });
 
   it('should calculate correct meal deductions for Daycare class', async () => {
-    // 1. Mock Fee Result
+    // Mock fee record returned from syncFeeWithAttendance's fee load
     const mockFee = {
       id: 'fee-1',
       student_id: 's-1',
+      class_id: 1,
       month: 10,
       school_year: '2024-2025',
       amount_vnd: 2000000,
       base_amount_vnd: 2000000,
-      classes: {
-        class_type: 'Daycare',
-        meal_rate: 30000,
-      },
     };
 
-    // 2. Mock Attendance (3 days absent)
+    // Mock finance config
+    const mockConfig = {
+      class_type: 'Daycare',
+      meal_rate: 30000,
+    };
+
+    // Mock attendance (3 days absent)
     const mockAttendance = [
       { status: 'absent', attendance_date: '2024-10-05' },
       { status: 'absent', attendance_date: '2024-10-10' },
@@ -40,44 +81,31 @@ describe('Attendance to Fee Sync Integration', () => {
       { status: 'present', attendance_date: '2024-10-20' },
     ];
 
-    // Setup the complex Supabase chain mock
-    const fromMock = vi.mocked(supabase.from);
-    
-    // First call: fee record fetch
-    fromMock.mockReturnValueOnce({
-      select: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          single: vi.fn().mockResolvedValue({ data: mockFee, error: null }),
-        }),
-      }),
-    } as any);
+    // Mock the ensureFeeModificationAccess calls:
+    // 1. getCurrentUser: supabase.from('users').select('role').single()
+    // 2. fee_records check: select('status, class_id').eq('id', feeId).eq('del_yn', false).maybeSingle()
+    mockQuery.single.mockResolvedValueOnce({ data: { role: 'Admin' }, error: null });
+    mockQuery.maybeSingle.mockResolvedValueOnce({ data: { status: 'unpaid', class_id: 1 }, error: null });
 
-    // Second call: attendance fetch
-    fromMock.mockReturnValueOnce({
-      select: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          gte: vi.fn().mockReturnValue({
-            lte: vi.fn().mockReturnValue({
-              eq: vi.fn().mockResolvedValue({ data: mockAttendance, error: null }),
-            }),
-          }),
-        }),
-      }),
-    } as any);
+    // Load fee: select('*, students(id, full_name)').eq('id', feeId).single()
+    mockQuery.single.mockResolvedValueOnce({ data: mockFee, error: null });
 
-    // Third call: update fee record
-    fromMock.mockReturnValueOnce({
-      update: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({ 
-                data: { ...mockFee, amount_vnd: 2000000 - 90000, meal_deduction_vnd: 90000 }, 
-                error: null 
-            }),
-          }),
-        }),
-      }),
-    } as any);
+    // Load class_finance_configs
+    mockQuery.maybeSingle.mockResolvedValueOnce({ data: mockConfig, error: null });
+
+    // Attendance query: select('*').eq().gte().lte().eq()
+    mockQuery.select.mockImplementation((...args: any[]) => {
+      if (args[0] === '*') {
+        return { ...mockQuery, then: (resolve: any) => resolve({ data: mockAttendance, error: null }) };
+      }
+      return mockQuery;
+    });
+
+    // Update result: select('id,...').single()
+    mockQuery.single.mockResolvedValueOnce({
+      data: { ...mockFee, amount_vnd: 2000000 - 90000, meal_deduction_vnd: 90000 },
+      error: null,
+    });
 
     const result = await syncFeeWithAttendance('fee-1');
 

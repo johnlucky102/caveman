@@ -4,6 +4,7 @@ import {
   BarChart3,
   Bell,
   Building2,
+  Calculator,
   CalendarCheck,
   BookOpen,
   ChevronLeft,
@@ -35,6 +36,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Giáo viên', path: '/teachers', icon: GraduationCap, allow: ['Admin'] },
   { label: 'Điểm danh', path: '/attendance', icon: CalendarCheck, allow: ['Admin', 'Teacher'] },
   { label: 'Học phí', path: '/fees', icon: Wallet, allow: ['Admin', 'Accountant'] },
+  { label: 'Cấu hình TC', path: '/finance-config', icon: Calculator, allow: ['Admin', 'Accountant'] },
   { label: 'Báo cáo', path: '/reports', icon: BarChart3, allow: ['Admin', 'Accountant'] },
 
   { label: 'Cài đặt', path: '/settings', icon: Settings, allow: ['Admin'] },
