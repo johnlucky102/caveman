@@ -25,8 +25,10 @@ interface StatCardProps {
   description?: string;
   /** Icon element */
   icon?: React.ReactNode;
-  /** Icon background color class (Tailwind) */
+  /** Icon background color class (Tailwind) — overrides variant */
   iconBg?: string;
+  /** Preset color variant for the icon background */
+  variant?: 'default' | 'success' | 'warning' | 'danger';
   /** Optional trend value (e.g. "+12%") */
   trend?: string;
   /** Optional trend direction for color */
@@ -104,11 +106,20 @@ export const StatCard: React.FC<StatCardProps> = ({
   value,
   description,
   icon,
-  iconBg = 'bg-primary/10',
+  iconBg,
+  variant = 'default',
   trend,
   trendDirection = 'neutral',
   onClick,
 }) => {
+  const variantIconBg: Record<NonNullable<StatCardProps['variant']>, string> = {
+    default: 'bg-primary/10',
+    success: 'bg-emerald-500/10',
+    warning: 'bg-amber-500/10',
+    danger: 'bg-red-500/10',
+  };
+  const resolvedIconBg = iconBg ?? variantIconBg[variant];
+
   const trendColor = {
     up: 'text-emerald-600 bg-emerald-500/10',
     down: 'text-red-500 bg-red-500/10',
@@ -138,7 +149,7 @@ export const StatCard: React.FC<StatCardProps> = ({
         </div>
 
         {icon && (
-          <div className={cn('w-12 h-12 rounded-xl flex items-center justify-center shrink-0', iconBg)}>
+          <div className={cn('w-12 h-12 rounded-xl flex items-center justify-center shrink-0', resolvedIconBg)}>
             {icon}
           </div>
         )}
