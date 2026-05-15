@@ -443,7 +443,7 @@ export default function Fees() {
         pagination={pagination(page, pageSize, total)}
         onPageChange={setPage}
         selectedKeys={selectedIds}
-        onSelectionChange={setSelectedIds}
+        onSelectionChange={(keys) => setSelectedIds(keys.map(String))}
         emptyMessage="Khong co phiếu thu nao"
         renderMobileCard={(row) => {
           const f = row as FeeRecordP2;

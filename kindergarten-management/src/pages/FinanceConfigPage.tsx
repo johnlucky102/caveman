@@ -332,30 +332,33 @@ export default function FinanceConfigPage() {
         onSort={(key) => setSortState({ key, direction: 'asc' })}
         pagination={meta}
         onPageChange={setPage}
-        renderMobileCard={(row) => (
-          <div className="bg-card border-b border-border p-4 space-y-2">
-            <div className="flex items-center gap-2">
-              <div className="p-1 rounded-lg bg-primary/10 text-primary">
-                <Calculator className="w-4 h-4" />
+        renderMobileCard={(row) => {
+          const r = row as ClassFinanceConfig;
+          return (
+            <div className="bg-card border-b border-border p-4 space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="p-1 rounded-lg bg-primary/10 text-primary">
+                  <Calculator className="w-4 h-4" />
+                </div>
+                <span className="font-medium text-foreground">{r.class_name || `Lớp #${r.class_id}`}</span>
+                <Badge variant={r.class_type === 'Daycare' ? 'primary' : 'secondary'} size="sm">
+                  {r.class_type === 'Daycare' ? 'Bán trú' : 'Tối'}
+                </Badge>
               </div>
-              <span className="font-medium text-foreground">{row.class_name || `Lớp #${row.class_id}`}</span>
-              <Badge variant={row.class_type === 'Daycare' ? 'primary' : 'secondary'} size="sm">
-                {row.class_type === 'Daycare' ? 'Bán trú' : 'Tối'}
-              </Badge>
+              <div className="flex flex-wrap gap-1">
+                {(r.deduction_rules || []).length === 0 ? (
+                  <span className="text-xs text-muted-foreground">—</span>
+                ) : (
+                  (r.deduction_rules || []).map((rule: DeductionRule) => (
+                    <Badge key={rule.id} variant="neutral" size="sm">
+                      {rule.name}: {formatCurrency(rule.amount)}
+                    </Badge>
+                  ))
+                )}
+              </div>
             </div>
-            <div className="flex flex-wrap gap-1">
-              {(row.deduction_rules || []).length === 0 ? (
-                <span className="text-xs text-muted-foreground">—</span>
-              ) : (
-                (row.deduction_rules || []).map(rule => (
-                  <Badge key={rule.id} variant="neutral" size="sm">
-                    {rule.name}: {formatCurrency(rule.amount)}
-                  </Badge>
-                ))
-              )}
-            </div>
-          </div>
-        )}
+          );
+        }}
       />
 
       <ConfirmModal

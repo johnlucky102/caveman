@@ -168,7 +168,7 @@ export interface CreateStudentInput {
 
 export type UpdateStudentInput = Partial<CreateStudentInput>;
 
-export type AttendanceStatusValue = 'present' | 'absent';
+export type AttendanceStatusValue = 'present' | 'absent' | 'late' | 'excused';
 
 export interface AttendanceRecord {
   id: string;

@@ -265,35 +265,7 @@ export default function ClassDetail() {
                   label: 'Học sinh',
                   render: (v) => (
                     <div className="flex items-center gap-3">
-                      <Avatar name={String(v)} size="xs" 
-
-            renderMobileCard={(row) => {
-              const r = row as any
-              return (
-                <div className="bg-card border-b border-border p-4 space-y-2">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0">
-                      {String(r.student_name || '').charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-foreground truncate">{r.student_name}</p>
-                    </div>
-                    <span className={
-                      r.status === 'present' ? 'text-xs font-medium text-emerald-500' :
-                      r.status === 'late' ? 'text-xs font-medium text-amber-500' :
-                      'text-xs font-medium text-red-500'
-                    }>
-                      {r.status === 'present' ? 'Có mặt' : r.status === 'late' ? 'Đi muộn' : 'Vắng'}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                    {r.check_in_time && <span>Giờ vào: {r.check_in_time.slice(0, 5)}</span>}
-                    {r.note && <span className="italic">{r.note}</span>}
-                  </div>
-                </div>
-              )
-            }}
-          />
+                      <Avatar name={String(v)} size="xs" />
                       <span className="font-medium">{String(v)}</span>
                     </div>
                   )
@@ -308,15 +280,42 @@ export default function ClassDetail() {
                   label: 'Giờ vào',
                   render: (v) => (v as React.ReactNode) || '—'
                 },
-                 {
+                {
                   key: 'note',
                   label: 'Ghi chú',
                   render: (v) => <span className="text-xs italic text-muted-foreground">{(v as React.ReactNode) || '—'}</span>
                 }
               ]}
               data={todayAttendance as any}
+              rowKey="student_id"
               loading={loadingAttendance}
               emptyMessage="Chưa có dữ liệu điểm danh hôm nay"
+              renderMobileCard={(row) => {
+                const r = row as any;
+                return (
+                  <div className="bg-card border-b border-border p-4 space-y-2">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0">
+                        {String(r.student_name || '').charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-foreground truncate">{r.student_name}</p>
+                      </div>
+                      <span className={
+                        r.status === 'present' ? 'text-xs font-medium text-emerald-500' :
+                        r.status === 'late' ? 'text-xs font-medium text-amber-500' :
+                        'text-xs font-medium text-red-500'
+                      }>
+                        {r.status === 'present' ? 'Có mặt' : r.status === 'late' ? 'Đi muộn' : 'Vắng'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                      {r.check_in_time && <span>Giờ vào: {r.check_in_time.slice(0, 5)}</span>}
+                      {r.note && <span className="italic">{r.note}</span>}
+                    </div>
+                  </div>
+                );
+              }}
             />
             <div className="p-4 border-t border-border flex justify-end">
               <Button size="sm" onClick={() => navigate(`/attendance?classId=${classItem.id}`)}>

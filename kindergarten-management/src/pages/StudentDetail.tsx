@@ -257,6 +257,7 @@ export default function StudentDetail() {
                   },
                 ] as TableColumn<FeeRecordP2>[]}
                 data={feeItems}
+                rowKey="id"
                 loading={loadingFees}
                 emptyMessage="Học sinh này chưa có bản ghi học phí nào"
               />
@@ -284,6 +285,7 @@ export default function StudentDetail() {
                   },
                 ] as TableColumn<AttendanceRecord>[]}
                 data={attendanceItems}
+                rowKey="id"
                 loading={loadingAttendance}
                 emptyMessage="Học sinh này chưa có lịch sử điểm danh"
               />

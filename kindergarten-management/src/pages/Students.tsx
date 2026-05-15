@@ -318,7 +318,7 @@ export default function Students() {
           }}
           onRowClick={(row) => navigate(`/students/${(row as unknown as StudentRecord).id}`)}
           selectedKeys={selectedKeys}
-          onSelectionChange={setSelectedKeys}
+          onSelectionChange={(keys) => setSelectedKeys(keys.map(String))}
           emptyMessage="Không tìm thấy học sinh nào"
         
         renderMobileCard={(row) => {

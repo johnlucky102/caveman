@@ -656,8 +656,8 @@ export default function Reports() {
             noPadding
           >
             <Table
-              columns={studentColumns as unknown as TableColumn<Record<string, unknown>>[]}
-              data={studentReports as unknown as Record<string, unknown>[]}
+              columns={studentColumns}
+              data={studentReports}
               rowKey="id" loading={loading} emptyMessage="Không có dữ liệu học sinh"
             />
           </Card>
@@ -726,12 +726,19 @@ export default function Reports() {
             } 
             noPadding
           >
-            <Table
-              columns={(attSubTab === 'summary' ? attendanceColumns : attendanceDetailColumns) as unknown as TableColumn<Record<string, unknown>>[]}
-              data={(attSubTab === 'summary' ? attendanceReports : attendanceDetails) as unknown as Record<string, unknown>[]}
-              rowKey="id" loading={loading} emptyMessage="Không có dữ liệu điểm danh"
-
-            />
+            {attSubTab === 'summary' ? (
+              <Table
+                columns={attendanceColumns}
+                data={attendanceReports}
+                rowKey="id" loading={loading} emptyMessage="Không có dữ liệu điểm danh"
+              />
+            ) : (
+              <Table
+                columns={attendanceDetailColumns}
+                data={attendanceDetails}
+                rowKey="id" loading={loading} emptyMessage="Không có dữ liệu điểm danh"
+              />
+            )}
           </Card>
         </div>
       )}
