@@ -10,6 +10,7 @@ import type {
 } from '@/types/domain';
 import { toAppError } from './supabaseErrors';
 import { invalidateSwCache } from '@/utils/swCacheInvalidate';
+import { invalidateCache } from '@/hooks/useServiceCache';
 import { ensureRole, ensureStudentOwnership } from './serviceGuards';
 
 
@@ -175,6 +176,8 @@ export async function createStudent(payload: CreateStudentInput): Promise<{ item
 
     if (!result.error && result.data) {
       invalidateSwCache(['students']);
+      invalidateCache('students');
+      invalidateCache('dashboard');
       return { item: mapStudentRow(result.data as unknown as StudentRow), error: null };
     }
     if (!shouldGenerateCode || !isStudentCodeConflict(result.error) || attempt === maxAttempts) {
@@ -206,6 +209,8 @@ export async function updateStudent(id: string, payload: UpdateStudentInput, use
 
   if (result.error) return { item: null, error: toAppError(result.error, 'Không thể cập nhật hồ sơ học sinh.') };
   invalidateSwCache(['students']);
+  invalidateCache('students');
+  invalidateCache('dashboard');
   return { item: mapStudentRow(result.data as unknown as StudentRow), error: null };
 }
 
@@ -226,6 +231,10 @@ export async function deleteStudent(id: string): Promise<{ error: AppError | nul
 
   if (result.error) return { error: toAppError(result.error, 'Không thể xóa học sinh.') };
   invalidateSwCache(['students', 'attendance', 'fee_records']);
+  invalidateCache('students');
+  invalidateCache('attendance');
+  invalidateCache('fees');
+  invalidateCache('dashboard');
   return { error: null };
 }
 
