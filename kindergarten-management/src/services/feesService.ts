@@ -10,6 +10,7 @@ import type {
 } from '@/types/domain';
 import { toAppError } from './supabaseErrors';
 import { invalidateSwCache } from '@/utils/swCacheInvalidate';
+import { invalidateCache } from '@/hooks/useServiceCache';
 import { ensureFinancialAccess, ensureFeeModificationAccess } from './serviceGuards';
 import { calendarYearFromSchoolMonth } from '@/utils/schoolYearCalendar';
 
@@ -238,6 +239,8 @@ export async function createFeeRecord(input: CreateFeeInput): Promise<{ item: Fe
   }
 
   invalidateSwCache(['fees', 'dashboard']);
+  invalidateCache('dashboard');
+  invalidateCache('fees');
 
   return { item: mapFeeRow((syncResult.item || data) as unknown as FeeRow), error: null };
 }
@@ -267,6 +270,8 @@ export async function updateFeeRecord(
   }
 
   invalidateSwCache(['fees', 'dashboard']);
+  invalidateCache('dashboard');
+  invalidateCache('fees');
 
   return { item: mapFeeRow(data as unknown as FeeRow), error: null };
 }
@@ -292,6 +297,8 @@ export async function deleteFeeRecords(feeIds: string[]): Promise<{ error: AppEr
   }
 
   invalidateSwCache(['fees', 'dashboard']);
+  invalidateCache('dashboard');
+  invalidateCache('fees');
 
   return { error: null };
 }
@@ -477,6 +484,8 @@ export async function updateFeeRecordStatus(
   if (error) return { item: null, error: toAppError(error, 'Không thể cập nhật trạng thái học phí.') };
 
   invalidateSwCache(['fees', 'dashboard']);
+  invalidateCache('dashboard');
+  invalidateCache('fees');
 
   return { item: mapFeeRow(data as unknown as FeeRow), error: null };
 }

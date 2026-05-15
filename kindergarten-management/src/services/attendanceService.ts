@@ -9,6 +9,7 @@ import type {
 } from '@/types/domain';
 import { toAppError } from './supabaseErrors';
 import { invalidateSwCache } from '@/utils/swCacheInvalidate';
+import { invalidateCache } from '@/hooks/useServiceCache';
 import { ensureClassOwnership } from './serviceGuards';
 
 
@@ -176,6 +177,8 @@ export async function upsertAttendanceBulk(rows: UpsertAttendanceInput[]): Promi
 
   // Invalidate cache for attendance and dashboard
   invalidateSwCache(['attendance', 'dashboard']);
+  invalidateCache('dashboard');
+  invalidateCache('attendance');
 
   return { error: null };
 }
