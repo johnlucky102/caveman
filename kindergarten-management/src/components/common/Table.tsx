@@ -298,8 +298,8 @@ function Table<T extends object>({
                       <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mb-3">
                         <ChevronsUpDown className="w-6 h-6 text-muted-foreground/40" />
                       </div>
-                      <p className="text-sm font-medium text-foreground">{emptyMessage || 'Khong co du lieu'}</p>
-                      <p className="text-xs text-muted-foreground mt-1">Chua co ban ghi nao.</p>
+                      <p className="text-sm font-medium text-foreground">{emptyMessage || 'Không có dữ liệu'}</p>
+                      <p className="text-xs text-muted-foreground mt-1">Chưa có bản ghi nào.</p>
                     </div>
                   )}
                 </td>
@@ -369,8 +369,8 @@ function Table<T extends object>({
                 <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mb-3">
                   <ChevronsUpDown className="w-6 h-6 text-muted-foreground/40" />
                 </div>
-                <p className="text-sm font-medium text-foreground">{emptyMessage || 'Khong co du lieu'}</p>
-                <p className="text-xs text-muted-foreground mt-1">Chua co ban ghi nao.</p>
+                <p className="text-sm font-medium text-foreground">{emptyMessage || 'Không có dữ liệu'}</p>
+                <p className="text-xs text-muted-foreground mt-1">Chưa có bản ghi nào.</p>
               </div>
             )}
           </div>
