@@ -191,7 +191,7 @@ export interface SelectOption {
 
 export interface TableColumn<T> {
   key: keyof T | string;
-  label: string;
+  label: React.ReactNode;
   sortable?: boolean;
   width?: string;
   render?: (value: unknown, row: T) => React.ReactNode;

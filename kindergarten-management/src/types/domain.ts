@@ -53,13 +53,18 @@ export interface ClassRecord {
   updated_at: string;
 }
 
+export interface DeductionRule {
+  id: string;
+  name: string;
+  amount: number;
+}
+
 export interface ClassFinanceConfig {
   id: number;
   class_id: number;
   class_name?: string;
   class_type: 'Daycare' | 'Evening';
-  meal_rate: number;
-  cancel_rate: number;
+  deduction_rules: DeductionRule[];
   del_yn: boolean;
   created_at: string;
   updated_at: string;
@@ -96,8 +101,7 @@ export interface CreateClassInput {
 export interface CreateFinanceConfigInput {
   class_id: number;
   class_type: 'Daycare' | 'Evening';
-  meal_rate: number;
-  cancel_rate: number;
+  deduction_rules: DeductionRule[];
 }
 
 export type UpdateFinanceConfigInput = Partial<CreateFinanceConfigInput>;
@@ -228,8 +232,8 @@ export interface FeeRecordP2 {
   payment_method: 'cash' | 'bank_transfer' | null;
   status: FeeStatusValue;
   base_amount_vnd: number;
-  meal_deduction_vnd: number;
-  tuition_deduction_vnd: number;
+  attendance_deduction_vnd: number;
+  deduction_details: DeductionRule[];
   deduction_note: string | null;
   created_at: string;
   updated_at: string;
@@ -259,8 +263,8 @@ export interface CreateFeeInput {
   payment_method: 'cash' | 'bank_transfer' | null;
   status: FeeStatusValue;
   base_amount_vnd?: number;
-  meal_deduction_vnd?: number;
-  tuition_deduction_vnd?: number;
+  attendance_deduction_vnd?: number;
+  deduction_details?: DeductionRule[];
   deduction_note?: string | null;
 }
 

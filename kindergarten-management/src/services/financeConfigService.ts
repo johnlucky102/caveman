@@ -13,13 +13,18 @@ type FinanceConfigRow = {
   id: number;
   class_id: number;
   class_type: string;
-  meal_rate: number;
-  cancel_rate: number;
+  deduction_rules: any;
   del_yn: boolean;
   created_at: string;
   updated_at: string;
   classes?: { name: string } | null;
 };
+
+function parseRules(raw: any) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  try { return JSON.parse(raw); } catch { return []; }
+}
 
 function mapFinanceConfigRow(row: FinanceConfigRow): ClassFinanceConfig {
   return {
@@ -27,8 +32,7 @@ function mapFinanceConfigRow(row: FinanceConfigRow): ClassFinanceConfig {
     class_id: row.class_id,
     class_name: row.classes?.name || undefined,
     class_type: row.class_type as 'Daycare' | 'Evening',
-    meal_rate: row.meal_rate,
-    cancel_rate: row.cancel_rate,
+    deduction_rules: parseRules(row.deduction_rules),
     del_yn: row.del_yn,
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -49,7 +53,6 @@ export async function listFinanceConfigs(
     builder = builder.ilike('classes.name', `%${search}%`);
   }
 
-  // Sort mapping: class_name → classes(name), class_type → class_type, created_at → created_at
   const sortColumn = sortBy === 'class_name' ? 'classes(name)' : sortBy;
   builder = builder.order(sortColumn, { ascending: sortDirection === 'asc' });
 
@@ -102,8 +105,7 @@ export async function createFinanceConfig(
     .insert({
       class_id: input.class_id,
       class_type: input.class_type,
-      meal_rate: input.meal_rate,
-      cancel_rate: input.cancel_rate,
+      deduction_rules: input.deduction_rules || [],
     })
     .select('*, classes!inner(name)')
     .single();
@@ -122,9 +124,13 @@ export async function updateFinanceConfig(
   const guard = await ensureFinancialAccess(true);
   if (guard.error) return { item: null, error: guard.error };
 
+  const updatePayload: any = {};
+  if (input.class_type !== undefined) updatePayload.class_type = input.class_type;
+  if (input.deduction_rules !== undefined) updatePayload.deduction_rules = input.deduction_rules;
+
   const { data, error } = await supabase
     .from('class_finance_configs')
-    .update(input)
+    .update(updatePayload)
     .eq('class_id', classId)
     .eq('del_yn', false)
     .select('*, classes!inner(name)')
@@ -165,8 +171,7 @@ export async function ensureFinanceConfigExists(
   const defaultConfig: CreateFinanceConfigInput = {
     class_id: classId,
     class_type: 'Daycare',
-    meal_rate: 20000,
-    cancel_rate: 50000,
+    deduction_rules: [],
   };
 
   const { error } = await createFinanceConfig(defaultConfig);

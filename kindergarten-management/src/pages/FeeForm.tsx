@@ -28,8 +28,8 @@ interface FeeFormState {
   dueDate: string;
   paidDate: string;
   baseAmount: string;
-  mealDeduction: string;
-  tuitionDeduction: string;
+  attendanceDeduction: string;
+  deductionDetails: string;
   deductionNote: string;
 }
 
@@ -94,8 +94,8 @@ export default function FeeForm() {
       dueDate: lastDayOfMonth,
       paidDate: today,
       baseAmount: '',
-      mealDeduction: '0',
-      tuitionDeduction: '0',
+      attendanceDeduction: '0',
+      deductionDetails: '',
       deductionNote: '',
     };
   });
@@ -118,7 +118,6 @@ export default function FeeForm() {
             const item = feeResult.item;
             setFeeStatus(item.status);
             
-            // If due_date is missing (old records), default to last day of that month
             let dueDate = item.due_date || '';
             if (!dueDate && item.month && item.school_year) {
               const [startYear] = item.school_year.split('-').map(Number);
@@ -137,14 +136,13 @@ export default function FeeForm() {
               dueDate: dueDate,
               paidDate: item.paid_date || '',
               baseAmount: String(item.base_amount_vnd || item.amount_vnd),
-              mealDeduction: String(item.meal_deduction_vnd || 0),
-              tuitionDeduction: String(item.tuition_deduction_vnd || 0),
+              attendanceDeduction: String(item.attendance_deduction_vnd || 0),
+              deductionDetails: JSON.stringify(item.deduction_details || []),
               deductionNote: item.deduction_note || '',
             });
           }
         }
       } catch (error) {
-        // Silently fail in test or show error in prod
       } finally {
         setLoading(false);
       }
@@ -174,6 +172,27 @@ export default function FeeForm() {
     }
   };
 
+  const handleSyncAttendance = async () => {
+    if (!id) return;
+    setLoading(true);
+    const result = await syncFeeWithAttendance(id);
+    setLoading(false);
+    if (result.error) {
+      toast.error('Đồng bộ thất bại', result.error.message);
+      return;
+    }
+    if (result.item) {
+      const item = result.item;
+      setFormData(prev => ({
+        ...prev,
+        amount: String(item.amount_vnd),
+        attendanceDeduction: String(item.attendance_deduction_vnd),
+        deductionDetails: JSON.stringify(item.deduction_details || []),
+        deductionNote: item.deduction_note || '',
+      }));
+      toast.success('Đã đồng bộ chuyên cần');
+    }
+  };
 
   const validate = (): boolean => {
     const nextErrors: FormErrors = {};
@@ -184,7 +203,6 @@ export default function FeeForm() {
     if (!formData.schoolYear.trim()) nextErrors.schoolYear = 'Vui lòng nhập năm học';
     if (!formData.dueDate) nextErrors.dueDate = 'Vui lòng nhập hạn nộp';
 
-    // Hạn nộp >= Tháng
     if (formData.dueDate) {
       const [startYear] = formData.schoolYear.split('-').map(Number);
       const selectedMonth = Number(formData.month);
@@ -199,51 +217,56 @@ export default function FeeForm() {
     return Object.keys(nextErrors).length === 0;
   };
 
-  const submit = async () => {
+  const handleSave = async () => {
     if (!validate()) return;
-    if (!selectedStudent) {
-      toast.error('Dữ liệu học sinh không hợp lệ');
-      return;
-    }
 
-    const amount = Number(formData.amount);
-    const paidAmount = Number(formData.paidAmount || '0');
-    const status: FeeStatusValue = paidAmount <= 0 ? 'unpaid' : paidAmount >= amount ? 'paid' : 'partial';
-
-    const payload: CreateFeeInput = {
-      student_id: formData.studentId,
-      class_id: selectedStudent.class_id,
-      title: formData.title || 'Học phí',
-      school_year: formData.schoolYear.trim(),
-      month: Number(formData.month),
-      amount_vnd: amount,
-      paid_amount_vnd: paidAmount,
-      paid_date: paidAmount > 0 ? (formData.paidDate || new Date().toISOString().split('T')[0]) : null,
-      due_date: formData.dueDate || null,
-      payment_method: formData.paymentMethod || null,
-      status,
-      base_amount_vnd: Number(formData.baseAmount || formData.amount),
-      meal_deduction_vnd: Number(formData.mealDeduction),
-      tuition_deduction_vnd: Number(formData.tuitionDeduction),
-      deduction_note: formData.deductionNote,
-    };
-
-    if (saving) return;
     setSaving(true);
-    const result = isEdit 
-      ? await updateFeeRecord(id!, payload) 
-      : await createFeeRecord(payload);
-    setSaving(false);
 
-    if (result.error) {
-      toast.error(isEdit ? 'Cập nhật học phí thất bại' : 'Tạo bản ghi học phí thất bại', result.error.message);
-      return;
+    const status: FeeStatusValue = Number(formData.paidAmount) >= Number(formData.amount)
+      ? 'paid'
+      : Number(formData.paidAmount) > 0
+        ? 'partial'
+        : 'unpaid';
+
+    try {
+      let result;
+      const payload: CreateFeeInput = {
+        student_id: formData.studentId || '',
+        class_id: selectedStudent?.class_id || 0,
+        title: formData.title || 'Học phí',
+        school_year: formData.schoolYear,
+        month: Number(formData.month),
+        amount_vnd: Number(formData.amount),
+        paid_amount_vnd: Number(formData.paidAmount),
+        paid_date: formData.paidDate || null,
+        due_date: formData.dueDate || null,
+        payment_method: formData.paymentMethod || null,
+        status,
+        base_amount_vnd: Number(formData.baseAmount || formData.amount),
+        attendance_deduction_vnd: Number(formData.attendanceDeduction),
+        deduction_note: formData.deductionNote,
+      };
+
+      if (isEdit && id) {
+        result = await updateFeeRecord(id, payload);
+      } else {
+        result = await createFeeRecord(payload);
+      }
+
+      setSaving(false);
+
+      if (result.error) {
+        toast.error(isEdit ? 'Cập nhật thất bại' : 'Tạo mới thất bại', result.error.message);
+        return;
+      }
+
+      toast.success(isEdit ? 'Đã cập nhật phiếu thu' : 'Đã tạo phiếu thu mới');
+      navigate('/fees');
+    } catch (error) {
+      setSaving(false);
+      toast.error('Lỗi hệ thống', 'Có lỗi xảy ra, vui lòng thử lại.');
     }
-
-    toast.success(isEdit ? 'Cập nhật học phí thành công' : 'Tạo bản ghi học phí thành công');
-    navigate('/fees');
   };
-
 
   const handleDelete = async () => {
     if (!id) return;
@@ -251,10 +274,10 @@ export default function FeeForm() {
     const result = await deleteFeeRecord(id);
     setDeleting(false);
     if (result.error) {
-      toast.error('Xóa học phí thất bại', result.error.message);
+      toast.error('Xóa thất bại', result.error.message);
       return;
     }
-    toast.success('Đã xóa bản ghi học phí');
+    toast.success('Đã xóa phiếu thu');
     navigate('/fees');
   };
 
@@ -262,432 +285,266 @@ export default function FeeForm() {
     window.print();
   };
 
-  const isTeacher = role === 'Teacher';
-  const isPaid = feeStatus === 'paid';
-  const isLocked = isEdit && isPaid;
-  const isFinancialReadOnly = isTeacher || isLocked;
+  const summary = useMemo(() => {
+    const base = Number(formData.baseAmount || formData.amount);
+    const deduction = Number(formData.attendanceDeduction);
+    const finalAmount = Math.max(0, base - deduction);
+    const paid = Number(formData.paidAmount);
+    const due = Math.max(0, finalAmount - paid);
+    return { base, deduction, finalAmount, paid, due };
+  }, [formData]);
+
+  const isLocked = isEdit && feeStatus !== 'unpaid';
+  const isFinancialReadOnly = isLocked;
 
   return (
-    <div className="space-y-5">
-      {isFinancialReadOnly && (
-        <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center gap-3 text-amber-600">
-          <AlertCircle className="w-5 h-5 shrink-0" />
-          <p className="text-sm font-medium">
-            {isPaid 
-              ? 'Bản ghi này đã hoàn tất thanh toán và được khóa.' 
-              : 'Bạn chỉ có quyền xem dữ liệu tài chính. Vui lòng liên hệ Kế toán để điều chỉnh số tiền.'}
-          </p>
-        </div>
-      )}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" leftIcon={<ArrowLeft className="w-4 h-4" />} onClick={() => navigate('/fees')} className="text-muted-foreground">
-            Quay lại
-          </Button>
-          <div>
-            <h1 className="text-xl font-bold text-foreground">{isEdit ? 'Chỉnh sửa học phí' : 'Tạo bản ghi phí'}</h1>
-            <p className="text-sm text-muted-foreground">{isEdit ? 'Cập nhật thông tin học phí' : 'Ghi nhận học phí theo tháng'}</p>
-          </div>
-        </div>
-        {isEdit && (
-          <>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              leftIcon={<RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />}
-              disabled={loading || isPaid}
-              onClick={async () => {
-                setLoading(true);
-                const res = await syncFeeWithAttendance(id!);
-                setLoading(false);
-                if (res.error) toast.error('Lỗi', res.error.message);
-                else if (res.item) {
-                  const item = res.item;
-                  setFormData(prev => ({
-                    ...prev,
-                    amount: String(item.amount_vnd),
-                    baseAmount: String(item.base_amount_vnd),
-                    mealDeduction: String(item.meal_deduction_vnd || 0),
-                    tuitionDeduction: String(item.tuition_deduction_vnd || 0),
-                    deductionNote: item.deduction_note || ''
-                  }));
-                  toast.success('Đã đồng bộ học phí từ dữ liệu chuyên cần');
-                }
-              }}
-            >
+    <div className="max-w-4xl mx-auto space-y-4 print:space-y-2">
+      {/* Header */}
+      <div className="flex items-center justify-between print:hidden">
+        <Button variant="ghost" size="sm" leftIcon={<ArrowLeft className="w-4 h-4" />} onClick={() => navigate('/fees')}>
+          Quay lại
+        </Button>
+        <div className="flex gap-2">
+          {isEdit && (
+            <Button variant="outline" size="sm" leftIcon={<RefreshCw className="w-4 h-4" />} onClick={handleSyncAttendance} loading={loading}>
               Đồng bộ chuyên cần
             </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              leftIcon={<Printer className="w-4 h-4" />}
-              onClick={handlePrint}
-            >
-              In biên lai
+          )}
+          {!isLocked && isEdit && (
+            <Button variant="danger" size="sm" leftIcon={<Trash2 className="w-4 h-4" />} onClick={() => setShowDeleteConfirm(true)}>
+              Xóa
             </Button>
-            {!isTeacher && (
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/20"
-                leftIcon={<Trash2 className="w-4 h-4" />}
-                onClick={() => setShowDeleteConfirm(true)}
-                disabled={isLocked}
-              >
-                Xóa
-              </Button>
+          )}
+          <Button variant="outline" size="sm" leftIcon={<Printer className="w-4 h-4" />} onClick={handlePrint}>
+            In biên lai
+          </Button>
+        </div>
+      </div>
+
+      {/* Form */}
+      <Card>
+        <div className="p-5 space-y-5">
+          {/* Student + Title row */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:hidden">
+            <Select
+              label="Học sinh"
+              value={formData.studentId}
+              onChange={(v) => updateField('studentId', v)}
+              options={studentOptions}
+              placeholder="Chọn học sinh..."
+              error={errors.studentId}
+              required
+              disabled={isEdit}
+              fullWidth
+            />
+            <Input
+              label="Tiêu đề"
+              value={formData.title}
+              onChange={(v) => updateField('title', String(v))}
+              placeholder="VD: Học phí tháng 10"
+              readOnly={isLocked}
+              disabled={isLocked}
+            />
+          </div>
+
+          {/* Period */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 print:hidden">
+            <Select
+              label="Tháng"
+              value={formData.month}
+              onChange={(v) => updateField('month', v)}
+              options={monthOptions}
+              error={errors.month}
+              required
+              fullWidth
+            />
+            <Select
+              label="Năm học"
+              value={formData.schoolYear}
+              onChange={(v) => updateField('schoolYear', v)}
+              options={schoolYearOptions}
+              error={errors.schoolYear}
+              fullWidth
+            />
+            <DatePicker
+              label="Hạn nộp"
+              date={formData.dueDate}
+              setDate={(v) => { updateField('dueDate', v); }}
+              required
+              error={errors.dueDate}
+            />
+          </div>
+
+          {/* Amounts */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <CurrencyInput
+              label="Học phí gốc"
+              value={formData.baseAmount || formData.amount}
+              onChange={(val) => updateField('baseAmount', val)}
+              required
+            />
+            <CurrencyInput
+              label="Khấu trừ vắng mặt"
+              value={formData.attendanceDeduction}
+              onChange={(val) => updateField('attendanceDeduction', val)}
+              readOnly={isFinancialReadOnly}
+            />
+          </div>
+
+          {/* Deduction note */}
+          {formData.deductionNote && (
+            <div className="p-3 bg-amber-500/5 border border-amber-500/20 rounded-xl">
+              <p className="text-xs text-amber-600 font-medium">Chi tiết khấu trừ</p>
+              <p className="text-xs text-muted-foreground mt-1">{formData.deductionNote}</p>
+            </div>
+          )}
+
+          {/* Payment */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:hidden">
+            <CurrencyInput
+              label="Đã thanh toán"
+              value={formData.paidAmount}
+              onChange={(val) => updateField('paidAmount', val)}
+              error={errors.paidAmount}
+            />
+            <Select
+              label="Phương thức"
+              value={formData.paymentMethod}
+              onChange={(v) => updateField('paymentMethod', v)}
+              options={paymentOptions}
+              fullWidth
+            />
+          </div>
+
+          {/* Dates */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:hidden">
+            <DatePicker
+              label="Ngày thanh toán"
+              date={formData.paidDate}
+              setDate={(v) => updateField('paidDate', v)}
+            />
+          </div>
+
+          {/* Summary */}
+          <div className="border border-primary/20 rounded-xl p-4 space-y-2 bg-primary/5">
+            <div className="flex justify-between text-sm font-semibold">
+              <span>Học phí gốc</span>
+              <span>{formatCurrency(summary.base)}</span>
+            </div>
+            {summary.deduction > 0 && (
+              <div className="flex justify-between text-sm text-red-500">
+                <span>Khấu trừ vắng mặt</span>
+                <span>-{formatCurrency(summary.deduction)}</span>
+              </div>
             )}
-
-          </>
-        )}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <div className="lg:col-span-2">
-          <Card header={<div className="text-base font-semibold text-foreground">Thông tin học phí</div>}>
-            <div className="space-y-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {isEdit ? (
-                  <Input
-                    label="Học sinh"
-                    value={selectedStudent?.full_name || '—'}
-                    readOnly
-                    leftAddon={<Lock className="w-4 h-4 text-muted-foreground" />}
-                  />
-                ) : (
-                  <Select
-                    label="Học sinh"
-                    options={studentOptions}
-                    value={formData.studentId}
-                    onChange={(value) => updateField('studentId', value)}
-                    required
-                    error={errors.studentId}
-                    placeholder="Chọn học sinh"
-                  />
-                )}
-                <Input
-                  label="Lớp học"
-                  value={selectedStudent?.class_name || '—'}
-                  readOnly
-                  leftAddon={<Lock className="w-4 h-4 text-muted-foreground" />}
-                />
-              </div>
-
-              <Input
-                label="Tên khoản thu"
-                value={formData.title}
-                onChange={(event) => updateField('title', event.target.value)}
-                placeholder="VD: Học phí tháng 10"
-                readOnly={isLocked}
-                disabled={isLocked}
-              />
-
-              <div className="grid grid-cols-2 gap-4">
-                <CurrencyInput
-                  label="Học phí gốc"
-                  value={formData.baseAmount || formData.amount}
-                  onChange={(val) => updateField('baseAmount', val)}
-                  required
-                  readOnly={isFinancialReadOnly}
-                />
-                <CurrencyInput
-                  label="Số tiền phải thu (Sau khấu trừ)"
-                  value={formData.amount}
-                  onChange={(val) => updateField('amount', val)}
-                  required
-                  error={errors.amount}
-                  readOnly={isFinancialReadOnly}
-                  hint={isFinancialReadOnly ? undefined : "Sẽ tự động cập nhật khi Đồng bộ chuyên cần"}
-                />
-              </div>
-
-              {(Number(formData.mealDeduction) > 0 || Number(formData.tuitionDeduction) > 0) && (
-                <div className="p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl space-y-3">
-                  <p className="text-xs font-bold text-amber-600 uppercase tracking-wider">Chi tiết khấu trừ</p>
-                  <div className="grid grid-cols-2 gap-4">
-                    <CurrencyInput
-                      label="Trừ tiền cơm"
-                      value={formData.mealDeduction}
-                      onChange={(val) => updateField('mealDeduction', val)}
-                      readOnly={isFinancialReadOnly}
-                    />
-                    <CurrencyInput
-                      label="Khấu trừ học phí (Viện/Nghỉ)"
-                      value={formData.tuitionDeduction}
-                      onChange={(val) => updateField('tuitionDeduction', val)}
-                      readOnly={isFinancialReadOnly}
-                    />
-                  </div>
-                  <Input
-                    label="Ghi chú khấu trừ"
-                    value={formData.deductionNote}
-                    onChange={(event) => updateField('deductionNote', event.target.value)}
-                    placeholder="VD: Trừ 5 ngày cơm..."
-                    readOnly={isLocked}
-                    disabled={isLocked}
-                  />
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-4">
-                <Select label="Tháng" options={monthOptions} value={formData.month} onChange={(value) => updateField('month', value)} required error={errors.month} disabled={isLocked} />
-                <Select
-                  label="Năm học"
-                  options={schoolYearOptions}
-                  value={formData.schoolYear}
-                  onChange={(value) => updateField('schoolYear', value)}
-                  required
-                  error={errors.schoolYear}
-                  disabled={isLocked}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <CurrencyInput
-                  label="Đã thu"
-                  value={formData.paidAmount}
-                  onChange={(val) => updateField('paidAmount', val)}
-                  disabled={formData.paymentMethod === '' || isFinancialReadOnly}
-                  readOnly={isFinancialReadOnly}
-                  hint={isFinancialReadOnly ? undefined : (formData.paymentMethod === '' ? 'Chọn phương thức để nhập số tiền' : 'Nhập số tiền đã thu')}
-                />
-                <Select 
-                  label="Phương thức" 
-                  options={paymentOptions} 
-                  value={formData.paymentMethod} 
-                  onChange={(value) => updateField('paymentMethod', value)}
-                  disabled={isFinancialReadOnly}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <DatePicker
-                  label="Hạn nộp"
-                  date={formData.dueDate}
-                  setDate={(d) => updateField('dueDate', d)}
-                  required
-                  disabled={isLocked}
-                />
-                <DatePicker
-                  label="Ngày thu (nếu đã nộp)"
-                  date={formData.paidDate}
-                  setDate={(d) => updateField('paidDate', d)}
-                  disabled={isLocked}
-                />
-              </div>
+            <div className="flex justify-between text-lg font-black border-t border-primary/20 pt-2">
+              <span>Tổng cộng</span>
+              <span className="text-primary">{formatCurrency(summary.finalAmount)}</span>
             </div>
-
-            <div className="flex items-center justify-end gap-3 mt-6 pt-5 border-t border-border">
-              <Button variant="outline" onClick={() => navigate('/fees')}>
-                Hủy
-              </Button>
-              <Button leftIcon={<Save className="w-4 h-4" />} onClick={submit} loading={saving || loading} disabled={isLocked}>
-                {isLocked ? 'Đã thanh toán (Khóa)' : (isEdit ? 'Lưu thay đổi' : 'Lưu bản ghi')}
-              </Button>
+            <div className="flex justify-between text-sm">
+              <span>Đã thanh toán</span>
+              <span className={summary.paid > 0 ? 'text-emerald-500' : 'text-muted-foreground'}>{formatCurrency(summary.paid)}</span>
             </div>
-          </Card>
+            <div className="flex justify-between text-sm border-t border-border pt-2">
+              <span className="font-bold">Còn lại</span>
+              <span className={`font-bold ${summary.due <= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                {summary.due <= 0 ? 'Đã hoàn tất' : formatCurrency(summary.due)}
+              </span>
+            </div>
+          </div>
+
+          {/* Save button */}
+          {!isLocked && (
+            <Button onClick={handleSave} loading={saving} leftIcon={<Save className="w-4 h-4" />} fullWidth>
+              {isEdit ? 'Cập nhật phiếu thu' : 'Tạo phiếu thu'}
+            </Button>
+          )}
         </div>
+      </Card>
 
-        <div className="lg:col-span-1">
-          <Card header={<div className="text-base font-semibold text-foreground">Tóm tắt</div>}>
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                  <Receipt className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Số tiền phải thu</p>
-                  <p className="text-lg font-bold text-foreground">{formData.amount ? formatCurrency(Number(formData.amount)) : '—'}</p>
-                </div>
-              </div>
-              <div className="pt-4 border-t border-border space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Học sinh</span>
-                  <span className="text-foreground font-medium">{selectedStudent?.full_name || '—'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Tên khoản thu</span>
-                  <span className="text-foreground font-medium">{formData.title || 'Học phí'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Đã thu</span>
-                  <span className="text-foreground font-medium">{formatCurrency(Number(formData.paidAmount || '0'))}</span>
-                </div>
-                {Number(formData.mealDeduction) + Number(formData.tuitionDeduction) > 0 && (
-                  <div className="flex justify-between text-red-500">
-                    <span className="font-medium text-xs italic">Tổng khấu trừ</span>
-                    <span className="font-medium text-xs italic">-{formatCurrency(Number(formData.mealDeduction) + Number(formData.tuitionDeduction))}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </Card>
-        </div>
-      </div>
-      
-      <ConfirmModal
-        open={showDeleteConfirm}
-        onClose={() => setShowDeleteConfirm(false)}
-        onConfirm={handleDelete}
-        title="Xóa học phí"
-        message="Bạn có chắc chắn muốn xóa bản ghi học phí này? Hành động này không thể hoàn tác."
-        confirmLabel="Xóa"
-        loading={deleting}
-      />
-
-      {/* Hidden Invoice for Printing */}
-      <div className="hidden print:block fixed inset-0 bg-white z-[9999] p-10 text-black overflow-y-auto">
-        <div className="max-w-[800px] mx-auto border-[3px] border-black p-10 bg-white relative">
-          {/* Decorative Corner */}
-          <div className="absolute top-0 right-0 w-24 h-24 border-t-[20px] border-r-[20px] border-primary/20 -m-1" />
-          
-          <div className="flex justify-between items-start border-b-[3px] border-black pb-8 mb-8">
-            <div className="flex gap-6">
-              <div className="w-20 h-20 bg-primary flex items-center justify-center rounded-2xl shrink-0">
-                <Receipt className="w-10 h-10 text-white" />
-              </div>
-              <div>
-                <h2 className="text-2xl font-black uppercase tracking-tight">Trường Mầm Non KidGarden</h2>
-                <p className="text-sm font-medium text-gray-600">Hệ thống giáo dục mầm non chất lượng cao</p>
-                <div className="mt-2 text-xs space-y-0.5">
-                  <p>Địa chỉ: 123 Đường Láng, Đống Đa, Hà Nội</p>
-                  <p>Hotline: 0123 456 789 | Email: contact@kidgarden.edu.vn</p>
-                  <p>Website: www.kidgarden.edu.vn</p>
-                </div>
-              </div>
+      {/* Print Invoice */}
+      <div className="hidden print:block">
+        <div className="bg-white border-[3px] border-black p-8">
+          <div className="flex justify-between items-start border-b-[3px] border-black pb-6 mb-6">
+            <div>
+              <h2 className="text-xl font-black uppercase">Trường Mầm Non KidGarden</h2>
+              <p className="text-[10px] text-gray-500 mt-1">123 Đường Láng, Đống Đa, Hà Nội | 0123 456 789</p>
             </div>
             <div className="text-right">
-              <h1 className="text-3xl font-black text-primary uppercase leading-none">Biên Lai Thu Tiền</h1>
-              <p className="text-sm font-mono mt-2 bg-gray-100 inline-block px-3 py-1 rounded">Số: #{id?.slice(0, 8).toUpperCase()}</p>
-              <div className="mt-4">
-                <p className="text-[10px] font-bold uppercase text-gray-400">Ngày lập phiếu</p>
-                <p className="text-sm font-bold">{new Date().toLocaleDateString('vi-VN')}</p>
-              </div>
+              <h1 className="text-2xl font-black text-primary uppercase">Biên Lai Thu Tiền</h1>
+              <p className="text-[10px] font-mono mt-1 bg-gray-100 inline-block px-2 py-0.5 rounded">#{id ? id.slice(0, 8).toUpperCase() : 'MỚI'}</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-8 mb-10">
-            <div className="space-y-3">
-              <p className="text-[10px] font-black uppercase text-primary tracking-widest border-b border-primary/20 pb-1">Thông tin người nộp</p>
-              <div className="grid grid-cols-[100px_1fr] gap-y-2 text-sm">
-                <span className="font-bold">Học sinh:</span>
-                <span className="uppercase font-black">{selectedStudent?.full_name}</span>
-                <span className="font-bold">Lớp:</span>
-                <span className="font-medium">{selectedStudent?.class_name}</span>
-                <span className="font-bold">Phụ huynh:</span>
-                <span className="font-medium">{selectedStudent?.parent_info?.full_name || '—'}</span>
-              </div>
+          <div className="grid grid-cols-2 gap-6 mb-6 text-sm">
+            <div className="space-y-1.5">
+              <p><span className="font-bold">Học sinh:</span> {selectedStudent?.full_name || formData.studentId}</p>
+              <p><span className="font-bold">Lớp:</span> {selectedStudent?.class_name || '—'}</p>
+              <p><span className="font-bold">Phụ huynh:</span> {selectedStudent?.parent_info?.full_name || '—'}</p>
             </div>
-            <div className="space-y-3">
-              <p className="text-[10px] font-black uppercase text-primary tracking-widest border-b border-primary/20 pb-1">Chi tiết kỳ phí</p>
-              <div className="grid grid-cols-[100px_1fr] gap-y-2 text-sm text-right">
-                <span className="font-bold text-left">Kỳ thu:</span>
-                <span className="font-black">Tháng {formData.month} / {formData.schoolYear}</span>
-                <span className="font-bold text-left">Hạn nộp:</span>
-                <span className="font-medium text-red-600">{formData.dueDate ? new Date(formData.dueDate).toLocaleDateString('vi-VN') : '—'}</span>
-                <span className="font-bold text-left">Trạng thái:</span>
-                <span className="font-bold uppercase underline">
-                  {Number(formData.paidAmount) >= Number(formData.amount) ? 'Đã thanh toán' : formData.paymentMethod ? 'Đã thu một phần' : 'Chưa thanh toán'}
-                </span>
-              </div>
+            <div className="space-y-1.5 text-right">
+              <p><span className="font-bold">Kỳ thu:</span> Tháng {formData.month} / {formData.schoolYear}</p>
+              <p><span className="font-bold">Ngày in:</span> {new Date().toLocaleDateString('vi-VN')}</p>
+              <p><span className="font-bold">Trạng thái:</span> {status === 'paid' ? 'Đã thanh toán' : formData.paymentMethod ? 'Một phần' : 'Chưa đóng'}</p>
             </div>
           </div>
 
-          <table className="w-full border-collapse mb-10">
+          <table className="w-full border-collapse mb-6">
             <thead>
-              <tr className="bg-gray-900 text-white print:bg-black print:text-white">
-                <th className="border border-black px-4 py-3 text-left uppercase text-xs tracking-widest">Danh mục khoản thu</th>
-                <th className="border border-black px-4 py-3 text-right w-48 uppercase text-xs tracking-widest">Số tiền (VNĐ)</th>
+              <tr className="bg-gray-100">
+                <th className="border border-black px-4 py-2 text-left text-xs uppercase">Khoản thu</th>
+                <th className="border border-black px-4 py-2 text-right w-40 text-xs uppercase">Số tiền</th>
               </tr>
             </thead>
             <tbody className="text-sm">
               <tr>
-                <td className="border border-black px-4 py-4">
-                  <p className="font-black text-base">{formData.title || 'Học phí trọn gói'}</p>
-                  <p className="text-xs text-gray-500 mt-1 italic">Bao gồm học phí cơ bản, phí quản lý và CSVC</p>
-                </td>
-                <td className="border border-black px-4 py-4 text-right font-bold text-lg">
-                  {formatCurrency(Number(formData.baseAmount || formData.amount))}
-                </td>
+                <td className="border border-black px-4 py-3 font-bold">{formData.title || 'Học phí'}</td>
+                <td className="border border-black px-4 py-3 text-right font-bold">{formatCurrency(summary.base)}</td>
               </tr>
-              {Number(formData.mealDeduction) > 0 && (
-                <tr className="bg-gray-50">
-                  <td className="border border-black px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
-                      <span className="font-medium">Khấu trừ tiền ăn (Theo số ngày vắng)</span>
-                    </div>
-                  </td>
-                  <td className="border border-black px-4 py-3 text-right text-red-600 font-bold">
-                    -{formatCurrency(Number(formData.mealDeduction))}
-                  </td>
+              {summary.deduction > 0 && (
+                <tr className="text-red-600 italic">
+                  <td className="border border-black px-4 py-2">- Khấu trừ vắng mặt</td>
+                  <td className="border border-black px-4 py-2 text-right">-{formatCurrency(summary.deduction)}</td>
                 </tr>
               )}
-              {Number(formData.tuitionDeduction) > 0 && (
-                <tr className="bg-gray-50">
-                  <td className="border border-black px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
-                      <span className="font-medium">Khấu trừ học phí ({formData.deductionNote || 'Nghỉ/Nằm viện'})</span>
-                    </div>
-                  </td>
-                  <td className="border border-black px-4 py-3 text-right text-red-600 font-bold">
-                    -{formatCurrency(Number(formData.tuitionDeduction))}
-                  </td>
-                </tr>
-              )}
-              <tr className="bg-gray-100 print:bg-gray-200">
-                <td className="border-2 border-black px-4 py-6 text-right font-black uppercase tracking-widest text-lg">
-                  Tổng cộng thực thu
-                </td>
-                <td className="border-2 border-black px-4 py-6 text-right text-2xl font-black text-primary">
-                  {formatCurrency(Number(formData.amount))}
-                </td>
+              <tr className="bg-gray-50">
+                <td className="border-2 border-black px-4 py-4 text-right font-black uppercase">Tổng cộng thực thu</td>
+                <td className="border-2 border-black px-4 py-4 text-right text-xl font-black text-primary">{formatCurrency(summary.finalAmount)}</td>
               </tr>
             </tbody>
           </table>
 
-          <div className="grid grid-cols-3 gap-10 items-start">
-            <div className="col-span-1 border-2 border-dashed border-gray-300 p-4 rounded-xl flex flex-col items-center justify-center bg-gray-50/50">
-              <p className="text-[10px] font-black uppercase text-gray-400 mb-3 tracking-tighter">Quét mã thanh toán qua ngân hàng</p>
-              <div className="w-32 h-32 bg-white border border-gray-200 rounded-lg flex items-center justify-center relative overflow-hidden">
-                {/* Mock QR Code Pattern */}
-                <div className="grid grid-cols-6 gap-0.5 opacity-20">
-                  {Array.from({ length: 36 }).map((_, i) => (
-                    <div key={i} className={`w-4 h-4 ${Math.random() > 0.5 ? 'bg-black' : ''}`} />
-                  ))}
-                </div>
-                <div className="absolute inset-0 flex flex-col items-center justify-center p-2 text-center">
-                  <div className="w-8 h-8 bg-primary rounded-md mb-1 flex items-center justify-center">
-                    <Wallet className="w-5 h-5 text-white" />
-                  </div>
-                  <p className="text-[8px] font-bold text-gray-400 leading-tight">VIETQR<br/>PAYMENT</p>
-                </div>
+          <div className="grid grid-cols-3 gap-6 items-start">
+            <div className="col-span-1 border border-dashed border-gray-300 p-3 rounded-lg bg-gray-50/50 flex flex-col items-center">
+              <div className="w-20 h-20 bg-white border border-gray-100 rounded-md mb-2 flex items-center justify-center opacity-50">
+                <Wallet className="w-6 h-6 text-gray-300" />
               </div>
-              <p className="mt-3 text-[10px] text-center text-gray-500 leading-snug">
-                Số TK: <span className="font-bold text-black">1234567890</span><br/>
-                Ngân hàng: <span className="font-bold text-black">Techcombank</span>
-              </p>
+              <p className="text-[8px] text-center font-bold text-gray-400 uppercase">VietQR Payment</p>
             </div>
-
-            <div className="col-span-2 flex justify-between items-start gap-10 pt-4">
+            <div className="col-span-2 flex justify-between pt-2">
               <div className="text-center flex-1">
-                <p className="font-bold uppercase text-xs mb-20">Người nộp tiền</p>
-                <p className="text-sm font-medium text-gray-400 italic">(Ký và ghi rõ họ tên)</p>
+                <p className="font-bold uppercase text-[10px] mb-12">Người nộp</p>
               </div>
               <div className="text-center flex-1">
-                <p className="text-xs italic mb-2">Hà Nội, ngày {new Date().getDate()} tháng {new Date().getMonth() + 1} năm {new Date().getFullYear()}</p>
-                <p className="font-bold uppercase text-xs mb-20">Người lập phiếu</p>
-                <p className="font-black text-sm uppercase">{user?.user_metadata?.full_name || 'Kế toán viên'}</p>
+                <p className="text-[10px] italic mb-1">Hà Nội, {new Date().toLocaleDateString('vi-VN')}</p>
+                <p className="font-bold uppercase text-[10px]">Người lập phiếu</p>
               </div>
             </div>
-          </div>
-
-          <div className="mt-12 pt-6 border-t border-gray-200 text-center">
-            <p className="text-[10px] text-gray-400 italic">Cảm ơn Quý phụ huynh đã luôn đồng hành cùng nhà trường!</p>
           </div>
         </div>
       </div>
+
+      <ConfirmModal
+        open={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDelete}
+        title="Xóa phiếu thu?"
+        message="Hành động này không thể hoàn tác. Toàn bộ dữ liệu thanh toán của phiếu thu này sẽ bị mất."
+        confirmLabel="Xóa"
+        cancelLabel="Hủy"
+        variant="danger"
+        loading={deleting}
+      />
     </div>
   );
 }

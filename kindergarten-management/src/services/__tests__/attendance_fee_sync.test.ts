@@ -111,7 +111,7 @@ describe('Attendance to Fee Sync Integration', () => {
 
     expect(result.error).toBeNull();
     // 3 absent days * 30,000 = 90,000 deduction
-    expect(result.item?.meal_deduction_vnd).toBe(90000);
+    expect(result.item?.attendance_deduction_vnd).toBe(90000);
     expect(result.item?.amount_vnd).toBe(1910000);
   });
 });

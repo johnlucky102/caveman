@@ -93,7 +93,7 @@ describe('Fees Service - Phase 5 Business Logic (Integer Currency)', () => {
 
     const { item } = await syncFeeWithAttendance('f1');
     expect(item?.amount_vnd).toBe(3000000);
-    expect(item?.meal_deduction_vnd).toBe(0);
+    expect(item?.attendance_deduction_vnd).toBe(0);
   });
 
   it('BIZ-02: Calculates meal deduction correctly (5 days absent)', async () => {
@@ -110,7 +110,7 @@ describe('Fees Service - Phase 5 Business Logic (Integer Currency)', () => {
 
     mockQuery.single
       .mockResolvedValueOnce({ data: feeData, error: null })
-      .mockResolvedValueOnce({ data: { ...feeData, amount_vnd: 2900000, meal_deduction_vnd: 100000 }, error: null });
+      .mockResolvedValueOnce({ data: { ...feeData, amount_vnd: 2900000, attendance_deduction_vnd: 100000 }, error: null });
 
     mockQuery.maybeSingle
       .mockResolvedValueOnce({ data: configData, error: null }); // class_finance_configs
@@ -123,7 +123,7 @@ describe('Fees Service - Phase 5 Business Logic (Integer Currency)', () => {
     });
 
     const { item } = await syncFeeWithAttendance('f1');
-    expect(item?.meal_deduction_vnd).toBe(100000);
+    expect(item?.attendance_deduction_vnd).toBe(100000);
     expect(item?.amount_vnd).toBe(2900000);
   });
 

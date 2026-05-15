@@ -22,24 +22,24 @@ vi.mock('@/lib/supabase', () => ({
   },
 }));
 
+const createMockSupabaseChain = (data: any, error: any = null) => {
+  const chain = {
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    single: vi.fn().mockResolvedValue({ data, error }),
+    maybeSingle: vi.fn().mockResolvedValue({ data, error }),
+    update: vi.fn().mockReturnThis(),
+    gte: vi.fn().mockReturnThis(),
+    lte: vi.fn().mockReturnThis(),
+    then: vi.fn().mockImplementation((cb) => cb({ data, error })),
+  };
+  return chain;
+};
+
 describe('syncFeeWithAttendance', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
-
-  const createMockSupabaseChain = (data: any, error: any = null) => {
-    const chain = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data, error }),
-      maybeSingle: vi.fn().mockResolvedValue({ data, error }),
-      update: vi.fn().mockReturnThis(),
-      gte: vi.fn().mockReturnThis(),
-      lte: vi.fn().mockReturnThis(),
-      then: vi.fn().mockImplementation((cb) => cb({ data, error })),
-    };
-    return chain;
-  };
 
   it('should calculate meal deductions correctly for Daycare classes', async () => {
     const mockFee = {

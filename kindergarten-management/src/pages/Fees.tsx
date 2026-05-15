@@ -31,9 +31,9 @@ export default function Fees() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [status, setStatus] = useState<FeeStatusValue | ''>('');
-  const [month, setMonth] = useState<string>('');
+  const [month, setMonth] = useState<string>(String(new Date().getMonth() + 1));
   const [classId, setClassId] = useState<string>('');
-  const [schoolYear, setSchoolYear] = useState<string>('');
+  const [schoolYear, setSchoolYear] = useState<string>(getCurrentSchoolYear());
   const [items, setItems] = useState<FeeRecordP2[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [page, setPage] = useState(1);
@@ -165,11 +165,10 @@ export default function Fees() {
     }
     setBulkCreating(true);
     const result = await createClassFees(
-      Number(bulkClassId),
-      bulkMonth,
-      bulkSchoolYear,
-      `${bulkTitle} ${bulkMonth}/${bulkSchoolYear.split('-')[0]}`,
-      bulkBaseAmount
+      { classId: Number(bulkClassId), month: bulkMonth, schoolYear: bulkSchoolYear },
+      1,
+      bulkBaseAmount,
+      []
     );
     setBulkCreating(false);
     if (result.error) {
@@ -181,9 +180,41 @@ export default function Fees() {
     }
   };
 
-  // Summary is now loaded from server via loadSummary and stored in state
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === items.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(items.map(i => i.id));
+    }
+  };
 
   const columns: TableColumn<FeeRecordP2>[] = [
+    {
+      key: '_select',
+      label: (
+        <input
+          type="checkbox"
+          checked={items.length > 0 && selectedIds.length === items.length}
+          onChange={toggleSelectAll}
+          className="w-4 h-4 rounded border-border accent-primary cursor-pointer"
+        />
+      ),
+      width: '40px',
+      render: (_value, row) => (
+        <input
+          type="checkbox"
+          checked={selectedIds.includes(row.id)}
+          onChange={() => toggleSelect(row.id)}
+          className="w-4 h-4 rounded border-border accent-primary cursor-pointer"
+        />
+      ),
+    },
     {
       key: 'student_name',
       label: 'Học sinh',
@@ -198,59 +229,51 @@ export default function Fees() {
     },
     {
       key: 'amount_vnd',
-      label: 'Phải thu',
-      render: (value, row) => {
-        const deductions = (row.meal_deduction_vnd || 0) + (row.tuition_deduction_vnd || 0);
-        return (
-          <div className="group relative">
-            <div className="flex flex-col">
-              <span className="font-bold text-foreground">{formatCurrency(Number(value))}</span>
-              {deductions > 0 && (
-                <span className="text-[10px] text-red-500 font-medium flex items-center gap-1">
-                  <TrendingDown className="w-3 h-3" />
-                  -{formatCurrency(deductions)}
-                </span>
-              )}
-            </div>
-            {/* Hover details */}
-            <div className="absolute left-0 top-full mt-1 hidden group-hover:block z-50 bg-popover border border-border p-2 rounded-lg shadow-xl min-w-[180px] animate-fade-in">
-              <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1.5 border-b border-border pb-1">Chi tiết tính toán</p>
-              <div className="space-y-1 text-xs">
-                <div className="flex justify-between gap-4">
-                  <span className="text-muted-foreground">Mức gốc:</span>
-                  <span className="font-medium">{formatCurrency(row.base_amount_vnd || Number(value))}</span>
-                </div>
-                {Number(row.meal_deduction_vnd) > 0 && (
-                  <div className="flex justify-between gap-4 text-red-500">
-                    <span>Trừ tiền cơm:</span>
-                    <span>-{formatCurrency(Number(row.meal_deduction_vnd))}</span>
-                  </div>
-                )}
-                {Number(row.tuition_deduction_vnd) > 0 && (
-                  <div className="flex justify-between gap-4 text-red-500">
-                    <span>Khấu trừ khác:</span>
-                    <span>-{formatCurrency(Number(row.tuition_deduction_vnd))}</span>
-                  </div>
-                )}
-                <div className="pt-1 mt-1 border-t border-border flex justify-between gap-4 font-bold">
-                  <span>Còn lại:</span>
-                  <span className="text-primary">{formatCurrency(Number(value))}</span>
-                </div>
-              </div>
-              {row.deduction_note && (
-                <p className="mt-2 pt-1 border-t border-border text-[10px] text-muted-foreground italic">
-                  Note: {row.deduction_note}
-                </p>
-              )}
-            </div>
-          </div>
-        );
-      },
+      label: 'Số tiền',
+      render: (value, row) => (
+        <div className="text-right">
+          <p className="font-medium">{formatCurrency(Number(value))}</p>
+          {row.base_amount_vnd > Number(value) && (
+            <p className="text-xs text-red-500">
+              Đã giảm {formatCurrency(row.base_amount_vnd - Number(value))}
+            </p>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'attendance_deduction_vnd',
+      label: 'Khấu trừ vắng',
+      render: (value) => (
+        <span className={Number(value) > 0 ? 'text-red-500' : 'text-muted-foreground'}>
+          {Number(value) > 0 ? `-${formatCurrency(Number(value))}` : '—'}
+        </span>
+      ),
     },
     {
       key: 'paid_amount_vnd',
       label: 'Đã thu',
-      render: (value) => <span className="font-medium text-emerald-600">{formatCurrency(Number(value))}</span>,
+      render: (value, row) => (
+        <div className="text-right">
+          <p className={row.paid_amount_vnd >= row.amount_vnd ? 'text-emerald-500 font-medium' : ''}>
+            {formatCurrency(Number(value))}
+          </p>
+          {row.paid_amount_vnd < row.amount_vnd && row.paid_amount_vnd > 0 && (
+            <p className="text-xs text-amber-500">
+              Còn {formatCurrency(row.amount_vnd - row.paid_amount_vnd)}
+            </p>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'month',
+      label: 'Tháng',
+      render: (value) => (
+        <span className="text-muted-foreground">
+          {value !== null && value !== undefined ? `T${String(value)}` : ''}
+        </span>
+      ),
     },
     {
       key: 'status',
@@ -258,60 +281,24 @@ export default function Fees() {
       render: (value) => <FeeStatusBadge status={String(value)} />,
     },
     {
-      key: 'due_date',
-      label: 'Hạn nộp',
-      render: (value) => <span className="text-muted-foreground">{value ? new Date(String(value)).toLocaleDateString('vi-VN') : '—'}</span>,
-    },
-    {
       key: 'actions',
-      label: 'Hành động',
-      width: '150px',
+      label: '',
+      width: '60px',
       render: (_value, row) => (
-        <div className="flex items-center gap-1">
+        <div className="flex gap-1">
           <button
-            onClick={async (e) => {
+            onClick={(e) => {
               e.stopPropagation();
-              setSyncingId(row.id);
-              const res = await syncFeeWithAttendance(row.id);
-              setSyncingId(null);
-              if (res.error) toast.error('Lỗi đồng bộ', res.error.message);
-              else {
-                toast.success('Đã đồng bộ khấu trừ từ chuyên cần');
-                void loadFees();
-              }
+              navigate(`/fees/${row.id}`);
             }}
-            disabled={syncingId === row.id}
-            className="p-1.5 rounded-lg text-muted-foreground hover:text-blue-500 hover:bg-blue-500/10 transition-colors disabled:opacity-50"
-            title="Đồng bộ chuyên cần"
-          >
-            <RefreshCw className={`w-4 h-4 ${syncingId === row.id ? 'animate-spin' : ''}`} />
-          </button>
-          {row.status !== 'paid' && (
-            <button
-              onClick={async (e) => {
-                e.stopPropagation();
-                const result = await updateFeeRecordStatus(row.id, row.amount_vnd, new Date().toISOString().split('T')[0], 'cash');
-                if (result.error) {
-                  toast.error('Xác nhận thanh toán thất bại', result.error.message);
-                  return;
-                }
-                toast.success('Xác nhận thanh toán thành công');
-                await loadFees();
-              }}
-              className="text-[10px] font-bold px-1.5 py-1 rounded-md bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition-colors uppercase"
-            >
-              Thu
-            </button>
-          )}
-          <button 
-            onClick={() => navigate(`/fees/${row.id}/edit`)}
             className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
             title="Chỉnh sửa"
           >
             <Pencil className="w-4 h-4" />
           </button>
-          <button 
-            onClick={() => {
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
               setFeeToDelete(row.id);
               setShowDeleteConfirm(true);
             }}
@@ -326,221 +313,196 @@ export default function Fees() {
   ];
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-foreground">Học phí</h1>
-          <p className="text-sm text-muted-foreground">Quản lý thu phí theo học sinh</p>
+          <p className="text-sm text-muted-foreground">Quản lý các khoản thu và tình trạng thanh toán</p>
         </div>
-        <div className="flex gap-2">
-          {selectedIds.length > 0 && (
-            <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="text-blue-600 border-blue-200/50 hover:bg-blue-500/10"
-                leftIcon={<Printer className="w-4 h-4" />}
-                onClick={() => navigate(`/fees/print-bulk?ids=${selectedIds.join(',')}`)}
-              >
-                In ({selectedIds.length})
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="text-amber-600 border-amber-200/50 hover:bg-amber-500/10"
-                leftIcon={<Bell className="w-4 h-4" />}
-                onClick={async () => {
-                  setLoading(true);
-                  await new Promise(r => setTimeout(r, 1000));
-                  setLoading(false);
-                  toast.success(`Đã gửi ${selectedIds.length} thông báo nhắc nợ.`);
-                  setSelectedIds([]);
-                }}
-                disabled={loading}
-              >
-                Nhắc nợ ({selectedIds.length})
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="text-red-500 border-red-200/50 hover:bg-red-500/10"
-                leftIcon={<Trash2 className="w-4 h-4" />}
-                onClick={() => setShowBulkDeleteConfirm(true)}
-              >
-                Xóa ({selectedIds.length})
-              </Button>
-              <div className="w-px h-6 bg-border mx-1" />
-            </div>
-          )}
-          <Button 
-            variant="outline" 
-            size="sm" 
-            leftIcon={<ClipboardList className="w-4 h-4" />} 
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            leftIcon={<Plus className="w-4 h-4" />}
             onClick={() => setShowBulkCreateModal(true)}
           >
-            Tạo theo lớp
+            Tạo hàng loạt
           </Button>
-          <Button size="sm" color="primary" leftIcon={<Plus className="w-4 h-4" />} onClick={() => navigate('/fees/new')}>
-            Tạo mới
+          <Button
+            size="sm"
+            leftIcon={<Plus className="w-4 h-4" />}
+            onClick={() => navigate('/fees/new')}
+          >
+            Tạo phiếu thu
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-        <StatCard label="Tổng phải thu" value={formatCurrency(summary.totalAmount)} icon={<Wallet className="w-5 h-5 text-primary" />} iconBg="bg-primary/10" />
-        <StatCard label="Tổng đã thu" value={formatCurrency(summary.totalPaid)} icon={<TrendingUp className="w-5 h-5 text-emerald-500" />} iconBg="bg-emerald-500/10" />
-        <StatCard label="Công nợ" value={formatCurrency(summary.totalDebt)} icon={<TrendingDown className="w-5 h-5 text-red-500" />} iconBg="bg-red-500/10" />
-        <StatCard label="Số hồ sơ chưa đủ" value={String(summary.debtCount)} icon={<AlertCircle className="w-5 h-5 text-amber-500" />} iconBg="bg-amber-500/10" />
-      </div>
-
-      <Card noPadding>
-        <div className="p-4 grid grid-cols-1 md:grid-cols-12 gap-3">
-          <div className="md:col-span-4 lg:col-span-3">
+      {/* Filters */}
+      <div className="bg-card rounded-xl border border-border p-4">
+        <div className="flex flex-col lg:flex-row gap-3">
+          <div className="flex-1 min-w-0">
             <Input
+              placeholder="Tìm học sinh..."
               value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-              placeholder="Tìm theo học sinh..."
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               leftAddon={<Search className="w-4 h-4" />}
-              fullWidth
             />
           </div>
-          <div className="md:col-span-2 lg:col-span-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Select
               value={status}
-              onChange={(value) => {
-                setStatus(value as FeeStatusValue | '');
-                setPage(1);
-              }}
+              onChange={(v) => { setStatus(v as FeeStatusValue | ''); setPage(1); }}
               options={statusOptions}
-              fullWidth
+              placeholder="Trạng thái"
             />
-          </div>
-          <div className="md:col-span-2 lg:col-span-2">
             <Select
               value={month}
-              onChange={(value) => {
-                setMonth(value);
-                setPage(1);
-              }}
+              onChange={(v) => { setMonth(v); setPage(1); }}
               options={monthOptions}
-              fullWidth
+              placeholder="Tháng"
             />
-          </div>
-          <div className="md:col-span-2 lg:col-span-2">
             <Select
               value={classId}
-              onChange={(value) => {
-                setClassId(value);
-                setPage(1);
-              }}
+              onChange={(v) => { setClassId(v); setPage(1); }}
               options={[{ value: '', label: 'Tất cả lớp' }, ...classOptions]}
-              fullWidth
+              placeholder="Lớp học"
             />
-          </div>
-          <div className="md:col-span-2 lg:col-span-3">
-            <Input
+            <Select
               value={schoolYear}
-              onChange={(e) => {
-                setSchoolYear(e.target.value);
-                setPage(1);
-              }}
-              placeholder="Năm học (VD: 2024-2025)"
-              fullWidth
+              onChange={(v) => { setSchoolYear(v); setPage(1); }}
+              options={[{ value: '', label: 'Tất cả năm' }, ...Array.from({ length: 5 }, (_, i) => {
+                const year = new Date().getFullYear() - 2 + i;
+                const value = `${year}-${year + 1}`;
+                return { value, label: value };
+              })]}
+              placeholder="Năm học"
             />
           </div>
         </div>
-      </Card>
+      </div>
 
-      <Card noPadding header={<CardHeader title="Danh sách học phí" subtitle={`${items.length} bản ghi / trang`} />}>
-        <Table
-          columns={columns}
-          data={items}
-          rowKey="id"
-          loading={loading}
-          selectedKeys={selectedIds}
-          onSelectionChange={setSelectedIds}
-          pagination={pagination(page, pageSize, total)}
-          onPageChange={setPage}
-          emptyMessage="Không có dữ liệu học phí"
-        />
-      </Card>
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <StatCard label="Tổng" value={formatCurrency(summary.totalAmount)} icon={<Wallet className="w-4 h-4" />} />
+        <StatCard label="Đã thu" value={formatCurrency(summary.totalPaid)} icon={<TrendingDown className="w-4 h-4" />} variant="success" />
+        <StatCard label="Còn nợ" value={formatCurrency(summary.totalDebt)} icon={<TrendingUp className="w-4 h-4" />} variant="warning" />
+        <StatCard label="Số nợ" value={summary.debtCount} icon={<AlertCircle className="w-4 h-4" />} variant="danger" />
+      </div>
 
-      <ConfirmModal
-        open={showDeleteConfirm}
-        onClose={() => setShowDeleteConfirm(false)}
-        onConfirm={() => feeToDelete && handleDelete(feeToDelete)}
-        title="Xóa bản ghi học phí"
-        message="Bạn có chắc chắn muốn xóa bản ghi học phí này? Hành động này không thể hoàn tác."
-        confirmLabel="Xóa"
-        loading={deleting}
+      {/* Bulk actions */}
+      {selectedIds.length > 0 && (
+        <div className="flex items-center justify-between bg-primary/5 border border-primary/20 rounded-xl px-4 py-3">
+          <p className="text-sm font-medium">Đã chọn <span className="font-bold">{selectedIds.length}</span> phiếu thu</p>
+          <div className="flex gap-2">
+            <Button
+              variant="danger"
+              size="sm"
+              leftIcon={<Trash2 className="w-4 h-4" />}
+              onClick={() => setShowBulkDeleteConfirm(true)}
+            >
+              Xóa {selectedIds.length} phiếu
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Table */}
+      <Table
+        columns={columns}
+        data={items}
+        rowKey="id"
+        loading={loading}
+        pagination={pagination(page, pageSize, total)}
+        onPageChange={setPage}
+        emptyMessage="Không có phiếu thu nào"
       />
+
+      {/* Modals */}
+      <Modal
+        open={showBulkCreateModal}
+        onClose={() => setShowBulkCreateModal(false)}
+        title="Tạo học phí hàng loạt"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">Hệ thống sẽ tạo phiếu thu cho toàn bộ học sinh trong lớp được chọn.</p>
+          
+          <Select
+            label="Lớp học"
+            value={bulkClassId}
+            onChange={setBulkClassId}
+            options={classOptions}
+            required
+            fullWidth
+          />
+
+          <div className="grid grid-cols-2 gap-4">
+            <Select
+              label="Tháng"
+              value={String(bulkMonth)}
+              onChange={(v) => setBulkMonth(Number(v))}
+              options={monthOptions.filter(o => o.value !== '')}
+              required
+              fullWidth
+            />
+            <Select
+              label="Năm học"
+              value={bulkSchoolYear}
+              onChange={setBulkSchoolYear}
+              options={Array.from({ length: 5 }, (_, i) => {
+                const year = new Date().getFullYear() - 2 + i;
+                const value = `${year}-${year + 1}`;
+                return { value, label: value };
+              })}
+              required
+              fullWidth
+            />
+          </div>
+
+          <Input
+            label="Tên khoản thu"
+            value={bulkTitle}
+            onChange={(e) => setBulkTitle(e.target.value)}
+            placeholder="VD: Học phí tháng"
+          />
+
+          <CurrencyInput
+            label="Số tiền gốc"
+            value={String(bulkBaseAmount)}
+            onChange={(v) => setBulkBaseAmount(Number(v))}
+            required
+          />
+
+          <div className="flex gap-3 pt-2">
+            <Button variant="outline" onClick={() => setShowBulkCreateModal(false)} className="flex-1">Hủy</Button>
+            <Button onClick={handleBulkCreate} loading={bulkCreating} className="flex-1">Tạo phiếu</Button>
+          </div>
+        </div>
+      </Modal>
 
       <ConfirmModal
         open={showBulkDeleteConfirm}
         onClose={() => setShowBulkDeleteConfirm(false)}
         onConfirm={handleBulkDelete}
-        title="Xóa nhiều bản ghi"
-        message={`Bạn có chắc chắn muốn xóa ${selectedIds.length} bản ghi học phí đã chọn?`}
+        title={`Xóa ${selectedIds.length} phiếu thu?`}
+        message="Hành động này không thể hoàn tác."
         confirmLabel="Xóa tất cả"
+        cancelLabel="Hủy"
+        variant="danger"
         loading={deleting}
       />
 
-      <Modal
-        open={showBulkCreateModal}
-        onClose={() => setShowBulkCreateModal(false)}
-        title="Tạo học phí theo lớp"
-      >
-        <div className="space-y-4 pt-2">
-          <p className="text-sm text-muted-foreground">Hệ thống sẽ tạo bản ghi học phí cho tất cả học sinh trong lớp được chọn.</p>
-          
-          <div className="grid grid-cols-2 gap-3">
-            <Select
-              label="Chọn lớp"
-              value={bulkClassId}
-              onChange={setBulkClassId}
-              options={classOptions}
-            />
-            <Input
-              label="Tháng"
-              type="number"
-              min={1}
-              max={12}
-              value={bulkMonth}
-              onChange={(e) => setBulkMonth(Number(e.target.value))}
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Input
-              label="Năm học"
-              placeholder="2024-2025"
-              value={bulkSchoolYear}
-              onChange={(e) => setBulkSchoolYear(e.target.value)}
-            />
-            <Input
-              label="Tiêu đề mẫu"
-              placeholder="Học phí tháng"
-              value={bulkTitle}
-              onChange={(e) => setBulkTitle(e.target.value)}
-            />
-          </div>
-
-          <CurrencyInput
-            label="Mức học phí cơ bản (VND)"
-            value={bulkBaseAmount}
-            onChange={(val) => setBulkBaseAmount(Number(val))}
-            hint="Số tiền này chưa bao gồm khấu trừ chuyên cần."
-          />
-
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="ghost" onClick={() => setShowBulkCreateModal(false)}>Hủy</Button>
-            <Button onClick={handleBulkCreate} loading={bulkCreating}>Bắt đầu tạo</Button>
-          </div>
-        </div>
-      </Modal>
+      <ConfirmModal
+        open={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={() => handleDelete(feeToDelete!)}
+        title="Xóa phiếu thu?"
+        message="Hành động này không thể hoàn tác."
+        confirmLabel="Xóa"
+        cancelLabel="Hủy"
+        variant="danger"
+        loading={deleting}
+      />
     </div>
   );
 }

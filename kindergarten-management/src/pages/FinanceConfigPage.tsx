@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Calculator, Pencil, Save, Search, X } from 'lucide-react';
+import { Calculator, Pencil, Save, Search, Plus, X } from 'lucide-react';
 import Card, { CardHeader, StatCard } from '@/components/common/Card';
 import Button from '@/components/common/Button';
 import Input from '@/components/common/Input';
@@ -13,7 +13,7 @@ import { listFinanceConfigs, updateFinanceConfig } from '@/services/financeConfi
 import { useAuthStore } from '@/stores/authStore';
 import { canManageFinance } from '@/lib/rbac';
 import type { PaginationMeta, TableColumn } from '@/types';
-import type { ClassFinanceConfig, UpdateFinanceConfigInput } from '@/types/domain';
+import type { ClassFinanceConfig, UpdateFinanceConfigInput, DeductionRule } from '@/types/domain';
 
 function paginate(page: number, pageSize: number, total: number): PaginationMeta {
   return {
@@ -26,8 +26,17 @@ function paginate(page: number, pageSize: number, total: number): PaginationMeta
 
 interface EditFormState {
   class_type: 'Daycare' | 'Evening';
-  meal_rate: string;
-  cancel_rate: string;
+  deduction_rules: { id: string; name: string; amount: string }[];
+}
+
+let ruleIdCounter = 0;
+function newRuleId() {
+  ruleIdCounter++;
+  return `rule_${Date.now()}_${ruleIdCounter}`;
+}
+
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
 }
 
 export default function FinanceConfigPage() {
@@ -45,8 +54,7 @@ export default function FinanceConfigPage() {
   const [editTarget, setEditTarget] = useState<ClassFinanceConfig | null>(null);
   const [editForm, setEditForm] = useState<EditFormState>({
     class_type: 'Daycare',
-    meal_rate: '20000',
-    cancel_rate: '50000',
+    deduction_rules: [],
   });
   const pageSize = 15;
 
@@ -84,18 +92,44 @@ export default function FinanceConfigPage() {
     setEditTarget(config);
     setEditForm({
       class_type: config.class_type,
-      meal_rate: String(config.meal_rate),
-      cancel_rate: String(config.cancel_rate),
+      deduction_rules: (config.deduction_rules || []).map(r => ({
+        id: r.id,
+        name: r.name,
+        amount: String(r.amount),
+      })),
     });
+  };
+
+  const addRule = () => {
+    setEditForm(prev => ({
+      ...prev,
+      deduction_rules: [...prev.deduction_rules, { id: newRuleId(), name: '', amount: '' }],
+    }));
+  };
+
+  const removeRule = (id: string) => {
+    setEditForm(prev => ({
+      ...prev,
+      deduction_rules: prev.deduction_rules.filter(r => r.id !== id),
+    }));
+  };
+
+  const updateRule = (id: string, field: 'name' | 'amount', value: string) => {
+    setEditForm(prev => ({
+      ...prev,
+      deduction_rules: prev.deduction_rules.map(r => r.id === id ? { ...r, [field]: value } : r),
+    }));
   };
 
   const handleSave = async () => {
     if (!editTarget) return;
     setSaving(true);
+    const rules: DeductionRule[] = editForm.deduction_rules
+      .filter(r => r.name.trim() && Number(r.amount) > 0)
+      .map(r => ({ id: r.id, name: r.name.trim(), amount: Number(r.amount) }));
     const payload: UpdateFinanceConfigInput = {
       class_type: editForm.class_type,
-      meal_rate: Number(editForm.meal_rate),
-      cancel_rate: Number(editForm.cancel_rate),
+      deduction_rules: rules,
     };
     const result = await updateFinanceConfig(editTarget.class_id, payload);
     setSaving(false);
@@ -133,21 +167,20 @@ export default function FinanceConfigPage() {
       ),
     },
     {
-      key: 'meal_rate',
-      label: 'Tiền cơm/ngày (Bán trú)',
+      key: 'deduction_rules',
+      label: 'Khoản khấu trừ',
       render: (_value, row) => (
-        <span className="text-muted-foreground">
-          {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(row.meal_rate)}
-        </span>
-      ),
-    },
-    {
-      key: 'cancel_rate',
-      label: 'Tiền nghỉ/buổi (Tối)',
-      render: (_value, row) => (
-        <span className="text-muted-foreground">
-          {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(row.cancel_rate)}
-        </span>
+        <div className="flex flex-wrap gap-1">
+          {(row.deduction_rules || []).length === 0 ? (
+            <span className="text-xs text-muted-foreground">—</span>
+          ) : (
+            (row.deduction_rules || []).map(rule => (
+              <Badge key={rule.id} variant="neutral" size="sm">
+                {rule.name}: {formatCurrency(rule.amount)}
+              </Badge>
+            ))
+          )}
+        </div>
       ),
     },
     {
@@ -185,9 +218,8 @@ export default function FinanceConfigPage() {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
       <div className="flex flex-col md:flex-row justify-between gap-3">
-        <CardHeader title="Cấu hình Tài chính" subtitle="Quản lý tiền ăn, tiền nghỉ theo lớp" />
+        <CardHeader title="Cấu hình Tài chính" subtitle="Quản lý các khoản khấu trừ theo lớp" />
         <div className="flex items-center gap-2">
           <Input
             placeholder="Tìm lớp..."
@@ -199,26 +231,22 @@ export default function FinanceConfigPage() {
         </div>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-2 gap-3">
         <StatCard label="Lớp Bán trú" value={daycareCount} icon={<Calculator className="w-4 h-4" />} />
         <StatCard label="Lớp Tối" value={eveningCount} icon={<Calculator className="w-4 h-4" />} />
       </div>
 
-      {/* Table */}
       <Table
         columns={columns}
         data={items}
         rowKey="class_id"
         loading={loading}
-        sortable
         sortState={sortState}
-        onSortChange={setSortState}
+        onSort={(key) => setSortState({ key, direction: 'asc' })}
         pagination={meta}
         onPageChange={setPage}
       />
 
-      {/* Edit Modal */}
       <Modal
         open={!!editTarget}
         onClose={() => setEditTarget(null)}
@@ -235,22 +263,44 @@ export default function FinanceConfigPage() {
             ]}
             fullWidth
           />
-          <CurrencyInput
-            label="Tiền cơm/ngày (Bán trú)"
-            value={editForm.meal_rate}
-            onChange={(v) => setEditForm(prev => ({ ...prev, meal_rate: v }))}
-            suffix="VNĐ / ngày"
-            hint="VD: 20000 = 20.000 VNĐ / ngày"
-            fullWidth
-          />
-          <CurrencyInput
-            label="Tiền nghỉ/buổi (Tối)"
-            value={editForm.cancel_rate}
-            onChange={(v) => setEditForm(prev => ({ ...prev, cancel_rate: v }))}
-            suffix="VNĐ / buổi"
-            hint="VD: 50000 = 50.000 VNĐ / buổi"
-            fullWidth
-          />
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-medium">Khoản khấu trừ</label>
+              <Button variant="ghost" size="sm" leftIcon={<Plus className="w-3 h-3" />} onClick={addRule}>
+                Thêm khoản
+              </Button>
+            </div>
+            <div className="space-y-2">
+              {editForm.deduction_rules.length === 0 && (
+                <p className="text-xs text-muted-foreground py-2">Chưa có khoản khấu trừ nào. Bấm "Thêm khoản" để tạo.</p>
+              )}
+              {editForm.deduction_rules.map((rule) => (
+                <div key={rule.id} className="flex items-center gap-2">
+                  <Input
+                    placeholder="Tên khoản (VD: Tiền cơm)"
+                    value={rule.name}
+                    onChange={(e) => updateRule(rule.id, 'name', e.target.value)}
+                    className="flex-1"
+                  />
+                  <CurrencyInput
+                    placeholder="Số tiền"
+                    value={rule.amount}
+                    onChange={(v) => updateRule(rule.id, 'amount', v)}
+                    suffix="đ"
+                    className="w-36"
+                  />
+                  <button
+                    onClick={() => removeRule(rule.id)}
+                    className="p-2 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <Button onClick={handleSave} loading={saving} leftIcon={<Save className="w-4 h-4" />} fullWidth>
             Lưu thay đổi
           </Button>

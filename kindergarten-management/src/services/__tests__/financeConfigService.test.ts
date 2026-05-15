@@ -147,15 +147,14 @@ describe('financeConfigService', () => {
       const result = await createFinanceConfig({
         class_id: 2,
         class_type: 'Daycare',
-        meal_rate: 30000,
-        cancel_rate: 60000,
-        hospital_deduction_type: 'Daily',
-        hospital_deduction_value: 20,
+        deduction_rules: [
+          { id: 'meal', name: 'Tiền cơm', amount: 30000 },
+          { id: 'cancel', name: 'Tiền nghỉ', amount: 60000 },
+        ],
       });
 
       expect(result.error).toBeNull();
       expect(result.item?.class_id).toBe(2);
-      expect(result.item?.meal_rate).toBe(30000);
     });
 
     it('should reject when user is not Admin/Accountant', async () => {
@@ -168,10 +167,10 @@ describe('financeConfigService', () => {
       const result = await createFinanceConfig({
         class_id: 1,
         class_type: 'Daycare',
-        meal_rate: 20000,
-        cancel_rate: 50000,
-        hospital_deduction_type: 'Fixed',
-        hospital_deduction_value: 0,
+        deduction_rules: [
+          { id: 'meal', name: 'Tiền cơm', amount: 20000 },
+          { id: 'cancel', name: 'Tiền nghỉ', amount: 50000 },
+        ],
       });
 
       expect(result.error?.code).toBe('FORBIDDEN');
@@ -179,17 +178,17 @@ describe('financeConfigService', () => {
   });
 
   describe('updateFinanceConfig', () => {
-    it('should update meal_rate', async () => {
-      const mockUpdated = { id: 1, class_id: 1, class_type: 'Daycare', meal_rate: 35000, cancel_rate: 50000, hospital_deduction_type: 'Fixed', hospital_deduction_value: 0, del_yn: false, created_at: '2026-01-01', updated_at: '2026-01-01', classes: { name: 'Mầm 1' } };
+    it('should update deduction_rules', async () => {
+      const mockUpdated = { id: 1, class_id: 1, class_type: 'Daycare', deduction_rules: [{ id: 'meal', name: 'Tiền cơm', amount: 35000 }, { id: 'cancel', name: 'Tiền nghỉ', amount: 50000 }], del_yn: false, created_at: '2026-01-01', updated_at: '2026-01-01', classes: { name: 'Mầm 1' } };
 
       const fromMock = vi.mocked(supabase.from);
       primeFinancialGuard();
       fromMock.mockReturnValueOnce(createMockChain(mockUpdated) as any);
 
-      const result = await updateFinanceConfig(1, { meal_rate: 35000 });
+      const result = await updateFinanceConfig(1, { deduction_rules: [{ id: 'meal', name: 'Tiền cơm', amount: 35000 }] });
 
       expect(result.error).toBeNull();
-      expect(result.item?.meal_rate).toBe(35000);
+      expect(result.item?.deduction_rules?.[0]?.amount).toBe(35000);
     });
 
     it('should reject when user is not Admin/Accountant', async () => {
@@ -198,7 +197,7 @@ describe('financeConfigService', () => {
         return createMockChain([]) as any;
       }) as any);
 
-      const result = await updateFinanceConfig(1, { meal_rate: 35000 });
+      const result = await updateFinanceConfig(1, { deduction_rules: [{ id: 'meal', name: 'Tiền cơm', amount: 35000 }] });
 
       expect(result.error?.code).toBe('FORBIDDEN');
     });

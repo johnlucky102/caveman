@@ -22,14 +22,16 @@ export function calculateAttendanceRate(present: number, total: number): number 
 
 /**
  * Summarizes financial deductions from logs.
+ * Now uses unified attendance_deduction_vnd instead of split meal/tuition.
  */
 export function summarizeDeductions(logs: any[]) {
-  const totalMeal = logs.reduce((sum, log) => sum + (log.meal_deduction_vnd || 0), 0);
-  const totalOther = logs.reduce((sum, log) => sum + (log.tuition_deduction_vnd || 0), 0);
-  const total = totalMeal + totalOther;
-  
-  const mealPercent = total > 0 ? Math.round((totalMeal / total) * 100) : 0;
-  const otherPercent = total > 0 ? Math.round((totalOther / total) * 100) : 0;
-
-  return { totalMeal, totalOther, total, mealPercent, otherPercent };
+  const totalDeduction = logs.reduce((sum, log) => sum + (log.attendance_deduction_vnd || 0), 0);
+  return {
+    totalDeduction,
+    totalMeal: totalDeduction,
+    totalOther: 0,
+    total: totalDeduction,
+    mealPercent: totalDeduction > 0 ? 100 : 0,
+    otherPercent: 0,
+  };
 }

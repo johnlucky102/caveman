@@ -14,8 +14,8 @@ interface FeeReceiptData {
   school_year: string;
   amount_vnd: number;
   base_amount_vnd: number;
-  meal_deduction_vnd: number;
-  tuition_deduction_vnd: number;
+  attendance_deduction_vnd: number;
+  deduction_details: any;
   deduction_note: string;
   due_date: string;
   payment_method: string;
@@ -64,8 +64,8 @@ export default function BulkPrintFees() {
         school_year: r.school_year,
         amount_vnd: r.amount_vnd,
         base_amount_vnd: r.base_amount_vnd || r.amount_vnd,
-        meal_deduction_vnd: r.meal_deduction_vnd || 0,
-        tuition_deduction_vnd: r.tuition_deduction_vnd || 0,
+        attendance_deduction_vnd: r.attendance_deduction_vnd || 0,
+        deduction_details: r.deduction_details,
         deduction_note: r.deduction_note,
         due_date: r.due_date,
         payment_method: r.payment_method,
@@ -164,16 +164,10 @@ export default function BulkPrintFees() {
                   <td className="border border-black px-4 py-3 font-bold">{item.title || 'Học phí'}</td>
                   <td className="border border-black px-4 py-3 text-right font-bold">{formatCurrency(item.base_amount_vnd)}</td>
                 </tr>
-                {item.meal_deduction_vnd > 0 && (
+                {item.attendance_deduction_vnd > 0 && (
                   <tr className="text-red-600 italic">
-                    <td className="border border-black px-4 py-2">- Khấu trừ tiền cơm (Vắng)</td>
-                    <td className="border border-black px-4 py-2 text-right">-{formatCurrency(item.meal_deduction_vnd)}</td>
-                  </tr>
-                )}
-                {item.tuition_deduction_vnd > 0 && (
-                  <tr className="text-red-600 italic">
-                    <td className="border border-black px-4 py-2">- Khấu trừ học phí ({item.deduction_note || 'Khác'})</td>
-                    <td className="border border-black px-4 py-2 text-right">-{formatCurrency(item.tuition_deduction_vnd)}</td>
+                    <td className="border border-black px-4 py-2">- Khấu trừ vắng mặt {item.deduction_note ? `(${item.deduction_note})` : ''}</td>
+                    <td className="border border-black px-4 py-2 text-right">-{formatCurrency(item.attendance_deduction_vnd)}</td>
                   </tr>
                 )}
                 <tr className="bg-gray-50">
@@ -197,7 +191,7 @@ export default function BulkPrintFees() {
                 </div>
                 <div className="text-center flex-1">
                   <p className="text-[10px] italic mb-1">Hà Nội, {new Date().toLocaleDateString('vi-VN')}</p>
-                  <p className="font-bold uppercase text-[10px] mb-12">Người lập phiếu</p>
+                  <p className="font-bold uppercase text-[10px]">Người lập phiếu</p>
                 </div>
               </div>
             </div>

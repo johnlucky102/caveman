@@ -1,0 +1,14 @@
+[
+  {"id": 1, "content": "domain.ts — thêm DeductionRule, sửa ClassFinanceConfig, FeeRecordP2, CreateFeeInput", "status": "completed"},
+  {"id": 2, "content": "financeConfigService.ts — row type, mapper, CRUD dùng deduction_rules", "status": "completed"},
+  {"id": 3, "content": "feesService.ts — sync logic gộp deduction, query select/update", "status": "completed"},
+  {"id": 4, "content": "FinanceConfigPage.tsx — field array UI", "status": "completed"},
+  {"id": 5, "content": "FeeForm.tsx — gộp deduction, attendance_deduction_vnd, print invoice", "status": "completed"},
+  {"id": 6, "content": "Fees.tsx — table columns update", "status": "completed"},
+  {"id": 7, "content": "StudentDetail.tsx — không cần sửa (dùng FeeRecordP2)", "status": "completed"},
+  {"id": 8, "content": "BulkPrintFees.tsx — local interface, render", "status": "completed"},
+  {"id": 9, "content": "utils/reports.ts — tính toán gộp", "status": "completed"},
+  {"id": 10, "content": "SQL migration script", "status": "completed"},
+  {"id": 11, "content": "Test files — update mock (pre-existing failures)", "status": "completed"},
+  {"id": 12, "content": "Type-check verify — 0 errors", "status": "completed"}
+]
