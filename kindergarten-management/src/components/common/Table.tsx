@@ -11,7 +11,7 @@ export interface SortState {
   direction: 'asc' | 'desc';
 }
 
-interface TableProps<T extends Record<string, unknown>> {
+interface TableProps<T extends object> {
   columns: TableColumn<T>[];
   data: T[];
   rowKey: keyof T | ((row: T) => string | number);
@@ -23,6 +23,7 @@ interface TableProps<T extends Record<string, unknown>> {
   pagination?: PaginationMeta;
   onPageChange?: (page: number) => void;
   emptyState?: React.ReactNode;
+  emptyMessage?: string;
   selectedKeys?: (string | number)[];
   onSelectionChange?: (selected: (string | number)[]) => void;
   renderMobileCard?: (row: T, rowId: string | number) => React.ReactNode;
@@ -163,7 +164,7 @@ function MobileSelectAllToolbar({
 
 // ─── Default Mobile Card ──────────────────────────────────────────────────────
 
-function DefaultMobileCard<T extends Record<string, unknown>>({
+function DefaultMobileCard<T extends object>({
   row,
   columns,
   rowId,
@@ -214,7 +215,7 @@ function callOnChange(
 
 // ─── Table Component ──────────────────────────────────────────────────────────
 
-function Table<T extends Record<string, unknown>>({
+function Table<T extends object>({
   columns,
   data,
   rowKey,
@@ -226,6 +227,7 @@ function Table<T extends Record<string, unknown>>({
   pagination,
   onPageChange,
   emptyState,
+  emptyMessage,
   selectedKeys,
   onSelectionChange,
   renderMobileCard,
@@ -285,7 +287,7 @@ function Table<T extends Record<string, unknown>>({
             {loading ? (
               <tr>
                 <td colSpan={columns.length + (isSelectable ? 1 : 0)} className="px-4 py-12">
-                  <Loading message="Dang tai..." />
+                  <Loading label="Đang tải..." />
                 </td>
               </tr>
             ) : data.length === 0 ? (
@@ -296,7 +298,7 @@ function Table<T extends Record<string, unknown>>({
                       <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mb-3">
                         <ChevronsUpDown className="w-6 h-6 text-muted-foreground/40" />
                       </div>
-                      <p className="text-sm font-medium text-foreground">Khong co du lieu</p>
+                      <p className="text-sm font-medium text-foreground">{emptyMessage || 'Khong co du lieu'}</p>
                       <p className="text-xs text-muted-foreground mt-1">Chua co ban ghi nao.</p>
                     </div>
                   )}
@@ -358,7 +360,7 @@ function Table<T extends Record<string, unknown>>({
       <div className="block md:hidden">
         {loading ? (
           <div className="px-4 py-12">
-            <Loading message="Dang tai..." />
+            <Loading label="Đang tải..." />
           </div>
         ) : data.length === 0 ? (
           <div className="px-4 py-12">
@@ -367,7 +369,7 @@ function Table<T extends Record<string, unknown>>({
                 <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mb-3">
                   <ChevronsUpDown className="w-6 h-6 text-muted-foreground/40" />
                 </div>
-                <p className="text-sm font-medium text-foreground">Khong co du lieu</p>
+                <p className="text-sm font-medium text-foreground">{emptyMessage || 'Khong co du lieu'}</p>
                 <p className="text-xs text-muted-foreground mt-1">Chua co ban ghi nao.</p>
               </div>
             )}
@@ -467,4 +469,4 @@ function Table<T extends Record<string, unknown>>({
 }
 
 export default Table;
-export type { TableProps, SortState };
+export type { TableProps };

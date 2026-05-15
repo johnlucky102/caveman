@@ -265,3 +265,23 @@ export interface FilterOption {
   options?: SelectOption[];
   placeholder?: string;
 }
+
+// ─── Toast Types ───────────────────────────────────────────────────────────────
+
+export type ToastType = 'success' | 'error' | 'warning' | 'info';
+
+export interface ToastMessage {
+  id: string;
+  type: ToastType;
+  title: string;
+  message: string;
+  duration?: number;
+}
+
+// ─── Sidebar Types ─────────────────────────────────────────────────────────────
+
+export interface SidebarNavItem {
+  label: string;
+  path: string;
+  icon: React.ElementType;
+}

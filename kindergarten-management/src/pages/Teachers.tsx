@@ -204,7 +204,7 @@ export default function Teachers() {
           pagination={paginationMeta}
           onPageChange={setPage}
           selectedKeys={selectedKeys}
-          onSelectionChange={setSelectedKeys}
+          onSelectionChange={(keys) => setSelectedKeys(keys.map(String))}
           emptyMessage="Không tìm thấy giáo viên nào"
         
         renderMobileCard={(row) => {
