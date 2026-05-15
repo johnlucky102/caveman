@@ -56,7 +56,7 @@ export default function Fees() {
   const [bulkMonth, setBulkMonth] = useState(new Date().getMonth() + 1);
   const [bulkSchoolYear, setBulkSchoolYear] = useState(getCurrentSchoolYear());
   const [bulkBaseAmount, setBulkBaseAmount] = useState(3000000);
-  const [bulkTitle, setBulkTitle] = useState('Học phí thang');
+  const [bulkTitle, setBulkTitle] = useState('Học phí tháng');
   const [classOptions, setClassOptions] = useState<SelectOption[]>([]);
   const [bulkCreating, setBulkCreating] = useState(false);
   const [syncingId, setSyncingId] = useState<string | null>(null);
@@ -100,7 +100,7 @@ export default function Fees() {
     });
     setLoading(false);
     if (result.error) {
-      toast.error('Khong tai duoc danh sach học phí', result.error.message);
+      toast.error('Không tải được danh sách học phí', result.error.message);
       setItems([]);
       setTotal(0);
       return;
@@ -167,7 +167,7 @@ export default function Fees() {
     if (result.error) {
       toast.error('Lỗi', result.error.message);
     } else {
-      toast.success('Da xóa ban ghi học phí');
+      toast.success('Đã xóa bản ghi học phí');
       void loadFees();
     }
   };
@@ -180,7 +180,7 @@ export default function Fees() {
     if (result.error) {
       toast.error('Lỗi', result.error.message);
     } else {
-      toast.success('Da xóa ' + selectedIds.length + ' ban ghi học phí');
+      toast.success('Đã xóa ' + selectedIds.length + ' bản ghi học phí');
       setSelectedIds([]);
       void loadFees();
     }
@@ -214,7 +214,7 @@ export default function Fees() {
     if (result.error) {
       toast.error('Lỗi khi tạo hàng loạt', result.error.message);
     } else {
-      toast.success('Da tao học phí cho ' + studentsList.length + ' hoc sinh');
+      toast.success('Đã tạo học phí cho ' + studentsList.length + ' học sinh');
       setShowBulkCreateModal(false);
       void loadFees();
     }
@@ -351,7 +351,7 @@ export default function Fees() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-foreground">Học phí</h1>
-          <p className="text-sm text-muted-foreground">{total} phiếu thu tong cong</p>
+          <p className="text-sm text-muted-foreground">{total} phiếu thu tổng cộng</p>
         </div>
         <div className="flex gap-2">
           {selectedIds.length > 0 && (
@@ -387,7 +387,7 @@ export default function Fees() {
             leftIcon={<Plus className="w-4 h-4" />}
             onClick={() => navigate('/fees/new')}
           >
-            Tao phiếu thu
+            Tạo phiếu thu
           </Button>
         </div>
       </div>
@@ -444,7 +444,7 @@ export default function Fees() {
         onPageChange={setPage}
         selectedKeys={selectedIds}
         onSelectionChange={(keys) => setSelectedIds(keys.map(String))}
-        emptyMessage="Khong co phiếu thu nao"
+        emptyMessage="Không có phiếu thu nào"
         renderMobileCard={(row) => {
           const f = row as FeeRecordP2;
           const statusColor = f.status === 'paid' ? 'text-emerald-500' : f.status === 'partial' ? 'text-amber-500' : 'text-red-500';
@@ -479,7 +479,7 @@ export default function Fees() {
         onClose={() => { setShowDeleteConfirm(false); setFeeToDelete(null); }}
         onConfirm={() => feeToDelete ? handleDelete(feeToDelete) : Promise.resolve()}
         title="Xóa phiếu thu"
-        message="Ban co chac chan muon xóa phiếu thu nay?"
+        message="Bạn có chắc chắn muốn xóa phiếu thu này?"
         confirmLabel="Xóa"
         loading={deleting}
       />
@@ -488,8 +488,8 @@ export default function Fees() {
         open={showBulkDeleteConfirm}
         onClose={() => setShowBulkDeleteConfirm(false)}
         onConfirm={handleBulkDelete}
-        title="Xóa hang loat"
-        message={'Ban co chac chan muon xóa ' + selectedIds.length + ' phiếu thu đã chọn?'}
+        title="Xóa hàng loạt"
+        message={'Bạn có chắc chắn muốn xóa ' + selectedIds.length + ' phiếu thu đã chọn?'}
         confirmLabel="Xóa"
         loading={deleting}
       />
@@ -538,11 +538,11 @@ export default function Fees() {
             label="Tên khoản thu"
             value={bulkTitle}
             onChange={(e) => setBulkTitle(e.target.value)}
-            placeholder="VD: Học phí thang"
+            placeholder="VD: Học phí tháng"
           />
 
           <CurrencyInput
-            label="Số tiền goc"
+            label="Số tiền gốc"
             value={String(bulkBaseAmount)}
             onChange={(v) => setBulkBaseAmount(Number(v))}
             required
