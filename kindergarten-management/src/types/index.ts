@@ -194,34 +194,74 @@ export interface TableColumn<T> {
   label: React.ReactNode;
   sortable?: boolean;
   width?: string;
+  wrap?: boolean;
   render?: (value: unknown, row: T) => React.ReactNode;
 }
 
-export interface SidebarNavItem {
+export interface TableAction<T> {
   label: string;
-  path: string;
-  icon: React.ComponentType<{ className?: string }>;
-  badge?: number;
+  icon?: React.ReactNode;
+  onClick: (row: T) => void;
+  variant?: 'default' | 'danger';
 }
 
-export type ToastType = 'success' | 'error' | 'warning' | 'info';
-
-export interface ToastMessage {
-  id: string;
-  type: ToastType;
-  title: string;
-  message?: string;
-  duration?: number;
+export interface ChartDataPoint {
+  label: string;
+  value: number;
+  color?: string;
 }
 
-// ─── Dashboard Stats ───────────────────────────────────────────────────────────
+export interface DropdownItem {
+  label: string;
+  value: string;
+  icon?: React.ReactNode;
+  disabled?: boolean;
+  danger?: boolean;
+}
 
-export interface DashboardStats {
-  totalStudents: number;
-  totalTeachers: number;
-  totalClasses: number;
-  totalParents: number;
-  attendanceToday: number;
-  pendingFees: number;
-  recentNotifications: number;
+export interface BreadcrumbItem {
+  label: string;
+  href?: string;
+}
+
+export interface StatItem {
+  label: string;
+  value: string | number;
+  icon?: React.ReactNode;
+  trend?: 'up' | 'down' | 'neutral';
+  trendValue?: string;
+}
+
+export interface TabItem {
+  label: string;
+  value: string;
+  count?: number;
+  badge?: string | number;
+  disabled?: boolean;
+}
+
+export interface FormField {
+  name: string;
+  label: string;
+  type: 'text' | 'email' | 'password' | 'number' | 'select' | 'textarea' | 'date' | 'file' | 'checkbox' | 'radio';
+  placeholder?: string;
+  required?: boolean;
+  disabled?: boolean;
+  options?: SelectOption[];
+  validation?: {
+    min?: number;
+    max?: number;
+    minLength?: number;
+    maxLength?: number;
+    pattern?: string;
+    custom?: (value: unknown) => string | undefined;
+  };
+}
+
+export interface FilterOption {
+  label: string;
+  value: string;
+  type: 'text' | 'select' | 'date' | 'date-range' | 'number-range';
+  options?: SelectOption[];
+  placeholder?: string;
 }

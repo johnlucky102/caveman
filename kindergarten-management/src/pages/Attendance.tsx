@@ -390,7 +390,35 @@ export default function Attendance() {
               <DatePicker date={historyTo} setDate={(d) => { setHistoryTo(d); setPage(1); }} />
             </div>
           </div>
-          <Table columns={historyColumns} data={filteredHistory} rowKey="id" loading={loading} emptyMessage="Không có lịch sử điểm danh" />
+          <Table columns={historyColumns} data={filteredHistory} rowKey="id" loading={loading} emptyMessage="Không có lịch sử điểm danh"
+        renderMobileCard={(row) => {
+          const r = row as unknown as import('@/types/domain').AttendanceRecord
+          return (
+            <div className="bg-card border-b border-border p-4 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="font-medium text-foreground">{r.student_name}</p>
+                  <p className="text-xs text-muted-foreground">{r.class_name}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-xs text-muted-foreground">{new Date(r.attendance_date).toLocaleDateString('vi-VN')}</p>
+                  <span className={
+                    r.status === 'present' ? 'text-xs font-medium text-emerald-500' :
+                    r.status === 'late' ? 'text-xs font-medium text-amber-500' :
+                    'text-xs font-medium text-red-500'
+                  }>
+                    {r.status === 'present' ? 'Có mặt' : r.status === 'late' ? 'Đi muộn' : 'Vắng'}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                {r.check_in_time && <span>Giờ vào: {r.check_in_time.slice(0, 5)}</span>}
+                {r.check_out_time && <span>Giờ ra: {r.check_out_time.slice(0, 5)}</span>}
+              </div>
+            </div>
+          )
+        }}
+      />
         </Card>
       )}
     </div>

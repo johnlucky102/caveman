@@ -231,9 +231,15 @@ export async function createFeeRecord(input: CreateFeeInput): Promise<{ item: Fe
     return { item: null, error: toAppError(error, 'Không thể tạo học phí.') };
   }
 
+  // Auto sync attendance deduction after creation
+  const syncResult = await syncFeeWithAttendance(data.id);
+  if (syncResult.error) {
+    console.warn('[feesService] Tu dong dong bo chuyen can that bai:', syncResult.error.message);
+  }
+
   invalidateSwCache(['fees', 'dashboard']);
 
-  return { item: mapFeeRow(data as unknown as FeeRow), error: null };
+  return { item: mapFeeRow((syncResult.item || data) as unknown as FeeRow), error: null };
 }
 
 export async function updateFeeRecord(

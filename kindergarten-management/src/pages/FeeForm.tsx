@@ -57,10 +57,7 @@ const paymentOptions: SelectOption[] = [
   { value: 'bank_transfer', label: 'Chuyển khoản' },
 ];
 
-const schoolYearOptions: SelectOption[] = Array.from({ length: 5 }, (_, i) => {
-  const start = currentYear - 2 + i;
-  return { value: `${start}-${start + 1}`, label: `${start}-${start + 1}` };
-});
+const schoolYearOptions: SelectOption[] = [{ value: getCurrentSchoolYear(), label: getCurrentSchoolYear() }];
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('vi-VN').format(value) + ' đ';
@@ -282,7 +279,9 @@ export default function FeeForm() {
   };
 
   const handlePrint = () => {
-    window.print();
+    if (id) {
+      navigate(`/fees/print-bulk?ids=${id}`);
+    }
   };
 
   const summary = useMemo(() => {
@@ -315,9 +314,11 @@ export default function FeeForm() {
               Xóa
             </Button>
           )}
-          <Button variant="outline" size="sm" leftIcon={<Printer className="w-4 h-4" />} onClick={handlePrint}>
-            In biên lai
-          </Button>
+          {isEdit && (
+            <Button variant="outline" size="sm" leftIcon={<Printer className="w-4 h-4" />} onClick={handlePrint}>
+              In biên lai
+            </Button>
+          )}
         </div>
       </div>
 
@@ -348,7 +349,7 @@ export default function FeeForm() {
           </div>
 
           {/* Period */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 print:hidden">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:hidden">
             <Select
               label="Tháng"
               value={formData.month}
@@ -356,14 +357,6 @@ export default function FeeForm() {
               options={monthOptions}
               error={errors.month}
               required
-              fullWidth
-            />
-            <Select
-              label="Năm học"
-              value={formData.schoolYear}
-              onChange={(v) => updateField('schoolYear', v)}
-              options={schoolYearOptions}
-              error={errors.schoolYear}
               fullWidth
             />
             <DatePicker

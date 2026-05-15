@@ -284,7 +284,33 @@ export default function Classes() {
             selectedKeys={selectedKeys}
             onSelectionChange={setSelectedKeys}
             emptyMessage="Không tìm thấy lớp học nào"
-          />
+          
+          renderMobileCard={(row) => {
+    const c = row as unknown as import('@/types/domain').ClassRecord
+    return (
+      <div className="bg-card border-b border-border p-4 space-y-2">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+            <svg className="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-medium text-foreground truncate">{c.name}</p>
+            <p className="text-xs text-muted-foreground">{c.teacher_name || 'Chưa phân công'}</p>
+          </div>
+          <span className="text-sm font-medium shrink-0">{c.student_count}/{c.max_students}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+            <div className="h-full rounded-full transition-all" style={{width: Math.min(100, Math.round(c.student_count / c.max_students * 100)) + '%', backgroundColor: c.student_count >= c.max_students ? '#f59e0b' : '#22c55e'}} />
+          </div>
+          <span className="text-xs text-muted-foreground shrink-0">
+            {c.room || '—'}
+          </span>
+        </div>
+      </div>
+    )
+  }}
+        />
         )}
       </Card>
 

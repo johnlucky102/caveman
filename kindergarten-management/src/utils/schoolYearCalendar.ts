@@ -1,8 +1,16 @@
 /**
- * Maps Vietnamese school year (e.g. "2024-2025") + month (1–12) to calendar year
- * for the fee month: months 1–8 fall in the end year (spring), 9–12 in start year (fall).
+ * Maps a school year string + month (1-12) to the calendar year for the fee month.
+ * Accepts both old format ("2025-2026") and new single-year format ("2026").
+ * For old format: months 1-8 fall in end year (spring), 9-12 in start year (fall).
+ * For new format: returns the year directly (sans any range parsing).
  */
 export function calendarYearFromSchoolMonth(schoolYear: string, month: number): number | null {
+  // single-year format ("2026")
+  const single = Number(schoolYear.trim());
+  if (Number.isFinite(single) && single > 1000) {
+    return single;
+  }
+  // old format fallback ("2025-2026")
   const parts = schoolYear.split('-').map((s) => Number(String(s).trim()));
   if (parts.length < 2 || !Number.isFinite(parts[0]) || !Number.isFinite(parts[1])) {
     return null;
@@ -21,19 +29,10 @@ export function calendarMonthKeyFromSchoolYear(
   if (schoolYear == null || month == null) return null;
   const y = calendarYearFromSchoolMonth(schoolYear, month);
   if (y == null) return null;
-  return `${y}-${String(month).padStart(2, '0')}`;
+  return y + '-' + String(month).padStart(2, '0');
 }
 
-/** Returns the current school year string (e.g. "2025-2026") based on today's date. */
+/** Returns the current school year as a single calendar year string (e.g. "2026"). */
 export function getCurrentSchoolYear(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1; // 1-12
-
-  // School year typically starts in Sept (Month 9)
-  if (month >= 9) {
-    return `${year}-${year + 1}`;
-  } else {
-    return `${year - 1}-${year}`;
-  }
+  return String(new Date().getFullYear());
 }

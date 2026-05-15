@@ -320,7 +320,30 @@ export default function Students() {
           selectedKeys={selectedKeys}
           onSelectionChange={setSelectedKeys}
           emptyMessage="Không tìm thấy học sinh nào"
-        />
+        
+        renderMobileCard={(row) => {
+    const s = row as unknown as import('@/types/domain').StudentRecord
+    return (
+      <div className="bg-card border-b border-border p-4 space-y-2">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold shrink-0">
+            {s.full_name.charAt(0).toUpperCase()}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-medium text-foreground truncate">{s.full_name}</p>
+            <p className="text-xs text-muted-foreground">{s.class_name}</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="font-mono text-xs text-muted-foreground">{s.student_code}</span>
+          <span className="text-xs text-muted-foreground">
+            {s.date_of_birth ? new Date(s.date_of_birth).toLocaleDateString('vi-VN') : '—'}
+          </span>
+        </div>
+      </div>
+    )
+  }}
+      />
       </Card>
 
       <ConfirmModal

@@ -181,14 +181,14 @@ export async function upsertAttendanceBulk(rows: UpsertAttendanceInput[]): Promi
 }
 
 export async function listAttendanceHistory(
-  classId: number,
+  classId?: number,
   studentId?: string,
   fromDate?: string,
   toDate?: string,
   teacherId?: string,
 ): Promise<{ items: AttendanceRecord[]; error: AppError | null }> {
   // If teacherId is provided, verify they manage this class first
-  if (teacherId) {
+  if (teacherId && classId !== undefined) {
     const { data: directClass } = await supabase
       .from('classes')
       .select('id')
@@ -214,8 +214,11 @@ export async function listAttendanceHistory(
   let query = supabase
     .from('attendance')
     .select('id, student_id, class_id, attendance_date, status, check_in_time, check_out_time, meal_included, created_at, updated_at, students!inner(id, full_name, classes!inner(id, name))')
-    .eq('class_id', classId)
     .eq('del_yn', false);
+
+  if (classId !== undefined) {
+    query = query.eq('class_id', classId);
+  }
 
   if (studentId) {
     query = query.eq('student_id', studentId);

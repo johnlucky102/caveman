@@ -12,13 +12,21 @@ import { useToast } from '@/components/common/Toast';
 import CurrencyInput from '@/components/common/CurrencyInput';
 import { listFees, getFeeSummary, updateFeeRecordStatus, deleteFeeRecord, deleteFeeRecords, createClassFees, syncFeeWithAttendance } from '@/services/feesService';
 import { listClasses } from '@/services/classesService';
+import { listStudents } from '@/services/studentsService';
+import { getFinanceConfigByClassId } from '@/services/financeConfigService';
 import Modal, { ConfirmModal } from '@/components/common/Modal';
 import { RefreshCw, ClipboardList } from 'lucide-react';
 import type { PaginationMeta, SelectOption, TableColumn } from '@/types';
 import type { FeeRecordP2, FeeStatusValue } from '@/types/domain';
 
 function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('vi-VN').format(value) + ' đ';
+  return new Intl.NumberFormat('vi-VN').format(value) + ' d';
+}
+
+function formatCompactCurrency(value: number): string {
+  if (value >= 1_000_000_000) return (value / 1_000_000_000).toFixed(1) + ' ty';
+  if (value >= 1_000_000) return (value / 1_000_000).toFixed(0) + ' tr';
+  return formatCurrency(value);
 }
 
 function pagination(page: number, pageSize: number, total: number): PaginationMeta {
@@ -48,11 +56,13 @@ export default function Fees() {
   const [bulkMonth, setBulkMonth] = useState(new Date().getMonth() + 1);
   const [bulkSchoolYear, setBulkSchoolYear] = useState(getCurrentSchoolYear());
   const [bulkBaseAmount, setBulkBaseAmount] = useState(3000000);
-  const [bulkTitle, setBulkTitle] = useState('Học phí tháng');
+  const [bulkTitle, setBulkTitle] = useState('Học phí thang');
   const [classOptions, setClassOptions] = useState<SelectOption[]>([]);
   const [bulkCreating, setBulkCreating] = useState(false);
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [summary, setSummary] = useState({ totalAmount: 0, totalPaid: 0, totalDebt: 0, debtCount: 0 });
+  const [bulkFinanceConfig, setBulkFinanceConfig] = useState<any>(null);
+  const [bulkStudentCount, setBulkStudentCount] = useState(0);
   const pageSize = 10;
 
   useEffect(() => {
@@ -73,7 +83,7 @@ export default function Fees() {
     { value: '', label: 'Tất cả các tháng' },
     ...Array.from({ length: 12 }, (_, i) => ({
       value: String(i + 1),
-      label: `Tháng ${i + 1}`,
+      label: 'Tháng ' + (i + 1),
     })),
   ];
 
@@ -90,7 +100,7 @@ export default function Fees() {
     });
     setLoading(false);
     if (result.error) {
-      toast.error('Không tải được danh sách học phí', result.error.message);
+      toast.error('Khong tai duoc danh sach học phí', result.error.message);
       setItems([]);
       setTotal(0);
       return;
@@ -130,6 +140,24 @@ export default function Fees() {
     void loadClasses();
   }, []);
 
+  // Load finance config + student count when class changes in bulk modal
+  useEffect(() => {
+    if (!bulkClassId || !showBulkCreateModal) return;
+    const loadConfig = async () => {
+      const configResult = await getFinanceConfigByClassId(Number(bulkClassId));
+      if (configResult.item) {
+        setBulkFinanceConfig(configResult.item);
+      } else {
+        setBulkFinanceConfig(null);
+      }
+      const studentsResult = await listStudents({ page: 1, pageSize: 1, classId: Number(bulkClassId) });
+      if (studentsResult.data) {
+        setBulkStudentCount(studentsResult.data.total);
+      }
+    };
+    void loadConfig();
+  }, [bulkClassId, showBulkCreateModal]);
+
   const handleDelete = async (id: string) => {
     setDeleting(true);
     const result = await deleteFeeRecord(id);
@@ -139,7 +167,7 @@ export default function Fees() {
     if (result.error) {
       toast.error('Lỗi', result.error.message);
     } else {
-      toast.success('Đã xóa bản ghi học phí');
+      toast.success('Da xóa ban ghi học phí');
       void loadFees();
     }
   };
@@ -152,7 +180,7 @@ export default function Fees() {
     if (result.error) {
       toast.error('Lỗi', result.error.message);
     } else {
-      toast.success(`Đã xóa ${selectedIds.length} bản ghi học phí`);
+      toast.success('Da xóa ' + selectedIds.length + ' ban ghi học phí');
       setSelectedIds([]);
       void loadFees();
     }
@@ -164,17 +192,29 @@ export default function Fees() {
       return;
     }
     setBulkCreating(true);
+
+    // Load students in the class
+    const studentsResult = await listStudents({
+      page: 1, pageSize: 500, classId: Number(bulkClassId),
+    });
+    if (studentsResult.error || !studentsResult.data?.items.length) {
+      toast.error('Không tìm thấy học sinh nào trong lớp');
+      setBulkCreating(false);
+      return;
+    }
+    const studentsList = studentsResult.data.items.map(s => ({ studentId: s.id }));
+
     const result = await createClassFees(
       { classId: Number(bulkClassId), month: bulkMonth, schoolYear: bulkSchoolYear },
       1,
       bulkBaseAmount,
-      []
+      studentsList
     );
     setBulkCreating(false);
     if (result.error) {
       toast.error('Lỗi khi tạo hàng loạt', result.error.message);
     } else {
-      toast.success('Đã tạo học phí cho toàn bộ học sinh trong lớp');
+      toast.success('Da tao học phí cho ' + studentsList.length + ' hoc sinh');
       setShowBulkCreateModal(false);
       void loadFees();
     }
@@ -246,7 +286,7 @@ export default function Fees() {
       label: 'Khấu trừ vắng',
       render: (value) => (
         <span className={Number(value) > 0 ? 'text-red-500' : 'text-muted-foreground'}>
-          {Number(value) > 0 ? `-${formatCurrency(Number(value))}` : '—'}
+          {Number(value) > 0 ? '-' + formatCurrency(Number(value)) : '\u2014'}
         </span>
       ),
     },
@@ -260,48 +300,39 @@ export default function Fees() {
           </p>
           {row.paid_amount_vnd < row.amount_vnd && row.paid_amount_vnd > 0 && (
             <p className="text-xs text-amber-500">
-              Còn {formatCurrency(row.amount_vnd - row.paid_amount_vnd)}
+              Con {formatCurrency(row.amount_vnd - row.paid_amount_vnd)}
             </p>
           )}
         </div>
       ),
     },
     {
-      key: 'month',
-      label: 'Tháng',
-      render: (value) => (
-        <span className="text-muted-foreground">
-          {value !== null && value !== undefined ? `T${String(value)}` : ''}
-        </span>
-      ),
-    },
-    {
       key: 'status',
       label: 'Trạng thái',
-      render: (value) => <FeeStatusBadge status={String(value)} />,
+      render: (value) => <FeeStatusBadge status={value as FeeStatusValue} />,
     },
     {
       key: 'actions',
       label: '',
-      width: '60px',
+      width: '100px',
       render: (_value, row) => (
-        <div className="flex gap-1">
+        <div className="flex items-center gap-1">
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/fees/${row.id}`);
-            }}
+            onClick={(e) => { e.stopPropagation(); navigate('/fees/' + row.id + '/edit'); }}
             className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-            title="Chỉnh sửa"
+            title="Sửa"
           >
             <Pencil className="w-4 h-4" />
           </button>
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setFeeToDelete(row.id);
-              setShowDeleteConfirm(true);
-            }}
+            onClick={(e) => { e.stopPropagation(); navigate('/fees/print-bulk?ids=' + row.id); }}
+            className="p-1.5 rounded-lg text-muted-foreground hover:text-blue-500 hover:bg-blue-500/10 transition-colors"
+            title="In biên lai"
+          >
+            <Printer className="w-4 h-4" />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); setFeeToDelete(row.id); setShowDeleteConfirm(true); }}
             className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors"
             title="Xóa"
           >
@@ -312,16 +343,39 @@ export default function Fees() {
     },
   ];
 
+  const currentSchoolYear = getCurrentSchoolYear();
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-foreground">Học phí</h1>
-          <p className="text-sm text-muted-foreground">Quản lý các khoản thu và tình trạng thanh toán</p>
+          <p className="text-sm text-muted-foreground">{total} phiếu thu tong cong</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex gap-2">
+          {selectedIds.length > 0 && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                leftIcon={<Printer className="w-4 h-4" />}
+                onClick={() => navigate('/fees/print-bulk?ids=' + selectedIds.join(','))}
+              >
+                In {selectedIds.length} biên lai
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-red-500 hover:text-red-600 hover:bg-red-500/10 border-red-500/20 hover:border-red-500/50"
+                leftIcon={<Trash2 className="w-4 h-4" />}
+                onClick={() => setShowBulkDeleteConfirm(true)}
+              >
+                Xóa {selectedIds.length} đã chọn
+              </Button>
+            </>
+          )}
           <Button
-            variant="outline"
             size="sm"
             leftIcon={<Plus className="w-4 h-4" />}
             onClick={() => setShowBulkCreateModal(true)}
@@ -333,7 +387,7 @@ export default function Fees() {
             leftIcon={<Plus className="w-4 h-4" />}
             onClick={() => navigate('/fees/new')}
           >
-            Tạo phiếu thu
+            Tao phiếu thu
           </Button>
         </div>
       </div>
@@ -343,17 +397,17 @@ export default function Fees() {
         <div className="flex flex-col lg:flex-row gap-3">
           <div className="flex-1 min-w-0">
             <Input
-              placeholder="Tìm học sinh..."
+              placeholder="Tìm kiếm học sinh..."
               value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              onChange={(e) => setSearch(e.target.value)}
               leftAddon={<Search className="w-4 h-4" />}
             />
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="flex flex-wrap gap-3">
             <Select
               value={status}
               onChange={(v) => { setStatus(v as FeeStatusValue | ''); setPage(1); }}
-              options={statusOptions}
+              options={[{ value: '', label: 'Tất cả trạng thái' }, ...statusOptions.slice(1)]}
               placeholder="Trạng thái"
             />
             <Select
@@ -368,44 +422,17 @@ export default function Fees() {
               options={[{ value: '', label: 'Tất cả lớp' }, ...classOptions]}
               placeholder="Lớp học"
             />
-            <Select
-              value={schoolYear}
-              onChange={(v) => { setSchoolYear(v); setPage(1); }}
-              options={[{ value: '', label: 'Tất cả năm' }, ...Array.from({ length: 5 }, (_, i) => {
-                const year = new Date().getFullYear() - 2 + i;
-                const value = `${year}-${year + 1}`;
-                return { value, label: value };
-              })]}
-              placeholder="Năm học"
-            />
           </div>
         </div>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard label="Tổng" value={formatCurrency(summary.totalAmount)} icon={<Wallet className="w-4 h-4" />} />
-        <StatCard label="Đã thu" value={formatCurrency(summary.totalPaid)} icon={<TrendingDown className="w-4 h-4" />} variant="success" />
-        <StatCard label="Còn nợ" value={formatCurrency(summary.totalDebt)} icon={<TrendingUp className="w-4 h-4" />} variant="warning" />
+        <StatCard label="Tổng" value={formatCompactCurrency(summary.totalAmount)} icon={<Wallet className="w-4 h-4" />} />
+        <StatCard label="Đã thu" value={formatCompactCurrency(summary.totalPaid)} icon={<TrendingDown className="w-4 h-4" />} variant="success" />
+        <StatCard label="Còn nợ" value={formatCompactCurrency(summary.totalDebt)} icon={<TrendingUp className="w-4 h-4" />} variant="warning" />
         <StatCard label="Số nợ" value={summary.debtCount} icon={<AlertCircle className="w-4 h-4" />} variant="danger" />
       </div>
-
-      {/* Bulk actions */}
-      {selectedIds.length > 0 && (
-        <div className="flex items-center justify-between bg-primary/5 border border-primary/20 rounded-xl px-4 py-3">
-          <p className="text-sm font-medium">Đã chọn <span className="font-bold">{selectedIds.length}</span> phiếu thu</p>
-          <div className="flex gap-2">
-            <Button
-              variant="danger"
-              size="sm"
-              leftIcon={<Trash2 className="w-4 h-4" />}
-              onClick={() => setShowBulkDeleteConfirm(true)}
-            >
-              Xóa {selectedIds.length} phiếu
-            </Button>
-          </div>
-        </div>
-      )}
 
       {/* Table */}
       <Table
@@ -415,45 +442,93 @@ export default function Fees() {
         loading={loading}
         pagination={pagination(page, pageSize, total)}
         onPageChange={setPage}
-        emptyMessage="Không có phiếu thu nào"
+        selectedKeys={selectedIds}
+        onSelectionChange={setSelectedIds}
+        emptyMessage="Khong co phiếu thu nao"
+        renderMobileCard={(row) => {
+          const f = row as FeeRecordP2;
+          const statusColor = f.status === 'paid' ? 'text-emerald-500' : f.status === 'partial' ? 'text-amber-500' : 'text-red-500';
+          return (
+            <div className="bg-card p-4 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-foreground truncate">{f.student_name}</p>
+                  <p className="text-xs text-muted-foreground">{f.class_name} · {f.title || 'Học phí'}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="font-medium">{formatCurrency(Number(f.amount_vnd))}</p>
+                  <span className={'text-xs font-medium ' + statusColor}>
+                    {f.status === 'paid' ? 'Hoàn tất' : f.status === 'partial' ? 'Còn nợ' : 'Chưa đóng'}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>Đã thu: {formatCurrency(Number(f.paid_amount_vnd))}</span>
+                {Number(f.attendance_deduction_vnd) > 0 && (
+                  <span className="text-red-500">-Điều chỉnh: {formatCurrency(Number(f.attendance_deduction_vnd))}</span>
+                )}
+              </div>
+            </div>
+          );
+        }}
       />
 
       {/* Modals */}
+      <ConfirmModal
+        open={showDeleteConfirm}
+        onClose={() => { setShowDeleteConfirm(false); setFeeToDelete(null); }}
+        onConfirm={() => feeToDelete ? handleDelete(feeToDelete) : Promise.resolve()}
+        title="Xóa phiếu thu"
+        message="Ban co chac chan muon xóa phiếu thu nay?"
+        confirmLabel="Xóa"
+        loading={deleting}
+      />
+
+      <ConfirmModal
+        open={showBulkDeleteConfirm}
+        onClose={() => setShowBulkDeleteConfirm(false)}
+        onConfirm={handleBulkDelete}
+        title="Xóa hang loat"
+        message={'Ban co chac chan muon xóa ' + selectedIds.length + ' phiếu thu đã chọn?'}
+        confirmLabel="Xóa"
+        loading={deleting}
+      />
+
       <Modal
         open={showBulkCreateModal}
-        onClose={() => setShowBulkCreateModal(false)}
-        title="Tạo học phí hàng loạt"
+        onClose={() => { setShowBulkCreateModal(false); setBulkFinanceConfig(null); setBulkStudentCount(0); }}
+        title="Tạo hàng loạt phiếu thu"
       >
         <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">Hệ thống sẽ tạo phiếu thu cho toàn bộ học sinh trong lớp được chọn.</p>
-          
           <Select
             label="Lớp học"
             value={bulkClassId}
-            onChange={setBulkClassId}
+            onChange={(v) => setBulkClassId(v)}
             options={classOptions}
+            placeholder="Chọn lớp..."
             required
             fullWidth
           />
 
-          <div className="grid grid-cols-2 gap-4">
+          {bulkFinanceConfig && (
+            <div className="bg-muted/30 rounded-xl p-3 space-y-1">
+              <p className="text-xs font-medium">Cấu hình lớp:</p>
+              <p className="text-xs text-muted-foreground">
+                Loại: {bulkFinanceConfig.class_type === 'Daycare' ? 'Bán trú' : 'Tối'}
+              </p>
+              {(bulkFinanceConfig.deduction_rules || []).map((r: { id: string; name: string; amount: number }) => (
+                <p key={r.id} className="text-xs">&bull; {r.name}: {formatCurrency(r.amount)}/ngay vang</p>
+              ))}
+              <p className="text-xs font-medium mt-2">Sẽ tạo {bulkStudentCount} phiếu thu</p>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 gap-4">
             <Select
               label="Tháng"
               value={String(bulkMonth)}
               onChange={(v) => setBulkMonth(Number(v))}
               options={monthOptions.filter(o => o.value !== '')}
-              required
-              fullWidth
-            />
-            <Select
-              label="Năm học"
-              value={bulkSchoolYear}
-              onChange={setBulkSchoolYear}
-              options={Array.from({ length: 5 }, (_, i) => {
-                const year = new Date().getFullYear() - 2 + i;
-                const value = `${year}-${year + 1}`;
-                return { value, label: value };
-              })}
               required
               fullWidth
             />
@@ -463,11 +538,11 @@ export default function Fees() {
             label="Tên khoản thu"
             value={bulkTitle}
             onChange={(e) => setBulkTitle(e.target.value)}
-            placeholder="VD: Học phí tháng"
+            placeholder="VD: Học phí thang"
           />
 
           <CurrencyInput
-            label="Số tiền gốc"
+            label="Số tiền goc"
             value={String(bulkBaseAmount)}
             onChange={(v) => setBulkBaseAmount(Number(v))}
             required
@@ -479,30 +554,6 @@ export default function Fees() {
           </div>
         </div>
       </Modal>
-
-      <ConfirmModal
-        open={showBulkDeleteConfirm}
-        onClose={() => setShowBulkDeleteConfirm(false)}
-        onConfirm={handleBulkDelete}
-        title={`Xóa ${selectedIds.length} phiếu thu?`}
-        message="Hành động này không thể hoàn tác."
-        confirmLabel="Xóa tất cả"
-        cancelLabel="Hủy"
-        variant="danger"
-        loading={deleting}
-      />
-
-      <ConfirmModal
-        open={showDeleteConfirm}
-        onClose={() => setShowDeleteConfirm(false)}
-        onConfirm={() => handleDelete(feeToDelete!)}
-        title="Xóa phiếu thu?"
-        message="Hành động này không thể hoàn tác."
-        confirmLabel="Xóa"
-        cancelLabel="Hủy"
-        variant="danger"
-        loading={deleting}
-      />
     </div>
   );
 }

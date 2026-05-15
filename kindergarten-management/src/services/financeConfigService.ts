@@ -102,11 +102,12 @@ export async function createFinanceConfig(
 
   const { data, error } = await supabase
     .from('class_finance_configs')
-    .insert({
+    .upsert({
       class_id: input.class_id,
       class_type: input.class_type,
       deduction_rules: input.deduction_rules || [],
-    })
+      del_yn: false,
+    }, { onConflict: 'class_id', ignoreDuplicates: false })
     .select('*, classes!inner(name)')
     .single();
 

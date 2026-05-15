@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Calculator, Pencil, Save, Search, Plus, X } from 'lucide-react';
+import { Calculator, Pencil, Save, Search, Plus, X, Trash2 } from 'lucide-react';
 import Card, { CardHeader, StatCard } from '@/components/common/Card';
 import Button from '@/components/common/Button';
 import Input from '@/components/common/Input';
@@ -7,13 +7,14 @@ import Select from '@/components/common/Select';
 import CurrencyInput from '@/components/common/CurrencyInput';
 import Table, { type SortState } from '@/components/common/Table';
 import Badge from '@/components/common/Badge';
-import Modal from '@/components/common/Modal';
+import Modal, { ConfirmModal } from '@/components/common/Modal';
 import { useToast } from '@/components/common/Toast';
-import { listFinanceConfigs, updateFinanceConfig } from '@/services/financeConfigService';
+import { listFinanceConfigs, createFinanceConfig, updateFinanceConfig, deleteFinanceConfig } from '@/services/financeConfigService';
+import { listClasses } from '@/services/classesService';
 import { useAuthStore } from '@/stores/authStore';
 import { canManageFinance } from '@/lib/rbac';
-import type { PaginationMeta, TableColumn } from '@/types';
-import type { ClassFinanceConfig, UpdateFinanceConfigInput, DeductionRule } from '@/types/domain';
+import type { PaginationMeta, SelectOption, TableColumn } from '@/types';
+import type { ClassFinanceConfig, CreateFinanceConfigInput, UpdateFinanceConfigInput, DeductionRule } from '@/types/domain';
 
 function paginate(page: number, pageSize: number, total: number): PaginationMeta {
   return {
@@ -25,6 +26,7 @@ function paginate(page: number, pageSize: number, total: number): PaginationMeta
 }
 
 interface EditFormState {
+  class_id?: number;
   class_type: 'Daycare' | 'Evening';
   deduction_rules: { id: string; name: string; amount: string }[];
 }
@@ -52,11 +54,27 @@ export default function FinanceConfigPage() {
   const [total, setTotal] = useState(0);
   const [sortState, setSortState] = useState<SortState>({ key: 'class_name', direction: 'asc' });
   const [editTarget, setEditTarget] = useState<ClassFinanceConfig | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
   const [editForm, setEditForm] = useState<EditFormState>({
     class_type: 'Daycare',
     deduction_rules: [],
   });
+  const [classOptions, setClassOptions] = useState<SelectOption[]>([]);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ClassFinanceConfig | null>(null);
   const pageSize = 15;
+
+  useEffect(() => {
+    async function loadClasses() {
+      const result = await listClasses({ page: 1, pageSize: 200 });
+      if (!result.error) {
+        setClassOptions(
+          result.data.items.map(c => ({ value: String(c.id), label: c.name }))
+        );
+      }
+    }
+    void loadClasses();
+  }, []);
 
   const loadConfigs = useCallback(async () => {
     if (!hasAccess) return;
@@ -88,7 +106,13 @@ export default function FinanceConfigPage() {
   const daycareCount = useMemo(() => items.filter((i) => i.class_type === 'Daycare').length, [items]);
   const eveningCount = useMemo(() => items.filter((i) => i.class_type === 'Evening').length, [items]);
 
+  const availableClassOptions = useMemo(() => {
+    const usedClassIds = new Set(items.map(i => i.class_id));
+    return classOptions.filter(o => !usedClassIds.has(Number(o.value)));
+  }, [classOptions, items]);
+
   const openEdit = (config: ClassFinanceConfig) => {
+    setIsCreating(false);
     setEditTarget(config);
     setEditForm({
       class_type: config.class_type,
@@ -98,6 +122,12 @@ export default function FinanceConfigPage() {
         amount: String(r.amount),
       })),
     });
+  };
+
+  const openCreate = () => {
+    setIsCreating(true);
+    setEditTarget(null);
+    setEditForm({ class_id: undefined, class_type: 'Daycare', deduction_rules: [] });
   };
 
   const addRule = () => {
@@ -122,23 +152,63 @@ export default function FinanceConfigPage() {
   };
 
   const handleSave = async () => {
-    if (!editTarget) return;
+    if (!isCreating && !editTarget) return;
     setSaving(true);
+
     const rules: DeductionRule[] = editForm.deduction_rules
       .filter(r => r.name.trim() && Number(r.amount) > 0)
       .map(r => ({ id: r.id, name: r.name.trim(), amount: Number(r.amount) }));
-    const payload: UpdateFinanceConfigInput = {
-      class_type: editForm.class_type,
-      deduction_rules: rules,
-    };
-    const result = await updateFinanceConfig(editTarget.class_id, payload);
+
+    if (isCreating) {
+      if (editForm.class_id === undefined) {
+        toast.error('Vui lòng chọn lớp học');
+        setSaving(false);
+        return;
+      }
+      const payload: CreateFinanceConfigInput = {
+        class_id: editForm.class_id,
+        class_type: editForm.class_type,
+        deduction_rules: rules,
+      };
+      const result = await createFinanceConfig(payload);
+      setSaving(false);
+      if (result.error) {
+        toast.error('Tạo cấu hình thất bại', result.error.message);
+        return;
+      }
+      toast.success('Đã tạo cấu hình tài chính mới');
+      setIsCreating(false);
+      void loadConfigs();
+    } else {
+      if (!editTarget) return;
+      const payload: UpdateFinanceConfigInput = {
+        class_type: editForm.class_type,
+        deduction_rules: rules,
+      };
+      const result = await updateFinanceConfig(editTarget.class_id, payload);
+      setSaving(false);
+      if (result.error) {
+        toast.error('Cập nhật thất bại', result.error.message);
+        return;
+      }
+      toast.success(`Đã cập nhật cấu hình cho lớp ${editTarget.class_name || editTarget.class_id}`);
+      setEditTarget(null);
+      void loadConfigs();
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setSaving(true);
+    const result = await deleteFinanceConfig(deleteTarget.class_id);
     setSaving(false);
+    setShowDeleteConfirm(false);
+    setDeleteTarget(null);
     if (result.error) {
-      toast.error('Cập nhật thất bại', result.error.message);
+      toast.error('Xóa cấu hình thất bại', result.error.message);
       return;
     }
-    toast.success(`Đã cập nhật cấu hình cho lớp ${editTarget.class_name || editTarget.class_id}`);
-    setEditTarget(null);
+    toast.success(`Đã xóa cấu hình của lớp ${deleteTarget.class_name || deleteTarget.class_id}`);
     void loadConfigs();
   };
 
@@ -169,6 +239,7 @@ export default function FinanceConfigPage() {
     {
       key: 'deduction_rules',
       label: 'Khoản khấu trừ',
+      wrap: true,
       render: (_value, row) => (
         <div className="flex flex-wrap gap-1">
           {(row.deduction_rules || []).length === 0 ? (
@@ -186,18 +257,31 @@ export default function FinanceConfigPage() {
     {
       key: 'actions',
       label: '',
-      width: '60px',
+      width: '90px',
       render: (_value, row) => (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            openEdit(row);
-          }}
-          className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-          title="Chỉnh sửa"
-        >
-          <Pencil className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              openEdit(row);
+            }}
+            className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+            title="Chỉnh sửa"
+          >
+            <Pencil className="w-4 h-4" />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setDeleteTarget(row);
+              setShowDeleteConfirm(true);
+            }}
+            className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors"
+            title="Xóa"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
       ),
     },
   ];
@@ -228,6 +312,9 @@ export default function FinanceConfigPage() {
             leftAddon={<Search className="w-4 h-4" />}
             className="max-w-xs"
           />
+          <Button variant="primary" leftIcon={<Plus className="w-4 h-4" />} onClick={openCreate}>
+            Thêm cấu hình
+          </Button>
         </div>
       </div>
 
@@ -245,14 +332,61 @@ export default function FinanceConfigPage() {
         onSort={(key) => setSortState({ key, direction: 'asc' })}
         pagination={meta}
         onPageChange={setPage}
+        renderMobileCard={(row) => (
+          <div className="bg-card border-b border-border p-4 space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="p-1 rounded-lg bg-primary/10 text-primary">
+                <Calculator className="w-4 h-4" />
+              </div>
+              <span className="font-medium text-foreground">{row.class_name || `Lớp #${row.class_id}`}</span>
+              <Badge variant={row.class_type === 'Daycare' ? 'primary' : 'secondary'} size="sm">
+                {row.class_type === 'Daycare' ? 'Bán trú' : 'Tối'}
+              </Badge>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {(row.deduction_rules || []).length === 0 ? (
+                <span className="text-xs text-muted-foreground">—</span>
+              ) : (
+                (row.deduction_rules || []).map(rule => (
+                  <Badge key={rule.id} variant="neutral" size="sm">
+                    {rule.name}: {formatCurrency(rule.amount)}
+                  </Badge>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+      />
+
+      <ConfirmModal
+        open={showDeleteConfirm}
+        onClose={() => { setShowDeleteConfirm(false); setDeleteTarget(null); }}
+        onConfirm={handleDelete}
+        title="Xóa cấu hình tài chính"
+        message={`Bạn có chắc chắn muốn xóa cấu hình của lớp "${deleteTarget?.class_name || deleteTarget?.class_id}"?`}
+        confirmLabel="Xóa"
+        variant="danger"
+        loading={saving}
       />
 
       <Modal
-        open={!!editTarget}
-        onClose={() => setEditTarget(null)}
-        title={`Chỉnh sửa: ${editTarget?.class_name || editTarget?.class_id || ''}`}
+        open={isCreating || !!editTarget}
+        onClose={() => { setEditTarget(null); setIsCreating(false); }}
+        title={isCreating ? 'Thêm cấu hình mới' : `Chỉnh sửa: ${editTarget?.class_name || editTarget?.class_id || ''}`}
       >
         <div className="space-y-4">
+          {isCreating && (
+            <Select
+              label="Lớp học"
+              value={editForm.class_id !== undefined ? String(editForm.class_id) : ''}
+              onChange={(v) => setEditForm(prev => ({ ...prev, class_id: Number(v) }))}
+              options={availableClassOptions}
+              placeholder="Chọn lớp học..."
+              fullWidth
+              required
+            />
+          )}
+
           <Select
             label="Loại lớp"
             value={editForm.class_type}
@@ -302,7 +436,7 @@ export default function FinanceConfigPage() {
           </div>
 
           <Button onClick={handleSave} loading={saving} leftIcon={<Save className="w-4 h-4" />} fullWidth>
-            Lưu thay đổi
+            {isCreating ? 'Tạo mới' : 'Lưu thay đổi'}
           </Button>
         </div>
       </Modal>
