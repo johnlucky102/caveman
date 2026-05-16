@@ -31,6 +31,7 @@ import { getDashboardStats, getAttendanceTrend, getFeeStatusSummary, getTeacherW
 import { getSchoolSettings } from '@/services/settingsService';
 import { useServiceCache } from '@/hooks/useServiceCache';
 import { isTeacher } from '@/lib/rbac';
+import { getCurrentSchoolYear } from '@/utils/schoolYearCalendar';
 
 // ─── Recharts wrappers (React 18 + recharts 2.x compat) ──────────────────────
 const RXAxis = XAxis as any;
@@ -132,8 +133,8 @@ export default function Dashboard() {
   const feeSummary: FeeStatusSummary = feeRes?.summary ?? { paid: 0, unpaid: 0, partial: 0 };
   const teacherWidgets: TeacherWidgetsData = teacherWidgetsRes?.data ?? { birthdays: [], medications: [] };
   const schoolYear = settingsRes?.settings?.school_year
-    ? settingsRes.settings.school_year.replace('-', ' – ')
-    : '2024 – 2025';
+    ? settingsRes.settings.school_year
+    : getCurrentSchoolYear();
 
   // Check for errors from service calls
   useEffect(() => {

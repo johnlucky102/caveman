@@ -67,7 +67,7 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
         )}
 
         {/* Select wrapper */}
-        <div className="relative">
+        <div className={cn('relative', className)}>
           <select
             ref={ref}
             id={selectId}
@@ -82,7 +82,6 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
                 : 'border-border',
               'disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground/60',
               'pl-3 pr-9',
-              className
             )}
             {...rest}
           >

@@ -134,22 +134,22 @@ export const StatCard: React.FC<StatCardProps> = ({
         onClick ? 'hover:shadow-md hover:border-primary/50 cursor-pointer active:scale-[0.98]' : ''
       )}
     >
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-muted-foreground truncate">{label}</p>
-          <p className="text-2xl font-bold text-foreground mt-1 leading-none">{value}</p>
+          <p className="text-xs sm:text-sm font-medium text-muted-foreground leading-tight">{label}</p>
+          <p className="text-base sm:text-xl font-bold text-foreground mt-1 leading-tight break-all">{value}</p>
           {description && (
             <p className="text-xs text-muted-foreground mt-1.5">{description}</p>
           )}
           {trend && (
-            <span className={cn('inline-block mt-2 text-xs font-medium px-2 py-0.5 rounded-full', trendColor)}>
+            <span className={cn('inline-block mt-2 text-xs font-medium px-2 py-0.5 rounded-full leading-tight', trendColor)}>
               {trend}
             </span>
           )}
         </div>
 
         {icon && (
-          <div className={cn('w-12 h-12 rounded-xl flex items-center justify-center shrink-0', resolvedIconBg)}>
+          <div className={cn('w-9 h-9 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center shrink-0', resolvedIconBg)}>
             {icon}
           </div>
         )}

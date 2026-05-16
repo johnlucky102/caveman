@@ -117,8 +117,7 @@ export default function FeeForm() {
             
             let dueDate = item.due_date || '';
             if (!dueDate && item.month && item.school_year) {
-              const [startYear] = item.school_year.split('-').map(Number);
-              const year = item.month >= 8 ? startYear : startYear + 1;
+              const year = calendarYearFromSchoolMonth(item.school_year, item.month) ?? new Date().getFullYear();
               dueDate = new Date(year, item.month, 0).toISOString().split('T')[0];
             }
 

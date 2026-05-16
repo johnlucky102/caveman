@@ -283,10 +283,13 @@ export async function getFeeStatusSummary(teacherId?: string): Promise<{ summary
 
 // ─── Financial Summary ────────────────────────────────────────────────────────
 export interface FinancialSummaryData {
-  totalRevenue: number;
+  totalRevenue: number;      // Doanh thu thực tế đã thu
+  totalExpected: number;     // Doanh thu dự kiến (tổng amount_vnd)
   paidCount: number;
   pendingCount: number;
   overdueCount: number;
+  inTermDebt: number;      // Công nợ trong hạn (chưa quá hạn)
+  overdueDebt: number;       // Công nợ quá hạn
 }
 
 export async function getFinancialSummary(month?: number | null, schoolYear?: string | null): Promise<{ data: FinancialSummaryData | null; error: AppError | null }> {
@@ -302,7 +305,7 @@ export async function getFinancialSummary(month?: number | null, schoolYear?: st
     const today = new Date().toISOString().split('T')[0];
     let query = supabase
       .from('fee_records')
-      .select('status, paid_amount_vnd, due_date')
+      .select('status, amount_vnd, paid_amount_vnd, due_date')
       .eq('del_yn', false);
 
     if (month !== null && month !== undefined) {
@@ -317,13 +320,28 @@ export async function getFinancialSummary(month?: number | null, schoolYear?: st
     if (error) throw error;
 
     const records = data || [];
+    const totalExpected = records.reduce((s, r: any) => s + (r.amount_vnd || 0), 0);
     const totalRevenue = records.reduce((s, r: any) => s + (r.paid_amount_vnd || 0), 0);
     const paidCount = records.filter((r: any) => r.status === 'paid').length;
     const pendingCount = records.filter((r: any) => r.status === 'unpaid' || r.status === 'partial').length;
+
+    // Calculate debts
+    let inTermDebt = 0;
+    let overdueDebt = 0;
+    records.forEach((r: any) => {
+      if (r.status === 'paid') return;
+      const debt = (r.amount_vnd || 0) - (r.paid_amount_vnd || 0);
+      if (debt <= 0) return;
+      if (r.due_date && r.due_date < today) {
+        overdueDebt += debt;
+      } else {
+        inTermDebt += debt;
+      }
+    });
     const overdueCount = records.filter((r: any) => r.status !== 'paid' && r.due_date && r.due_date < today).length;
 
     return {
-      data: { totalRevenue, paidCount, pendingCount, overdueCount },
+      data: { totalRevenue, totalExpected, paidCount, pendingCount, overdueCount, inTermDebt, overdueDebt },
       error: null
     };
   } catch (err) {

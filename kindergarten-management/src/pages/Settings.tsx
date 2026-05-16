@@ -312,7 +312,7 @@ export default function Settings() {
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <Input label="Năm học hiện tại" name="school_year" value={schoolSettings?.school_year || ''}
-                        onChange={(e) => setSchoolSettings((p) => ({ ...p!, school_year: e.target.value }))} placeholder="VD: 2024-2025" />
+                        onChange={(e) => setSchoolSettings((p) => ({ ...p!, school_year: e.target.value }))} placeholder="VD: 2026" />
                       <Input label="Logo URL" name="logo_url" value={schoolSettings?.logo_url || ''}
                         onChange={(e) => setSchoolSettings((p) => ({ ...p!, logo_url: e.target.value }))} />
                     </div>
@@ -510,8 +510,8 @@ export default function Settings() {
         size="sm"
       >
         <div className="space-y-4">
-          <Input label="Tên năm học" placeholder="VD: 2024-2025" value={newYearName}
-            onChange={(e) => setNewYearName(e.target.value)} hint="Nhập theo định dạng: 2024-2025" />
+          <Input label="Tên năm học" placeholder="VD: 2026" value={newYearName}
+            onChange={(e) => setNewYearName(e.target.value)} hint="Nhập năm học (VD: 2026)" />
           <div className="grid grid-cols-2 gap-3">
             <DatePicker label="Ngày bắt đầu" date={newYearStart}
               setDate={setNewYearStart} />

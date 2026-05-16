@@ -232,3 +232,66 @@ export async function getOverdueStudents(month?: number | null, schoolYear?: str
     return { data: [], error: toAppError(err, 'Lỗi tải danh sách học sinh nợ quá hạn.') };
   }
 }
+
+export interface RenewalStudent {
+  studentId: string;
+  studentName: string;
+  className: string;
+  dueDate: string;
+  amountPaid: number;
+  amountTotal: number;
+  daysRemaining: number;
+}
+
+/**
+ * Fetches list of students with fees due in the next 30 days for renewal reminder.
+ */
+export async function getRenewalForecast(): Promise<{ data: RenewalStudent[]; error: AppError | null }> {
+  try {
+    const today = new Date();
+    const thirtyDaysLater = new Date();
+    thirtyDaysLater.setDate(today.getDate() + 30);
+
+    const todayStr = today.toISOString().split('T')[0];
+    const futureStr = thirtyDaysLater.toISOString().split('T')[0];
+
+    const { data, error } = await withSupabaseTimeout(
+      supabase
+        .from('fee_records')
+        .select('student_id, due_date, paid_amount_vnd, amount_vnd, students!inner(full_name, classes!inner(name))')
+        .eq('del_yn', false)
+        .gte('due_date', todayStr)
+        .lte('due_date', futureStr)
+        .order('due_date', { ascending: true }),
+      8000,
+      { data: [], error: null } as any
+    );
+
+    if (error) throw error;
+
+    const records = data || [];
+
+    const renewalStudents: RenewalStudent[] = records
+      .map((r: any) => {
+        const dueDate = new Date(r.due_date);
+        if (Number.isNaN(dueDate.getTime())) return null;
+
+        const daysRemaining = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 3600 * 24));
+
+        return {
+          studentId: r.student_id,
+          studentName: r.students?.full_name || 'N/A',
+          className: r.students?.classes?.name || 'N/A',
+          dueDate: r.due_date,
+          amountPaid: r.paid_amount_vnd || 0,
+          amountTotal: r.amount_vnd || 0,
+          daysRemaining,
+        };
+      })
+      .filter((s): s is RenewalStudent => s !== null);
+
+    return { data: renewalStudents, error: null };
+  } catch (err) {
+    return { data: [], error: toAppError(err, 'Lỗi tải dự báo gia hạn.') };
+  }
+}
