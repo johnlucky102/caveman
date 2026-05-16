@@ -74,33 +74,39 @@ export async function getDashboardStats(teacherId?: string): Promise<{ stats: Da
     let studentsCountQuery = supabase.from('students').select('id', { count: 'exact', head: true }).eq('del_yn', false);
     let attendanceQuery = supabase.from('attendance').select('status, class_id, medicine_instructions').eq('attendance_date', today).eq('del_yn', false);
     let studentDataQuery = supabase.from('students').select('id, class_id, classes(id, name)').eq('del_yn', false);
+    let feeQuery = supabase.from('fee_records').select('amount_vnd, paid_amount_vnd, status').eq('del_yn', false);
     
     if (role === 'Teacher') {
       studentsCountQuery = studentsCountQuery.in('class_id', assignedClassIds);
       attendanceQuery = attendanceQuery.in('class_id', assignedClassIds);
       studentDataQuery = studentDataQuery.in('class_id', assignedClassIds);
+      feeQuery = feeQuery.in('class_id', assignedClassIds);
     }
 
     const [
       studentsCountRes,
       attendanceRes,
       studentDataRes,
-      classesRes
+      classesRes,
+      feeRes
     ] = await Promise.all([
       studentsCountQuery,
       attendanceQuery,
       studentDataQuery,
-      supabase.from('classes').select('id, name, teacher_id').eq('del_yn', false)
+      supabase.from('classes').select('id, name, teacher_id').eq('del_yn', false),
+      feeQuery
     ]);
 
     if (studentsCountRes.error) throw studentsCountRes.error;
     if (attendanceRes.error) throw attendanceRes.error;
     if (studentDataRes.error) throw studentDataRes.error;
     if (classesRes.error) throw classesRes.error;
+    if (feeRes.error) throw feeRes.error;
 
     const attendanceRecords = attendanceRes.data || [];
     const students = studentDataRes.data || [];
     const allClasses = classesRes.data || [];
+    const feeRecords = feeRes.data || [];
 
     // 3. Process Attendance Metrics
     const totalAttendance = attendanceRecords.length;
@@ -126,7 +132,7 @@ export async function getDashboardStats(teacherId?: string): Promise<{ stats: Da
       ...stats
     })).sort((a, b) => b.total - a.total).slice(0, 5);
 
-    // 5. Distribution & Attention
+    // 5. Distribution & Attention (group by class name)
     const classCounts = new Map<string, number>();
     students.forEach((s: any) => {
       const cName = s.classes?.name || 'Khác';
@@ -138,10 +144,20 @@ export async function getDashboardStats(teacherId?: string): Promise<{ stats: Da
       count
     })).sort((a, b) => b.count - a.count).slice(0, 5);
 
+    // 6. Calculate total debt (unpaid + partial)
+    const totalDebt = feeRecords.reduce((sum, r: any) => {
+      const amount = r.amount_vnd || 0;
+      const paid = r.paid_amount_vnd || 0;
+      if (r.status === 'unpaid' || r.status === 'partial') {
+        return sum + (amount - paid);
+      }
+      return sum;
+    }, 0);
+
     return {
       stats: {
         totalStudents: role === 'Teacher' ? students.length : (studentsCountRes.count || 0),
-        totalDebt: 0, 
+        totalDebt,
         attendanceToday: { present: presentCount, absent: absentCount, total: totalAttendance },
         attendanceByClass,
         studentsByGrade,
@@ -201,13 +217,13 @@ export async function getAttendanceTrend(teacherId?: string): Promise<{ trend: A
 
     const filteredData = data || [];
 
-    // Group by date
+    // Group by date (count both present and late as present)
     const dateMap = new Map<string, { present: number; total: number }>();
     filteredData.forEach((r: any) => {
       const key = r.attendance_date;
       const cur = dateMap.get(key) || { present: 0, total: 0 };
       cur.total++;
-      if (r.status === 'present') cur.present++;
+      if (r.status === 'present' || r.status === 'late') cur.present++;
       dateMap.set(key, cur);
     });
 

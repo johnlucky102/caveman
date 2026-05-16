@@ -86,6 +86,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [today] = useState(() => formatVietnameseDate(new Date()));
   const isT = isTeacher(role);
+  const [error, setError] = useState<string | null>(null);
 
   // Determine teacherId once per session
   const teacherId = useMemo(() => {
@@ -94,19 +95,19 @@ export default function Dashboard() {
   }, []);
 
   // ── Cached service calls ────────────────────────────────────────────────────
-  const { data: statsRes, loading: loadingStats } = useServiceCache(
+  const { data: statsRes, loading: loadingStats, refetch: refetchStats } = useServiceCache(
     `dashboard-stats-${teacherId ?? 'all'}`,
     () => getDashboardStats(teacherId),
     { staleTime: isT ? 0 : 30_000 } // Teachers need real-time data for attendance/meds
   );
 
-  const { data: trendRes, loading: loadingTrend } = useServiceCache(
+  const { data: trendRes, loading: loadingTrend, refetch: refetchTrend } = useServiceCache(
     `dashboard-trend-${teacherId ?? 'all'}`,
     () => getAttendanceTrend(teacherId),
     { staleTime: 120_000 }
   );
 
-  const { data: feeRes, loading: loadingFee } = useServiceCache(
+  const { data: feeRes, loading: loadingFee, refetch: refetchFee } = useServiceCache(
     `dashboard-fee-summary-${teacherId ?? 'all'}`,
     () => getFeeStatusSummary(teacherId),
     { staleTime: 60_000, enabled: !isT }
@@ -118,7 +119,7 @@ export default function Dashboard() {
     { staleTime: 300_000 }
   );
 
-  const { data: teacherWidgetsRes, loading: loadingWidgets } = useServiceCache(
+  const { data: teacherWidgetsRes, loading: loadingWidgets, refetch: refetchWidgets } = useServiceCache(
     `teacher-widgets-${teacherId}`,
     () => getTeacherWidgets(teacherId!),
     { staleTime: 60_000, enabled: isT && !!teacherId }
@@ -133,6 +134,19 @@ export default function Dashboard() {
   const schoolYear = settingsRes?.settings?.school_year
     ? settingsRes.settings.school_year.replace('-', ' – ')
     : '2024 – 2025';
+
+  // Check for errors from service calls
+  useEffect(() => {
+    const errors = [
+      statsRes?.error?.message,
+      trendRes?.error?.message,
+      feeRes?.error?.message,
+      teacherWidgetsRes?.error?.message
+    ].filter(Boolean);
+    if (errors.length > 0) {
+      setError(errors[0]);
+    }
+  }, [statsRes, trendRes, feeRes, teacherWidgetsRes]);
 
   useEffect(() => {
     setPageTitle('Dashboard');
@@ -150,8 +164,32 @@ export default function Dashboard() {
     { name: 'Đóng một phần', value: feeSummary.partial, color: COLORS.warning },
   ].filter(s => s.value > 0);
 
+  const handleRetry = () => {
+    setError(null);
+    refetchStats();
+    refetchTrend();
+    refetchFee();
+    refetchWidgets();
+  };
+
   return (
     <div className="space-y-6">
+      {/* Error Banner */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <XCircle className="w-5 h-5 text-red-500" />
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+          <button
+            onClick={handleRetry}
+            className="text-sm font-medium text-red-700 hover:text-red-900 underline"
+          >
+            Thử lại
+          </button>
+        </div>
+      )}
+
       {/* Welcome row */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
