@@ -269,11 +269,168 @@ export async function updateFeeRecord(
     return { item: null, error: toAppError(error, 'Không thể cập nhật học phí.') };
   }
 
+  // Auto sync attendance deduction after update
+  const syncResult = await syncFeeWithAttendance(id);
+  if (syncResult.error) {
+    console.warn('[feesService] Tu dong dong bo chuyen can that bai (update):', syncResult.error.message);
+  }
+
   invalidateSwCache(['fees', 'dashboard']);
   invalidateCache('dashboard');
   invalidateCache('fees');
 
-  return { item: mapFeeRow(data as unknown as FeeRow), error: null };
+  return { item: mapFeeRow((syncResult.item || data) as unknown as FeeRow), error: null };
+}
+
+async function runInChunks<T>(
+  tasks: (() => Promise<T>)[],
+  chunkSize = 10,
+): Promise<T[]> {
+  const results: T[] = [];
+  for (let i = 0; i < tasks.length; i += chunkSize) {
+    const chunk = tasks.slice(i, i + chunkSize);
+    const chunkResults = await Promise.all(chunk.map(t => t()));
+    results.push(...chunkResults);
+  }
+  return results;
+}
+
+export async function bulkSyncFeesByFilter(params: {
+  classId?: number;
+  month?: number;
+  schoolYear?: string;
+  ids?: string[];
+}): Promise<{ synced: number; failed: number; error: AppError | null }> {
+  const accessError = await ensureFinancialAccess(true);
+  if (accessError.error) return { synced: 0, failed: 0, error: accessError.error };
+
+  // Step 1: Fetch all fee records in one query
+  const feeSelect = 'id, student_id, class_id, school_year, month, amount_vnd, base_amount_vnd, status';
+  let feeQuery = supabase
+    .from('fee_records')
+    .select(feeSelect)
+    .eq('del_yn', false);
+
+  if (params.ids && params.ids.length > 0) {
+    feeQuery = feeQuery.in('id', params.ids);
+  } else {
+    if (params.classId !== undefined) feeQuery = feeQuery.eq('class_id', params.classId);
+    if (params.month !== undefined) feeQuery = feeQuery.eq('month', params.month);
+    if (params.schoolYear) feeQuery = feeQuery.eq('school_year', params.schoolYear);
+  }
+
+  const { data: fees, error: feesError } = await feeQuery;
+  if (feesError || !fees || fees.length === 0) {
+    if (feesError) return { synced: 0, failed: 0, error: toAppError(feesError, 'Không tìm thấy bản ghi học phí.') };
+    return { synced: 0, failed: 0, error: null };
+  }
+
+  // Step 2: Fetch all class finance configs in one query
+  const uniqueClassIds = [...new Set(fees.map(f => f.class_id))];
+  const { data: configs, error: configsError } = await supabase
+    .from('class_finance_configs')
+    .select('class_id, deduction_rules')
+    .in('class_id', uniqueClassIds)
+    .eq('del_yn', false);
+
+  if (configsError) {
+    return { synced: 0, failed: 0, error: toAppError(configsError, 'Không tải được cấu hình tài chính.') };
+  }
+  const configMap = new Map<number, DeductionRule[]>(
+    (configs || []).map(c => [c.class_id as number, (c.deduction_rules || []) as DeductionRule[]])
+  );
+
+  // Step 3: Fetch all attendance in one query (cover full date span)
+  const uniqueStudentIds = [...new Set(fees.map(f => f.student_id))];
+  const allDates = fees
+    .filter(f => f.month && f.school_year)
+    .map(f => {
+      const calYear = calendarYearFromSchoolMonth(f.school_year!, f.month!);
+      const start = `${calYear}-${String(f.month).padStart(2, '0')}-01`;
+      const endObj = new Date(calYear, f.month!, 0);
+      const end = `${endObj.getFullYear()}-${String(endObj.getMonth() + 1).padStart(2, '0')}-${String(endObj.getDate()).padStart(2, '0')}`;
+      return { start, end };
+    });
+  const overallStart = allDates.reduce((min, d) => d.start < min ? d.start : min, allDates[0]?.start ?? '');
+  const overallEnd = allDates.reduce((max, d) => d.end > max ? d.end : max, allDates[0]?.end ?? '');
+
+  const { data: allAttendance, error: attError } = await supabase
+    .from('attendance')
+    .select('student_id, class_id, attendance_date, status')
+    .in('student_id', uniqueStudentIds)
+    .in('class_id', uniqueClassIds)
+    .gte('attendance_date', overallStart)
+    .lte('attendance_date', overallEnd)
+    .eq('del_yn', false);
+
+  if (attError) {
+    return { synced: 0, failed: 0, error: toAppError(attError, 'Không tải được dữ liệu điểm danh.') };
+  }
+
+  // Build attendance lookup: key = `${student_id}:${class_id}:${yyyy-mm}`
+  const attMap = new Map<string, number>();
+  for (const rec of (allAttendance || [])) {
+    if (rec.status !== 'absent') continue;
+    const ym = rec.attendance_date.slice(0, 7); // "yyyy-mm"
+    const key = `${rec.student_id}:${rec.class_id}:${ym}`;
+    attMap.set(key, (attMap.get(key) ?? 0) + 1);
+  }
+
+  // Step 4: Calculate deductions locally + prepare batch update tasks
+  let synced = 0;
+  let failed = 0;
+
+  const updateTasks = fees.map(fee => async () => {
+    const rules = configMap.get(fee.class_id as number) ?? [];
+    const baseAmount = fee.base_amount_vnd || fee.amount_vnd;
+
+    let absentDays = 0;
+    if (fee.month && fee.school_year) {
+      const calYear = calendarYearFromSchoolMonth(fee.school_year, fee.month);
+      const ym = `${calYear}-${String(fee.month).padStart(2, '0')}`;
+      absentDays = attMap.get(`${fee.student_id}:${fee.class_id}:${ym}`) ?? 0;
+    }
+
+    const ruleTotal = rules.reduce((sum, r) => sum + r.amount, 0);
+    const totalDeduction = absentDays * ruleTotal;
+    const finalAmount = Math.max(0, baseAmount - totalDeduction);
+    const ruleNames = rules.map(r => `${r.name} ${r.amount.toLocaleString('vi-VN')}đ`).join(' + ');
+    const note = absentDays > 0
+      ? `Trừ ${absentDays} ngày vắng x (${ruleNames}) = ${totalDeduction.toLocaleString('vi-VN')}đ`
+      : 'Đã đồng bộ chuyên cần';
+
+    const { error: updateErr } = await supabase
+      .from('fee_records')
+      .update({
+        amount_vnd: finalAmount,
+        attendance_deduction_vnd: totalDeduction,
+        deduction_details: rules.map(r => ({
+          ...r,
+          absent_days: absentDays,
+          subtotal: absentDays * r.amount,
+        })),
+        deduction_note: note,
+      })
+      .eq('id', fee.id);
+
+    return updateErr ? 'failed' : 'synced';
+  });
+
+  // Step 5: Run updates in parallel chunks of 10
+  const results = await runInChunks(updateTasks, 10);
+  for (const r of results) {
+    if (r === 'synced') synced++;
+    else {
+      failed++;
+      console.warn('[feesService] Bulk sync update failed for a fee record');
+    }
+  }
+
+  invalidateSwCache(['fees', 'dashboard']);
+  invalidateCache('dashboard');
+  invalidateCache('fees');
+
+  return { synced, failed, error: null };
 }
 
 export async function deleteFeeRecord(feeId: string): Promise<{ error: AppError | null }> {

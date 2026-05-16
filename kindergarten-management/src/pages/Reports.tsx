@@ -32,8 +32,10 @@ import {
   getDashboardStats,
   getFinancialSummary, 
   getAttendanceTrend,
+  getFeeSummaryByClass,
   DashboardStats,
-  AttendanceTrendPoint 
+  AttendanceTrendPoint,
+  FeeSummaryByClass
 } from '@/services/dashboardService';
 import { listAttendanceHistory } from '@/services/attendanceService';
 import { getRevenueTrend, getStudentDistribution, getDebtAging, RevenueTrendPoint, AgingBucket } from '@/services/analyticsService';
@@ -160,6 +162,7 @@ export default function Reports() {
     grade: { name: string; value: number }[];
   }>({ gender: [], grade: [] });
   const [debtAging, setDebtAging] = useState<AgingBucket[]>([]);
+  const [feeSummaryByClass, setFeeSummaryByClass] = useState<FeeSummaryByClass[]>([]);
 
   const [loading, setLoading] = useState(false);
   const role = useAuthStore(state => state.role);
@@ -185,11 +188,13 @@ export default function Reports() {
       setLoading(true);
       Promise.all([
         getDashboardStats(),
-        getAttendanceTrend()
-      ]).then(([resStats, resTrend]) => {
+        getAttendanceTrend(),
+        getStudentDistribution()
+      ]).then(([resStats, resTrend, resDist]) => {
         setLoading(false);
         if (resStats.stats) setStats(resStats.stats);
         if (resTrend.trend) setAttendanceTrend(resTrend.trend);
+        if (resDist) setStudentDistribution({ gender: resDist.gender, grade: resDist.grade });
       });
     }
 
@@ -370,8 +375,8 @@ export default function Reports() {
       const { data, error } = await withSupabaseTimeout(
         supabase
           .from('fee_records')
-          .select('id, student_id, students(full_name, classes(name)), title, meal_deduction_vnd, tuition_deduction_vnd, deduction_note')
-          .or('meal_deduction_vnd.gt.0,tuition_deduction_vnd.gt.0')
+          .select('id, student_id, students(full_name, classes(name)), title, attendance_deduction_vnd, deduction_note')
+          .gt('attendance_deduction_vnd', 0)
           .eq('del_yn', false)
           .order('created_at', { ascending: false }),
         8000,
@@ -396,6 +401,9 @@ export default function Reports() {
       getDebtAging().then(res => {
         if (res.data) setDebtAging(res.data);
       });
+      getFeeSummaryByClass().then(res => {
+        if (res.data) setFeeSummaryByClass(res.data);
+      });
     }
   }, [activeTab, loadFinancialDetails]);
 
@@ -410,16 +418,14 @@ export default function Reports() {
         student_name: log.students?.full_name || 'N/A',
         class_name: log.students?.classes?.name || 'N/A',
         title: log.title || 'Học phí',
-        meal_deduction: log.meal_deduction_vnd || 0,
-        other_deduction: log.tuition_deduction_vnd || 0,
+        attendance_deduction: log.attendance_deduction_vnd || 0,
         note: log.deduction_note || ''
       })),
       [
         { key: 'student_name', label: 'Học sinh' },
         { key: 'class_name', label: 'Lớp' },
         { key: 'title', label: 'Khoản thu' },
-        { key: 'meal_deduction', label: 'Tiền cơm', render: (val) => String(val) },
-        { key: 'other_deduction', label: 'Khấu trừ khác', render: (val) => String(val) },
+        { key: 'attendance_deduction', label: 'Khấu trừ điểm danh', render: (val) => String(val) },
         { key: 'note', label: 'Ghi chú' }
       ],
       `so_nhat_ky_khau_tru_${new Date().toISOString().slice(0, 10)}`
@@ -809,9 +815,18 @@ export default function Reports() {
                 <div className="flex items-center justify-between">
                   <CardHeader title="Bảng kê thu tiền theo lớp" subtitle="Tình trạng thanh toán chi tiết" />
                   <Button size="sm" variant="ghost" onClick={() => {
-                    exportToCsv(stats?.attendanceByClass || [], [
+                    exportToCsv(feeSummaryByClass.map(c => ({
+                      className: c.className,
+                      studentCount: c.studentCount,
+                      paidAmount: c.paidAmount,
+                      totalAmount: c.totalAmount,
+                      progress: c.totalAmount > 0 ? Math.round((c.paidAmount / c.totalAmount) * 100) : 0
+                    })), [
                       { key: 'className', label: 'Lớp' },
-                      { key: 'total', label: 'Sĩ số' },
+                      { key: 'studentCount', label: 'Sĩ số' },
+                      { key: 'paidAmount', label: 'Đã thu', render: (val) => String(val) },
+                      { key: 'totalAmount', label: 'Tổng', render: (val) => String(val) },
+                      { key: 'progress', label: 'Tiến độ (%)', render: (val) => String(val) },
                     ], 'bang_ke_theo_lop');
                   }}>
                     Xuất Excel
@@ -831,28 +846,35 @@ export default function Reports() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {(stats?.attendanceByClass || []).map((c) => (
-                      <tr key={c.classId} className="hover:bg-muted/30 transition-colors">
-                        <td className="px-4 py-3 font-semibold text-foreground">{c.className}</td>
-                        <td className="px-4 py-3 text-center text-muted-foreground">{c.total}</td>
-                        <td className="px-4 py-3 text-right font-medium text-emerald-600">
-                          <span className="opacity-50">—</span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
-                              {/* Stable mock progress based on classId */}
-                              <div className="h-full bg-primary rounded-full" style={{ width: `${(Number(c.classId) * 17) % 40 + 60}%` }} />
+                    {feeSummaryByClass.map((c) => {
+                      const progress = c.totalAmount > 0 ? Math.round((c.paidAmount / c.totalAmount) * 100) : 0;
+                      return (
+                        <tr key={c.classId} className="hover:bg-muted/30 transition-colors">
+                          <td className="px-4 py-3 font-semibold text-foreground">{c.className}</td>
+                          <td className="px-4 py-3 text-center text-muted-foreground">{c.studentCount}</td>
+                          <td className="px-4 py-3 text-right font-medium text-emerald-600">
+                            {formatCurrencyVND(c.paidAmount)}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                                <div className="h-full bg-primary rounded-full" style={{ width: `${progress}%` }} />
+                              </div>
+                              <span className="text-xs font-medium text-muted-foreground w-10 text-right">{progress}%</span>
                             </div>
-                          </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {feeSummaryByClass.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="px-6 py-10 text-center text-muted-foreground">
+                          Chưa có dữ liệu thu phí.
                         </td>
                       </tr>
-                    ))}
+                    )}
                   </tbody>
                 </table>
-                <div className="p-4 bg-muted/20 text-[10px] text-muted-foreground italic">
-                  * Dữ liệu tiến độ thu phí đang được đồng bộ theo thời gian thực.
-                </div>
               </div>
             </Card>
 
@@ -958,7 +980,7 @@ export default function Reports() {
                   <tr className="bg-muted/50">
                     <th className="px-6 py-3 text-left font-bold text-xs uppercase tracking-wider">Học sinh</th>
                     <th className="px-4 py-3 text-left font-bold text-xs uppercase tracking-wider">Khoản thu</th>
-                    <th className="px-4 py-3 text-right font-bold text-xs uppercase tracking-wider">Tiền cơm</th>
+                    <th className="px-4 py-3 text-right font-bold text-xs uppercase tracking-wider">Khấu trừ điểm danh</th>
                     <th className="px-4 py-3 text-right font-bold text-xs uppercase tracking-wider">Khác</th>
                     <th className="px-4 py-3 text-left font-bold text-xs uppercase tracking-wider">Ghi chú</th>
                   </tr>
@@ -971,8 +993,8 @@ export default function Reports() {
                         <div className="text-[10px] text-muted-foreground uppercase">{log.students?.classes?.name || 'N/A'}</div>
                       </td>
                       <td className="px-4 py-4 text-muted-foreground">{log.title || 'Học phí'}</td>
-                      <td className="px-4 py-4 text-right font-medium text-red-500">-{formatCurrencyVND(log.meal_deduction_vnd || 0)}</td>
-                      <td className="px-4 py-4 text-right font-medium text-red-500">-{formatCurrencyVND(log.tuition_deduction_vnd || 0)}</td>
+                      <td className="px-4 py-4 text-right font-medium text-red-500">-{formatCurrencyVND(log.attendance_deduction_vnd || 0)}</td>
+                      <td className="px-4 py-4 text-right font-medium text-red-500">-</td>
                       <td className="px-4 py-4 text-xs italic text-muted-foreground">{log.deduction_note || '—'}</td>
                     </tr>
                   ))}

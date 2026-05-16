@@ -387,3 +387,63 @@ export async function getTeacherWidgets(teacherId: string): Promise<{ data: Teac
     return { data: null, error: toAppError(err, 'Lỗi tải thông tin widget giáo viên.') };
   }
 }
+
+// ─── Fee Summary by Class ───────────────────────────────────────────────────────
+
+export interface FeeSummaryByClass {
+  classId: number;
+  className: string;
+  totalAmount: number;
+  paidAmount: number;
+  studentCount: number;
+}
+
+export async function getFeeSummaryByClass(): Promise<{ data: FeeSummaryByClass[]; error: AppError | null }> {
+  try {
+    const { userId, role, error: authError } = await getCurrentUser();
+    if (authError) return { data: [], error: authError };
+
+    // App-level Guard: Only Admin and Accountant can access fee summary by class
+    if (!['Admin', 'Accountant'].includes(role)) {
+       return { data: [], error: { code: 'FORBIDDEN', message: 'Truy cập bị từ chối: Chỉ quản trị viên và kế toán mới có quyền xem báo cáo này.' } };
+    }
+
+    // Fetch fee records with class information
+    const { data: feeRecords, error } = await supabase
+      .from('fee_records')
+      .select('amount_vnd, paid_amount_vnd, student_id, students!inner(class_id, classes!inner(name))')
+      .eq('del_yn', false);
+
+    if (error) throw error;
+
+    // Group by class and calculate totals
+    const classMap = new Map<number, { className: string; totalAmount: number; paidAmount: number; studentCount: Set<string> }>();
+    
+    (feeRecords || []).forEach((r: any) => {
+      const classId = r.students?.class_id;
+      const className = r.students?.classes?.name || `Lớp ${classId}`;
+      
+      if (!classMap.has(classId)) {
+        classMap.set(classId, { className, totalAmount: 0, paidAmount: 0, studentCount: new Set() });
+      }
+      
+      const classData = classMap.get(classId)!;
+      classData.totalAmount += r.amount_vnd || 0;
+      classData.paidAmount += r.paid_amount_vnd || 0;
+      classData.studentCount.add(r.student_id);
+    });
+
+    // Convert to array
+    const data: FeeSummaryByClass[] = Array.from(classMap.entries()).map(([classId, stats]) => ({
+      classId,
+      className: stats.className,
+      totalAmount: stats.totalAmount,
+      paidAmount: stats.paidAmount,
+      studentCount: stats.studentCount.size
+    })).sort((a, b) => b.totalAmount - a.totalAmount);
+
+    return { data, error: null };
+  } catch (err) {
+    return { data: [], error: toAppError(err, 'Lỗi tải báo cáo thu phí theo lớp.') };
+  }
+}

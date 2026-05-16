@@ -50,6 +50,10 @@ export default function Attendance() {
   });
   const [historyTo, setHistoryTo] = useState(() => new Date().toISOString().split('T')[0]);
   const [page, setPage] = useState(1);
+  const [pageSize] = useState(20);
+  const [totalHistory, setTotalHistory] = useState(0);
+  const [rollcallPage, setRollcallPage] = useState(1);
+  const [rollcallPageSize] = useState(20);
 
   useEffect(() => {
     const loadClasses = async () => {
@@ -80,8 +84,8 @@ export default function Attendance() {
     if (!selectedClass) return;
     const loadRollCall = async () => {
       setLoading(true);
-      const result = await listAttendanceByClassAndDate({ 
-        classId: Number(selectedClass), 
+      const result = await listAttendanceByClassAndDate({
+        classId: Number(selectedClass),
         attendanceDate: date,
         teacherId: role === 'Teacher' ? user?.id : undefined
       });
@@ -92,6 +96,7 @@ export default function Attendance() {
         return;
       }
       setStudents(result.items);
+      setRollcallPage(1); // Reset to page 1 when class/date changes
     };
     void loadRollCall();
   }, [date, selectedClass, toast, role, user?.id]);
@@ -102,21 +107,27 @@ export default function Attendance() {
       setLoading(true);
       const result = await listAttendanceHistory(
         Number(selectedClass),
-        undefined, 
+        undefined,
         historyFrom || undefined,
         historyTo || undefined,
-        role === 'Teacher' ? user?.id : undefined
+        role === 'Teacher' ? user?.id : undefined,
+        page,
+        pageSize,
+        historyStatus || undefined,
+        historySearch || undefined
       );
       setLoading(false);
       if (result.error) {
         toast.error('Không tải được lịch sử điểm danh', result.error.message);
         setHistory([]);
+        setTotalHistory(0);
         return;
       }
       setHistory(result.items);
+      setTotalHistory(result.total || 0);
     };
     void loadHistory();
-  }, [historyFrom, historyTo, selectedClass, toast, viewMode, role, user?.id]);
+  }, [historyFrom, historyTo, selectedClass, toast, viewMode, role, user?.id, page, pageSize, historyStatus, historySearch]);
 
   const togglePresent = (studentId: string, currentStatus: AttendanceStatusValue) => {
     const newStatus: AttendanceStatusValue = currentStatus === 'present' ? 'absent' : 'present';
@@ -144,13 +155,13 @@ export default function Attendance() {
     return { total, present, absent, rate, isSunday };
   }, [students, date]);
 
-  const filteredHistory = useMemo(() => {
-    return history.filter((item) => {
-      const matchSearch = !historySearch || item.student_name.toLowerCase().includes(historySearch.toLowerCase());
-      const matchStatus = !historyStatus || item.status === historyStatus;
-      return matchSearch && matchStatus;
-    });
-  }, [history, historySearch, historyStatus]);
+  const filteredHistory = history;
+
+  const paginatedStudents = useMemo(() => {
+    const start = (rollcallPage - 1) * rollcallPageSize;
+    const end = start + rollcallPageSize;
+    return students.slice(start, end);
+  }, [students, rollcallPage, rollcallPageSize]);
 
   const historyColumns: TableColumn<AttendanceRecord>[] = [
     {
@@ -249,27 +260,29 @@ export default function Attendance() {
           {/* Date + Actions */}
           <Card noPadding>
             <div className="p-4 flex flex-col md:flex-row md:items-center gap-3">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center justify-center gap-2 md:justify-start">
                 <button
                   onClick={() => {
                     const d = new Date(date);
                     d.setDate(d.getDate() - 1);
                     setDate(d.toISOString().split('T')[0]);
                   }}
-                  className="p-1.5 rounded-lg hover:bg-accent transition-colors"
+                  className="p-2 rounded-lg hover:bg-accent transition-colors"
                 >
-                  <ChevronLeft className="w-4 h-4" />
+                  <ChevronLeft className="w-5 h-5" />
                 </button>
-                <DatePicker date={date} setDate={setDate} />
+                <div className="flex-1 max-w-xs">
+                  <DatePicker date={date} setDate={setDate} className="w-full" />
+                </div>
                 <button
                   onClick={() => {
                     const d = new Date(date);
                     d.setDate(d.getDate() + 1);
                     setDate(d.toISOString().split('T')[0]);
                   }}
-                  className="p-1.5 rounded-lg hover:bg-accent transition-colors"
+                  className="p-2 rounded-lg hover:bg-accent transition-colors"
                 >
-                  <ChevronRight className="w-4 h-4" />
+                  <ChevronRight className="w-5 h-5" />
                 </button>
               </div>
               <div className="flex-1" />
@@ -310,7 +323,7 @@ export default function Attendance() {
           {/* Student List */}
           <Card noPadding>
             <div className="divide-y divide-border/50">
-              {students.map((student) => (
+              {paginatedStudents.map((student) => (
                 <React.Fragment key={student.student_id}>
                   <div
                     className={`flex items-center gap-3 px-4 py-3 transition-colors cursor-pointer hover:bg-accent/20 ${
@@ -356,6 +369,31 @@ export default function Attendance() {
               )}
             </div>
           </Card>
+
+          {/* Pagination for Rollcall */}
+          {students.length > rollcallPageSize && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+              <span className="text-xs text-muted-foreground">
+                Trang {rollcallPage} / {Math.ceil(students.length / rollcallPageSize)}
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setRollcallPage(p => Math.max(1, p - 1))}
+                  disabled={rollcallPage <= 1}
+                  className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setRollcallPage(p => p + 1)}
+                  disabled={rollcallPage >= Math.ceil(students.length / rollcallPageSize)}
+                  className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </>
       )}
 
@@ -385,40 +423,53 @@ export default function Attendance() {
               />
             </div>
             <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground whitespace-nowrap">Từ:</span>
               <DatePicker date={historyFrom} setDate={(d) => { setHistoryFrom(d); setPage(1); }} />
-              <span className="text-muted-foreground">/</span>
+              <span className="text-sm text-muted-foreground whitespace-nowrap">Đến:</span>
               <DatePicker date={historyTo} setDate={(d) => { setHistoryTo(d); setPage(1); }} />
             </div>
           </div>
-          <Table columns={historyColumns} data={filteredHistory} rowKey="id" loading={loading} emptyMessage="Không có lịch sử điểm danh"
-        renderMobileCard={(row) => {
-          const r = row as unknown as import('@/types/domain').AttendanceRecord
-          return (
-            <div className="bg-card border-b border-border p-4 space-y-2">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="font-medium text-foreground">{r.student_name}</p>
-                  <p className="text-xs text-muted-foreground">{r.class_name}</p>
+          <Table 
+            columns={historyColumns} 
+            data={filteredHistory} 
+            rowKey="id" 
+            loading={loading} 
+            emptyMessage="Không có lịch sử điểm danh"
+            pagination={{
+              page: page,
+              pageSize: pageSize,
+              total: totalHistory,
+              totalPages: Math.ceil(totalHistory / pageSize)
+            }}
+            onPageChange={setPage}
+            renderMobileCard={(row) => {
+              const r = row as unknown as import('@/types/domain').AttendanceRecord
+              return (
+                <div className="bg-card border-b border-border p-4 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-medium text-foreground">{r.student_name}</p>
+                      <p className="text-xs text-muted-foreground">{r.class_name}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-xs text-muted-foreground">{new Date(r.attendance_date).toLocaleDateString('vi-VN')}</p>
+                      <span className={
+                        r.status === 'present' ? 'text-xs font-medium text-emerald-500' :
+                        r.status === 'late' ? 'text-xs font-medium text-amber-500' :
+                        'text-xs font-medium text-red-500'
+                      }>
+                        {r.status === 'present' ? 'Có mặt' : r.status === 'late' ? 'Đi muộn' : 'Vắng'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                    {r.check_in_time && <span>Giờ vào: {r.check_in_time.slice(0, 5)}</span>}
+                    {r.check_out_time && <span>Giờ ra: {r.check_out_time.slice(0, 5)}</span>}
+                  </div>
                 </div>
-                <div className="text-right shrink-0">
-                  <p className="text-xs text-muted-foreground">{new Date(r.attendance_date).toLocaleDateString('vi-VN')}</p>
-                  <span className={
-                    r.status === 'present' ? 'text-xs font-medium text-emerald-500' :
-                    r.status === 'late' ? 'text-xs font-medium text-amber-500' :
-                    'text-xs font-medium text-red-500'
-                  }>
-                    {r.status === 'present' ? 'Có mặt' : r.status === 'late' ? 'Đi muộn' : 'Vắng'}
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                {r.check_in_time && <span>Giờ vào: {r.check_in_time.slice(0, 5)}</span>}
-                {r.check_out_time && <span>Giờ ra: {r.check_out_time.slice(0, 5)}</span>}
-              </div>
-            </div>
-          )
-        }}
-      />
+              )
+            }}
+          />
         </Card>
       )}
     </div>

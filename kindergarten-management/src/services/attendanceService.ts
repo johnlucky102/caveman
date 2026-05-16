@@ -189,7 +189,11 @@ export async function listAttendanceHistory(
   fromDate?: string,
   toDate?: string,
   teacherId?: string,
-): Promise<{ items: AttendanceRecord[]; error: AppError | null }> {
+  page?: number,
+  pageSize?: number,
+  status?: string,
+  search?: string,
+): Promise<{ items: AttendanceRecord[]; total: number; error: AppError | null }> {
   // If teacherId is provided, verify they manage this class first
   if (teacherId && classId !== undefined) {
     const { data: directClass } = await supabase
@@ -209,7 +213,7 @@ export async function listAttendanceHistory(
         .maybeSingle();
 
       if (!secondaryClass) {
-        return { items: [], error: { code: 'FORBIDDEN', message: 'Bạn không có quyền xem dữ liệu lớp học này.' } };
+        return { items: [], total: 0, error: { code: 'FORBIDDEN', message: 'Bạn không có quyền xem dữ liệu lớp học này.' } };
       }
     }
   }
@@ -235,18 +239,67 @@ export async function listAttendanceHistory(
     query = query.lte('attendance_date', toDate);
   }
 
+  if (status) {
+    query = query.eq('status', status);
+  }
+
+  if (search) {
+    query = query.ilike('students.full_name', `%${search}%`);
+  }
+
+  // Get total count first
+  let countQuery = supabase
+    .from('attendance')
+    .select('id', { count: 'exact', head: true })
+    .eq('del_yn', false);
+
+  if (classId !== undefined) {
+    countQuery = countQuery.eq('class_id', classId);
+  }
+
+  if (studentId) {
+    countQuery = countQuery.eq('student_id', studentId);
+  }
+
+  if (fromDate) {
+    countQuery = countQuery.gte('attendance_date', fromDate);
+  }
+
+  if (toDate) {
+    countQuery = countQuery.lte('attendance_date', toDate);
+  }
+
+  if (status) {
+    countQuery = countQuery.eq('status', status);
+  }
+
+  if (search) {
+    countQuery = countQuery.ilike('students.full_name', `%${search}%`);
+  }
+
+  const { count: totalCount } = await countQuery;
+
+  // Apply pagination
+  if (page && pageSize) {
+    const offset = (page - 1) * pageSize;
+    query = query.range(offset, offset + pageSize - 1);
+  } else {
+    query = query.limit(500); // Default limit for backward compatibility
+  }
+
   const result = await withSupabaseTimeout(
-    query.order('attendance_date', { ascending: false }).limit(500),
+    query.order('attendance_date', { ascending: false }),
     10000,
     { data: null, error: { message: 'Timeout tải lịch sử điểm danh', details: '', hint: '', code: 'TIMEOUT' } } as any
   );
 
   if (result.error) {
-    return { items: [], error: toAppError(result.error, 'Không tải được lịch sử điểm danh.') };
+    return { items: [], total: 0, error: toAppError(result.error, 'Không tải được lịch sử điểm danh.') };
   }
 
   return {
     items: ((result.data || []) as unknown as AttendanceRow[]).map(mapAttendance),
+    total: totalCount || 0,
     error: null,
   };
 }

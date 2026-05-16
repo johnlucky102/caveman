@@ -10,7 +10,7 @@ import Table from '@/components/common/Table';
 import { FeeStatusBadge } from '@/components/common/Badge';
 import { useToast } from '@/components/common/Toast';
 import CurrencyInput from '@/components/common/CurrencyInput';
-import { listFees, getFeeSummary, updateFeeRecordStatus, deleteFeeRecord, deleteFeeRecords, createClassFees, syncFeeWithAttendance } from '@/services/feesService';
+import { listFees, getFeeSummary, updateFeeRecordStatus, deleteFeeRecord, deleteFeeRecords, createClassFees, syncFeeWithAttendance, bulkSyncFeesByFilter } from '@/services/feesService';
 import { listClasses } from '@/services/classesService';
 import { listStudents } from '@/services/studentsService';
 import { getFinanceConfigByClassId } from '@/services/financeConfigService';
@@ -60,6 +60,7 @@ export default function Fees() {
   const [classOptions, setClassOptions] = useState<SelectOption[]>([]);
   const [bulkCreating, setBulkCreating] = useState(false);
   const [syncingId, setSyncingId] = useState<string | null>(null);
+  const [bulkSyncing, setBulkSyncing] = useState(false);
   const [summary, setSummary] = useState({ totalAmount: 0, totalPaid: 0, totalDebt: 0, debtCount: 0 });
   const [bulkFinanceConfig, setBulkFinanceConfig] = useState<any>(null);
   const [bulkStudentCount, setBulkStudentCount] = useState(0);
@@ -220,6 +221,26 @@ export default function Fees() {
     }
   };
 
+  const handleBulkSync = async () => {
+    setBulkSyncing(true);
+    const result = await bulkSyncFeesByFilter({
+      classId: classId ? Number(classId) : undefined,
+      month: month ? Number(month) : undefined,
+      schoolYear: schoolYear || undefined,
+      ids: selectedIds.length > 0 ? selectedIds : undefined,
+    });
+    setBulkSyncing(false);
+    if (result.error) {
+      toast.error('Lỗi đồng bộ', result.error.message);
+    } else {
+      const msg = selectedIds.length > 0
+        ? `Đã đồng bộ ${result.synced} phiếu đã chọn${result.failed > 0 ? `, ${result.failed} lỗi` : ''}`
+        : `Đã đồng bộ ${result.synced} phiếu${result.failed > 0 ? `, ${result.failed} lỗi` : ''}`;
+      toast.success(msg);
+      void loadFees();
+    }
+  };
+
   const toggleSelect = (id: string) => {
     setSelectedIds(prev =>
       prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
@@ -373,8 +394,26 @@ export default function Fees() {
               >
                 Xóa {selectedIds.length} đã chọn
               </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                leftIcon={<RefreshCw className="w-4 h-4" />}
+                onClick={handleBulkSync}
+                loading={bulkSyncing}
+              >
+                Đồng bộ đã chọn
+              </Button>
             </>
           )}
+          <Button
+            variant="outline"
+            size="sm"
+            leftIcon={<RefreshCw className="w-4 h-4" />}
+            onClick={handleBulkSync}
+            loading={bulkSyncing}
+          >
+            Đồng bộ tất cả
+          </Button>
           <Button
             size="sm"
             leftIcon={<Plus className="w-4 h-4" />}
