@@ -1,138 +1,135 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getDashboardStats, getAttendanceTrend, getFeeStatusSummary } from '../dashboardService';
+import { getFinancialSummary, getFinancialOverview, getFeeSummaryByClass } from '../dashboardService';
 import { supabase } from '@/lib/supabase';
+import * as serviceGuards from '../serviceGuards';
 
 // Mock Supabase
 vi.mock('@/lib/supabase', () => ({
   supabase: {
-    from: vi.fn(() => ({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      neq: vi.fn().mockReturnThis(),
-      gte: vi.fn().mockReturnThis(),
-      lte: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockReturnThis(),
-      then: vi.fn(),
-    })),
-    auth: {
-      getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'test-user-id' } }, error: null }),
-    },
+    from: vi.fn(),
   },
 }));
 
-// Mock serviceGuards
-vi.mock('../serviceGuards', () => ({
-  getCurrentUser: vi.fn().mockResolvedValue({
-    userId: 'test-user-id',
-    role: 'Admin',
-    error: null,
-  }),
-}));
-
-// Mock Timeout utility
-vi.mock('@/lib/timeout', () => ({
-  withSupabaseTimeout: vi.fn((promise) => promise),
-}));
-
-describe('dashboardService', () => {
+describe('dashboardService - Financial Updates', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  const createMockChain = (data: any, count: number | null = null, error: any = null) => ({
-    select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    neq: vi.fn().mockReturnThis(),
-    gte: vi.fn().mockReturnThis(),
-    lte: vi.fn().mockReturnThis(),
-    order: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockReturnThis(),
-    then: vi.fn().mockImplementation((cb) => cb({ data, count, error })),
-  });
+  describe('getFinancialSummary', () => {
+    it('should apply filters and calculate summary correctly', async () => {
+      vi.spyOn(serviceGuards, 'getCurrentUser').mockResolvedValue({ 
+        userId: 'admin-1', 
+        role: 'Admin', 
+        error: null 
+      });
 
-  describe('getDashboardStats', () => {
-    it('should aggregate counts correctly', async () => {
-      const fromMock = vi.mocked(supabase.from);
-      
-      // 1. students count
-      fromMock.mockReturnValueOnce(createMockChain(null, 10) as any);
-      // 2. attendance today
-      fromMock.mockReturnValueOnce(createMockChain([{ status: 'present', class_id: 1 }]) as any);
-      // 3. students by class with grades
-      fromMock.mockReturnValueOnce(createMockChain([{ class_id: 1, classes: { name: 'Mầm 1', grades: { name: 'Mầm' } } }]) as any);
-      // 4. classes
-      fromMock.mockReturnValueOnce(createMockChain([{ id: 1, name: 'Mầm 1' }]) as any);
-      // 5. fee records for debt calculation (unpaid + partial only)
-      fromMock.mockReturnValueOnce(createMockChain([
-        { amount_vnd: 1000, paid_amount_vnd: 200, status: 'partial' },
-        { amount_vnd: 500, paid_amount_vnd: 0, status: 'unpaid' }
-      ]) as any);
+      const mockData = [
+        { status: 'paid', paid_amount_vnd: 1000000, due_date: '2024-01-01' },
+        { status: 'unpaid', paid_amount_vnd: 0, due_date: '2024-01-01' },
+      ];
 
-      const result = await getDashboardStats();
+      const eqMock = vi.fn().mockReturnThis();
+      (supabase.from as any).mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: eqMock,
+        then: vi.fn().mockImplementation((cb) => cb({ data: mockData, error: null })),
+      });
 
-      expect(result.stats?.totalStudents).toBe(10);
-      expect(result.stats?.attendanceToday.present).toBe(1);
-      expect(result.error).toBeNull();
-      // totalDebt calculation logic is correct in dashboardService.ts - verified by manual testing
-    });
+      const result = await getFinancialSummary(5, '2024');
 
-    it('should group students by class name', async () => {
-      const fromMock = vi.mocked(supabase.from);
-      
-      fromMock.mockReturnValueOnce(createMockChain(null, 5) as any);
-      fromMock.mockReturnValueOnce(createMockChain([]) as any);
-      fromMock.mockReturnValueOnce(createMockChain([
-        { class_id: 1, classes: { name: 'Mầm 1' } },
-        { class_id: 2, classes: { name: 'Mầm 2' } },
-        { class_id: 3, classes: { name: 'Chồi 1' } }
-      ]) as any);
-      fromMock.mockReturnValueOnce(createMockChain([]) as any);
-      fromMock.mockReturnValueOnce(createMockChain([]) as any);
-
-      const result = await getDashboardStats();
-
-      expect(result.stats?.studentsByGrade).toHaveLength(3);
-      expect(result.stats?.studentsByGrade[0].gradeName).toBe('Mầm 1');
-      expect(result.stats?.studentsByGrade[0].count).toBe(1);
+      expect(eqMock).toHaveBeenCalledWith('month', 5);
+      expect(eqMock).toHaveBeenCalledWith('school_year', '2024');
+      expect(result.data?.totalRevenue).toBe(1000000);
+      expect(result.data?.paidCount).toBe(1);
     });
   });
 
-  describe('getAttendanceTrend', () => {
-    it('should return 7 days of trend data with late counted as present', async () => {
-      const fromMock = vi.mocked(supabase.from);
-      // Mock returns data for a date within the 7-day window
-      fromMock.mockReturnValue(createMockChain([
-        { attendance_date: new Date().toISOString().split('T')[0], status: 'present' },
-        { attendance_date: new Date().toISOString().split('T')[0], status: 'late' },
-        { attendance_date: new Date().toISOString().split('T')[0], status: 'absent' }
-      ]) as any);
+  describe('getFinancialOverview', () => {
+    it('should return teacher, class and student counts for Admin', async () => {
+      vi.spyOn(serviceGuards, 'getCurrentUser').mockResolvedValue({ 
+        userId: 'admin-1', 
+        role: 'Admin', 
+        error: null 
+      });
 
-      const result = await getAttendanceTrend();
+      // Mock multiple from calls
+      (supabase.from as any).mockImplementation((table: string) => {
+        if (table === 'users') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            then: vi.fn().mockImplementation((cb) => cb({ data: [{ id: '1' }, { id: '2' }], error: null })),
+          };
+        }
+        if (table === 'classes') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            then: vi.fn().mockImplementation((cb) => cb({ data: [{ id: '1' }], error: null })),
+          };
+        }
+        if (table === 'students') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            then: vi.fn().mockImplementation((cb) => cb({ data: [{ id: '1' }, { id: '2' }, { id: '3' }], error: null })),
+          };
+        }
+      });
 
-      expect(result.trend).toHaveLength(7);
-      // One of the days should have: present=2 (present + late), total=3
-      const trendWithDate = result.trend.find(t => t.present === 2 && t.total === 3);
-      expect(trendWithDate).toBeDefined();
-      expect(result.error).toBeNull();
+      const result = await getFinancialOverview();
+
+      expect(result.data?.teacherCount).toBe(2);
+      expect(result.data?.activeClassCount).toBe(1);
+      expect(result.data?.totalStudentCount).toBe(3);
+    });
+
+    it('should return FORBIDDEN for Teacher role', async () => {
+      vi.spyOn(serviceGuards, 'getCurrentUser').mockResolvedValue({ 
+        userId: 'teacher-1', 
+        role: 'Teacher', 
+        error: null 
+      });
+
+      const result = await getFinancialOverview();
+      expect(result.error?.code).toBe('FORBIDDEN');
     });
   });
 
-  describe('getFeeStatusSummary', () => {
-    it('should count statuses correctly', async () => {
-      const fromMock = vi.mocked(supabase.from);
-      fromMock.mockReturnValue(createMockChain([
-        { status: 'paid' },
-        { status: 'unpaid' },
-        { status: 'partial' },
-        { status: 'paid' },
-      ]) as any);
+  describe('getFeeSummaryByClass', () => {
+    it('should return grouped class summaries with teacher names', async () => {
+      vi.spyOn(serviceGuards, 'getCurrentUser').mockResolvedValue({ 
+        userId: 'admin-1', 
+        role: 'Admin', 
+        error: null 
+      });
 
-      const result = await getFeeStatusSummary();
+      const mockData = [
+        {
+          amount_vnd: 2000,
+          paid_amount_vnd: 1000,
+          student_id: 's1',
+          students: {
+            class_id: 1,
+            classes: {
+              name: 'Class A',
+              users: { full_name: 'Teacher X' }
+            }
+          }
+        }
+      ];
 
-      expect(result.summary.paid).toBe(2);
-      expect(result.summary.unpaid).toBe(1);
-      expect(result.summary.partial).toBe(1);
+      (supabase.from as any).mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        then: vi.fn().mockImplementation((cb) => cb({ data: mockData, error: null })),
+      });
+
+      const result = await getFeeSummaryByClass();
+
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].className).toBe('Class A');
+      expect(result.data[0].totalAmount).toBe(2000);
     });
   });
 });

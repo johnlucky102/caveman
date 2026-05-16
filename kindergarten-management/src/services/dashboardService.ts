@@ -289,7 +289,7 @@ export interface FinancialSummaryData {
   overdueCount: number;
 }
 
-export async function getFinancialSummary(userRole?: string): Promise<{ data: FinancialSummaryData | null; error: AppError | null }> {
+export async function getFinancialSummary(month?: number | null, schoolYear?: string | null): Promise<{ data: FinancialSummaryData | null; error: AppError | null }> {
   try {
     const { role, error: authError } = await getCurrentUser();
     if (authError) return { data: null, error: authError };
@@ -300,10 +300,19 @@ export async function getFinancialSummary(userRole?: string): Promise<{ data: Fi
     }
 
     const today = new Date().toISOString().split('T')[0];
-    const { data, error } = await supabase
+    let query = supabase
       .from('fee_records')
       .select('status, paid_amount_vnd, due_date')
       .eq('del_yn', false);
+
+    if (month !== null && month !== undefined) {
+      query = query.eq('month', month);
+    }
+    if (schoolYear) {
+      query = query.eq('school_year', schoolYear);
+    }
+
+    const { data, error } = await query;
 
     if (error) throw error;
 
@@ -388,17 +397,59 @@ export async function getTeacherWidgets(teacherId: string): Promise<{ data: Teac
   }
 }
 
+// ─── Financial Overview ───────────────────────────────────────────────────────────────
+
+export interface FinancialOverview {
+  teacherCount: number;
+  activeClassCount: number;
+  totalStudentCount: number;
+}
+
+export async function getFinancialOverview(): Promise<{ data: FinancialOverview | null; error: AppError | null }> {
+  try {
+    const { role, error: authError } = await getCurrentUser();
+    if (authError) return { data: null, error: authError };
+
+    // App-level Guard: Only Admin and Accountant can access financial overview
+    if (!['Admin', 'Accountant'].includes(role)) {
+       return { data: null, error: { code: 'FORBIDDEN', message: 'Truy cập bị từ chối: Chỉ quản trị viên và kế toán mới có quyền xem báo cáo này.' } };
+    }
+
+    const [teachersRes, classesRes, studentsRes] = await Promise.all([
+      supabase.from('users').select('id').eq('role', 'Teacher').eq('status', 'Active'),
+      supabase.from('classes').select('id').eq('del_yn', false),
+      supabase.from('students').select('id').eq('del_yn', false),
+    ]);
+
+    if (teachersRes.error) throw teachersRes.error;
+    if (classesRes.error) throw classesRes.error;
+    if (studentsRes.error) throw studentsRes.error;
+
+    return {
+      data: {
+        teacherCount: (teachersRes.data || []).length,
+        activeClassCount: (classesRes.data || []).length,
+        totalStudentCount: (studentsRes.data || []).length,
+      },
+      error: null
+    };
+  } catch (err) {
+    return { data: null, error: toAppError(err, 'Lỗi tải tổng quan tài chính.') };
+  }
+}
+
 // ─── Fee Summary by Class ───────────────────────────────────────────────────────
 
 export interface FeeSummaryByClass {
   classId: number;
   className: string;
+  teacherName?: string;
   totalAmount: number;
   paidAmount: number;
   studentCount: number;
 }
 
-export async function getFeeSummaryByClass(): Promise<{ data: FeeSummaryByClass[]; error: AppError | null }> {
+export async function getFeeSummaryByClass(month?: number | null, schoolYear?: string | null): Promise<{ data: FeeSummaryByClass[]; error: AppError | null }> {
   try {
     const { userId, role, error: authError } = await getCurrentUser();
     if (authError) return { data: [], error: authError };
@@ -408,25 +459,35 @@ export async function getFeeSummaryByClass(): Promise<{ data: FeeSummaryByClass[
        return { data: [], error: { code: 'FORBIDDEN', message: 'Truy cập bị từ chối: Chỉ quản trị viên và kế toán mới có quyền xem báo cáo này.' } };
     }
 
-    // Fetch fee records with class information
-    const { data: feeRecords, error } = await supabase
+    // Fetch fee records with class and teacher information
+    let query = supabase
       .from('fee_records')
-      .select('amount_vnd, paid_amount_vnd, student_id, students!inner(class_id, classes!inner(name))')
+      .select('amount_vnd, paid_amount_vnd, student_id, students!inner(class_id, classes!inner(name, teacher_id, users!inner(full_name)))')
       .eq('del_yn', false);
+
+    if (month !== null && month !== undefined) {
+      query = query.eq('month', month);
+    }
+    if (schoolYear) {
+      query = query.eq('school_year', schoolYear);
+    }
+
+    const { data: feeRecords, error } = await query;
 
     if (error) throw error;
 
     // Group by class and calculate totals
-    const classMap = new Map<number, { className: string; totalAmount: number; paidAmount: number; studentCount: Set<string> }>();
-    
+    const classMap = new Map<number, { className: string; teacherName: string; totalAmount: number; paidAmount: number; studentCount: Set<string> }>();
+
     (feeRecords || []).forEach((r: any) => {
       const classId = r.students?.class_id;
       const className = r.students?.classes?.name || `Lớp ${classId}`;
-      
+      const teacherName = r.students?.classes?.users?.full_name || '';
+
       if (!classMap.has(classId)) {
-        classMap.set(classId, { className, totalAmount: 0, paidAmount: 0, studentCount: new Set() });
+        classMap.set(classId, { className, teacherName, totalAmount: 0, paidAmount: 0, studentCount: new Set() });
       }
-      
+
       const classData = classMap.get(classId)!;
       classData.totalAmount += r.amount_vnd || 0;
       classData.paidAmount += r.paid_amount_vnd || 0;
@@ -437,6 +498,7 @@ export async function getFeeSummaryByClass(): Promise<{ data: FeeSummaryByClass[
     const data: FeeSummaryByClass[] = Array.from(classMap.entries()).map(([classId, stats]) => ({
       classId,
       className: stats.className,
+      teacherName: stats.teacherName,
       totalAmount: stats.totalAmount,
       paidAmount: stats.paidAmount,
       studentCount: stats.studentCount.size

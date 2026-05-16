@@ -111,6 +111,15 @@ export interface AgingBucket {
   amount: number;
 }
 
+export interface OverdueStudent {
+  studentId: string;
+  studentName: string;
+  className: string;
+  teacherName?: string;
+  amountOwed: number;
+  daysOverdue: number;
+}
+
 /**
  * Fetches debt aging distribution.
  */
@@ -130,7 +139,7 @@ export async function getDebtAging(): Promise<{ data: AgingBucket[]; error: AppE
 
     const records = data || [];
     const today = new Date();
-    
+
     const buckets: AgingBucket[] = [
       { range: '0-30 ngày', count: 0, amount: 0 },
       { range: '31-60 ngày', count: 0, amount: 0 },
@@ -167,5 +176,59 @@ export async function getDebtAging(): Promise<{ data: AgingBucket[]; error: AppE
     return { data: buckets, error: null };
   } catch (err) {
     return { data: [], error: toAppError(err, 'Lỗi tải phân tích tuổi nợ.') };
+  }
+}
+
+/**
+ * Fetches list of overdue students.
+ */
+export async function getOverdueStudents(month?: number | null, schoolYear?: string | null): Promise<{ data: OverdueStudent[]; error: AppError | null }> {
+  try {
+    let query = supabase
+      .from('fee_records')
+      .select('id, student_id, amount_vnd, paid_amount_vnd, due_date, students!inner(full_name, classes!inner(name, teacher_id, users!inner(full_name)))')
+      .eq('del_yn', false)
+      .in('status', ['unpaid', 'partial'])
+      .not('due_date', 'is', null);
+
+    if (month !== null && month !== undefined) {
+      query = query.eq('month', month);
+    }
+    if (schoolYear) {
+      query = query.eq('school_year', schoolYear);
+    }
+
+    const { data, error } = await withSupabaseTimeout(query, 8000, { data: [], error: null } as any);
+
+    if (error) throw error;
+
+    const records = data || [];
+    const today = new Date();
+
+    const overdueStudents: OverdueStudent[] = records
+      .map((r: any) => {
+        const amountOwed = (r.amount_vnd || 0) - (r.paid_amount_vnd || 0);
+        if (amountOwed <= 0) return null;
+
+        const dueDate = new Date(r.due_date);
+        if (Number.isNaN(dueDate.getTime())) return null;
+
+        const daysOverdue = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 3600 * 24));
+
+        return {
+          studentId: r.student_id,
+          studentName: r.students?.full_name || 'N/A',
+          className: r.students?.classes?.name || 'N/A',
+          teacherName: r.students?.classes?.users?.full_name || '',
+          amountOwed,
+          daysOverdue,
+        };
+      })
+      .filter((s): s is OverdueStudent => s !== null)
+      .sort((a, b) => b.daysOverdue - a.daysOverdue);
+
+    return { data: overdueStudents, error: null };
+  } catch (err) {
+    return { data: [], error: toAppError(err, 'Lỗi tải danh sách học sinh nợ quá hạn.') };
   }
 }

@@ -22,7 +22,7 @@ export function calculateAttendanceRate(present: number, total: number): number 
 
 /**
  * Summarizes financial deductions from logs.
- * Now uses unified attendance_deduction_vnd instead of split meal/tuition.
+ * Uses unified attendance_deduction_vnd for attendance-based deductions.
  */
 export function summarizeDeductions(logs: any[]) {
   const totalDeduction = logs.reduce((sum, log) => sum + (log.attendance_deduction_vnd || 0), 0);
