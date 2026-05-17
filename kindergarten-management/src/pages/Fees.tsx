@@ -141,6 +141,17 @@ export default function Fees() {
     void loadClasses();
   }, []);
 
+  // Trigger background sync when month/class changes (on enter screen or change filters)
+  useEffect(() => {
+    if (month || classId) {
+      void bulkSyncFeesByFilter({
+        month: month ? Number(month) : undefined,
+        class_id: classId ? Number(classId) : undefined,
+        school_year: schoolYear || undefined,
+      });
+    }
+  }, [month, classId, schoolYear]);
+
   // Load finance config + student count when class changes in bulk modal
   useEffect(() => {
     if (!bulkClassId || !showBulkCreateModal) return;
@@ -216,6 +227,12 @@ export default function Fees() {
       toast.error('Lỗi khi tạo hàng loạt', result.error.message);
     } else {
       toast.success('Đã tạo học phí cho ' + studentsList.length + ' học sinh');
+      // Trigger sync for the entire class/month immediately
+      void bulkSyncFeesByFilter({
+        class_id: Number(bulkClassId),
+        month: bulkMonth,
+        school_year: bulkSchoolYear
+      });
       setShowBulkCreateModal(false);
       void loadFees();
     }
@@ -224,10 +241,10 @@ export default function Fees() {
   const handleBulkSync = async () => {
     setBulkSyncing(true);
     const result = await bulkSyncFeesByFilter({
-      classId: classId ? Number(classId) : undefined,
+      class_id: classId ? Number(classId) : undefined,
       month: month ? Number(month) : undefined,
-      schoolYear: schoolYear || undefined,
-      ids: selectedIds.length > 0 ? selectedIds : undefined,
+      school_year: schoolYear || undefined,
+      fee_ids: selectedIds.length > 0 ? selectedIds : undefined,
     });
     setBulkSyncing(false);
     if (result.error) {
@@ -241,41 +258,8 @@ export default function Fees() {
     }
   };
 
-  const toggleSelect = (id: string) => {
-    setSelectedIds(prev =>
-      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-    );
-  };
-
-  const toggleSelectAll = () => {
-    if (selectedIds.length === items.length) {
-      setSelectedIds([]);
-    } else {
-      setSelectedIds(items.map(i => i.id));
-    }
-  };
 
   const columns: TableColumn<FeeRecordP2>[] = [
-    {
-      key: '_select',
-      label: (
-        <input
-          type="checkbox"
-          checked={items.length > 0 && selectedIds.length === items.length}
-          onChange={toggleSelectAll}
-          className="w-4 h-4 rounded border-border accent-primary cursor-pointer"
-        />
-      ),
-      width: '40px',
-      render: (_value, row) => (
-        <input
-          type="checkbox"
-          checked={selectedIds.includes(row.id)}
-          onChange={() => toggleSelect(row.id)}
-          className="w-4 h-4 rounded border-border accent-primary cursor-pointer"
-        />
-      ),
-    },
     {
       key: 'student_name',
       label: 'Học sinh',
@@ -381,7 +365,13 @@ export default function Fees() {
                 variant="outline"
                 size="sm"
                 leftIcon={<Printer className="w-4 h-4" />}
-                onClick={() => navigate('/fees/print-bulk?ids=' + selectedIds.join(','))}
+                onClick={async () => {
+                  setBulkSyncing(true);
+                  await bulkSyncFeesByFilter({ fee_ids: selectedIds });
+                  setBulkSyncing(false);
+                  navigate('/fees/print-bulk?ids=' + selectedIds.join(','));
+                }}
+                loading={bulkSyncing}
               >
                 In {selectedIds.length} biên lai
               </Button>

@@ -116,7 +116,7 @@ describe('Phase 2 Service Functions', () => {
             data = null;
             count = 156;
           } else if (table === 'fee_records') {
-            data = [{ amount_vnd: 100, paid_amount_vnd: 40 }];
+            data = [{ amount_vnd: 100, paid_amount_vnd: 40, status: 'partial' }];
           } else if (table === 'attendance') {
             data = [{ status: 'present' }, { status: 'absent' }];
           }

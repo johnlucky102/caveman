@@ -18,6 +18,7 @@ type ClassRow = {
   teacher_id: string | null;
   room: string | null;
   max_students: number;
+  class_type: string;
   created_at: string;
   updated_at: string;
   description: string | null;
@@ -39,6 +40,7 @@ function mapClassRow(row: ClassRow, studentCount: number): ClassRecord {
     room: row.room,
     max_students: row.max_students,
     student_count: studentCount,
+    class_type: row.class_type as any,
     description: row.description,
     teachers: (row.class_teachers || []).map(ct => ({
       id: ct.id,
@@ -83,7 +85,7 @@ export async function listClasses(query: ClassListQuery): Promise<{ data: ListEn
 
   let statement = supabase
     .from('classes')
-    .select('id, name, teacher_id, room, max_students, description, created_at, updated_at, users(id, full_name), class_teachers(id, teacher_id, role, users(full_name))', { count: 'exact' })
+    .select('id, name, teacher_id, room, max_students, class_type, description, created_at, updated_at, users(id, full_name), class_teachers(id, teacher_id, role, users(full_name))', { count: 'exact' })
     .eq('del_yn', false);
 
   if (query.search?.trim()) {
@@ -151,7 +153,7 @@ export async function getClassById(id: number): Promise<{ item: ClassRecord | nu
   const result = await withSupabaseTimeout(
     supabase
       .from('classes')
-      .select('id, name, teacher_id, room, max_students, description, created_at, updated_at, users(id, full_name), class_teachers(id, teacher_id, role, users(full_name))')
+      .select('id, name, teacher_id, room, max_students, class_type, description, created_at, updated_at, users(id, full_name), class_teachers(id, teacher_id, role, users(full_name))')
       .eq('id', id)
       .eq('del_yn', false)
       .maybeSingle(),
@@ -174,7 +176,7 @@ export async function createClass(payload: CreateClassInput): Promise<{ item: Cl
     supabase
       .from('classes')
       .insert(payload)
-      .select('id, name, teacher_id, room, max_students, description, created_at, updated_at, users(id, full_name)')
+      .select('id, name, teacher_id, room, max_students, class_type, description, created_at, updated_at, users(id, full_name)')
       .single(),
     8000,
     { data: null, error: { message: 'Timeout creating class', details: '', hint: '', code: 'TIMEOUT' } } as any
@@ -183,13 +185,6 @@ export async function createClass(payload: CreateClassInput): Promise<{ item: Cl
   if (result.error || !result.data) return { item: null, error: toAppError(result.error, 'Không thể tạo lớp học.') };
 
   const classItem = mapClassRow(result.data as unknown as ClassRow, 0);
-
-  // Tự động tạo finance config với default values
-  const { error: configError } = await ensureFinanceConfigExists(classItem.id);
-  if (configError) {
-    // Log nhưng không block - class vẫn được tạo
-    console.warn('[classesService] Không thể tạo finance config mặc định:', configError.message);
-  }
 
   return { item: classItem, error: null };
 }
@@ -217,7 +212,7 @@ export async function updateClass(id: number, payload: UpdateClassInput): Promis
       .from('classes')
       .update(payload)
       .eq('id', id)
-      .select('id, name, teacher_id, room, max_students, description, created_at, updated_at, users(id, full_name)')
+      .select('id, name, teacher_id, room, max_students, class_type, description, created_at, updated_at, users(id, full_name)')
       .single(),
     8000,
     { data: null, error: { message: 'Timeout updating class', details: '', hint: '', code: 'TIMEOUT' } } as any

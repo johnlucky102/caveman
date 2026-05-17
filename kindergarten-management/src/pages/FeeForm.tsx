@@ -29,6 +29,7 @@ interface FeeFormState {
   paidDate: string;
   baseAmount: string;
   attendanceDeduction: string;
+  otherDeduction: string;
   deductionDetails: string;
   deductionNote: string;
 }
@@ -87,11 +88,12 @@ export default function FeeForm() {
       month: String(new Date().getMonth() + 1),
       schoolYear: getCurrentSchoolYear(),
       paidAmount: '0',
-      paymentMethod: '',
+      paymentMethod: 'cash',
       dueDate: lastDayOfMonth,
       paidDate: today,
       baseAmount: '',
       attendanceDeduction: '0',
+      otherDeduction: '0',
       deductionDetails: '',
       deductionNote: '',
     };
@@ -133,6 +135,7 @@ export default function FeeForm() {
               paidDate: item.paid_date || '',
               baseAmount: String(item.base_amount_vnd || item.amount_vnd),
               attendanceDeduction: String(item.attendance_deduction_vnd || 0),
+              otherDeduction: String((item.base_amount_vnd || 0) - (item.attendance_deduction_vnd || 0) - (item.amount_vnd || 0)),
               deductionDetails: JSON.stringify(item.deduction_details || []),
               deductionNote: item.deduction_note || '',
             });
@@ -183,6 +186,7 @@ export default function FeeForm() {
         ...prev,
         amount: String(item.amount_vnd),
         attendanceDeduction: String(item.attendance_deduction_vnd),
+        otherDeduction: String((item.base_amount_vnd || 0) - (item.attendance_deduction_vnd || 0) - (item.amount_vnd || 0)),
         deductionDetails: JSON.stringify(item.deduction_details || []),
         deductionNote: item.deduction_note || '',
       }));
@@ -240,6 +244,7 @@ export default function FeeForm() {
         status,
         base_amount_vnd: Number(formData.baseAmount || formData.amount),
         attendance_deduction_vnd: Number(formData.attendanceDeduction),
+        amount_vnd: Number(formData.baseAmount || formData.amount) - Number(formData.attendanceDeduction) - Number(formData.otherDeduction),
         deduction_note: formData.deductionNote,
       };
 
@@ -286,10 +291,11 @@ export default function FeeForm() {
   const summary = useMemo(() => {
     const base = Number(formData.baseAmount || formData.amount);
     const deduction = Number(formData.attendanceDeduction);
-    const finalAmount = Math.max(0, base - deduction);
+    const other = Number(formData.otherDeduction);
+    const finalAmount = Math.max(0, base - deduction - other);
     const paid = Number(formData.paidAmount);
     const due = Math.max(0, finalAmount - paid);
-    return { base, deduction, finalAmount, paid, due };
+    return { base, deduction, other, finalAmount, paid, due };
   }, [formData]);
 
   const isLocked = isEdit && feeStatus !== 'unpaid';
@@ -376,10 +382,9 @@ export default function FeeForm() {
               required
             />
             <CurrencyInput
-              label="Khấu trừ vắng mặt"
-              value={formData.attendanceDeduction}
-              onChange={(val) => updateField('attendanceDeduction', val)}
-              readOnly={isFinancialReadOnly}
+              label="Khấu trừ khác"
+              value={formData.otherDeduction}
+              onChange={(val) => updateField('otherDeduction', val)}
             />
           </div>
 
@@ -429,6 +434,12 @@ export default function FeeForm() {
                 <span>-{formatCurrency(summary.deduction)}</span>
               </div>
             )}
+            {summary.other > 0 && (
+              <div className="flex justify-between text-sm text-red-500">
+                <span>Khấu trừ khác</span>
+                <span>-{formatCurrency(summary.other)}</span>
+              </div>
+            )}
             <div className="flex justify-between text-lg font-black border-t border-primary/20 pt-2">
               <span>Tổng cộng</span>
               <span className="text-primary">{formatCurrency(summary.finalAmount)}</span>
@@ -446,11 +457,9 @@ export default function FeeForm() {
           </div>
 
           {/* Save button */}
-          {!isLocked && (
-            <Button onClick={handleSave} loading={saving} leftIcon={<Save className="w-4 h-4" />} fullWidth>
-              {isEdit ? 'Cập nhật phiếu thu' : 'Tạo phiếu thu'}
-            </Button>
-          )}
+          <Button onClick={handleSave} loading={saving} leftIcon={<Save className="w-4 h-4" />} fullWidth>
+            {isEdit ? 'Cập nhật phiếu thu' : 'Tạo phiếu thu'}
+          </Button>
         </div>
       </Card>
 

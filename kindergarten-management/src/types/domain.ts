@@ -47,6 +47,7 @@ export interface ClassRecord {
   room: string | null;
   max_students: number;
   student_count: number;
+  class_type: 'Daycare' | 'Evening';
   description: string | null;
   teachers?: ClassTeacherRecord[];
   created_at: string;
@@ -61,7 +62,7 @@ export interface DeductionRule {
 
 export interface ClassFinanceConfig {
   id: number;
-  class_id: number;
+  class_id?: number | null;
   class_name?: string;
   class_type: 'Daycare' | 'Evening';
   deduction_rules: DeductionRule[];
@@ -95,11 +96,12 @@ export interface CreateClassInput {
   teacher_id: string | null;
   room: string | null;
   max_students: number;
+  class_type: 'Daycare' | 'Evening';
   description: string | null;
 }
 
 export interface CreateFinanceConfigInput {
-  class_id: number;
+  class_id?: number;
   class_type: 'Daycare' | 'Evening';
   deduction_rules: DeductionRule[];
 }
@@ -110,7 +112,7 @@ export interface FinanceConfigListQuery {
   page: number;
   pageSize: number;
   search?: string;
-  sortBy?: 'class_name' | 'class_type' | 'created_at';
+  sortBy?: 'class_type' | 'created_at';
   sortDirection?: SortDirection;
 }
 

@@ -26,7 +26,6 @@ function paginate(page: number, pageSize: number, total: number): PaginationMeta
 }
 
 interface EditFormState {
-  class_id?: number;
   class_type: 'Daycare' | 'Evening';
   deduction_rules: { id: string; name: string; amount: string }[];
 }
@@ -52,29 +51,17 @@ export default function FinanceConfigPage() {
   const [saving, setSaving] = useState(false);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
-  const [sortState, setSortState] = useState<SortState>({ key: 'class_name', direction: 'asc' });
+  const [sortState, setSortState] = useState<SortState>({ key: 'class_type', direction: 'asc' });
   const [editTarget, setEditTarget] = useState<ClassFinanceConfig | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [editForm, setEditForm] = useState<EditFormState>({
     class_type: 'Daycare',
     deduction_rules: [],
   });
-  const [classOptions, setClassOptions] = useState<SelectOption[]>([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ClassFinanceConfig | null>(null);
   const pageSize = 15;
 
-  useEffect(() => {
-    async function loadClasses() {
-      const result = await listClasses({ page: 1, pageSize: 200 });
-      if (!result.error) {
-        setClassOptions(
-          result.data.items.map(c => ({ value: String(c.id), label: c.name }))
-        );
-      }
-    }
-    void loadClasses();
-  }, []);
 
   const loadConfigs = useCallback(async () => {
     if (!hasAccess) return;
@@ -83,7 +70,7 @@ export default function FinanceConfigPage() {
       page,
       pageSize,
       search,
-      sortBy: sortState.key as 'class_name' | 'class_type' | 'created_at',
+      sortBy: sortState.key as any,
       sortDirection: sortState.direction,
     });
     setLoading(false);
@@ -106,10 +93,6 @@ export default function FinanceConfigPage() {
   const daycareCount = useMemo(() => items.filter((i) => i.class_type === 'Daycare').length, [items]);
   const eveningCount = useMemo(() => items.filter((i) => i.class_type === 'Evening').length, [items]);
 
-  const availableClassOptions = useMemo(() => {
-    const usedClassIds = new Set(items.map(i => i.class_id));
-    return classOptions.filter(o => !usedClassIds.has(Number(o.value)));
-  }, [classOptions, items]);
 
   const openEdit = (config: ClassFinanceConfig) => {
     setIsCreating(false);
@@ -127,7 +110,7 @@ export default function FinanceConfigPage() {
   const openCreate = () => {
     setIsCreating(true);
     setEditTarget(null);
-    setEditForm({ class_id: undefined, class_type: 'Daycare', deduction_rules: [] });
+    setEditForm({ class_type: 'Daycare', deduction_rules: [] });
   };
 
   const addRule = () => {
@@ -160,13 +143,7 @@ export default function FinanceConfigPage() {
       .map(r => ({ id: r.id, name: r.name.trim(), amount: Number(r.amount) }));
 
     if (isCreating) {
-      if (editForm.class_id === undefined) {
-        toast.error('Vui lòng chọn lớp học');
-        setSaving(false);
-        return;
-      }
       const payload: CreateFinanceConfigInput = {
-        class_id: editForm.class_id,
         class_type: editForm.class_type,
         deduction_rules: rules,
       };
@@ -182,16 +159,15 @@ export default function FinanceConfigPage() {
     } else {
       if (!editTarget) return;
       const payload: UpdateFinanceConfigInput = {
-        class_type: editForm.class_type,
         deduction_rules: rules,
       };
-      const result = await updateFinanceConfig(editTarget.class_id, payload);
+      const result = await updateFinanceConfig(editTarget.class_type, payload);
       setSaving(false);
       if (result.error) {
         toast.error('Cập nhật thất bại', result.error.message);
         return;
       }
-      toast.success(`Đã cập nhật cấu hình cho lớp ${editTarget.class_name || editTarget.class_id}`);
+      toast.success(`Đã cập nhật cấu hình cho loại lớp ${editTarget.class_type}`);
       setEditTarget(null);
       void loadConfigs();
     }
@@ -200,7 +176,7 @@ export default function FinanceConfigPage() {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setSaving(true);
-    const result = await deleteFinanceConfig(deleteTarget.class_id);
+    const result = await deleteFinanceConfig(deleteTarget.class_type);
     setSaving(false);
     setShowDeleteConfirm(false);
     setDeleteTarget(null);
@@ -208,32 +184,22 @@ export default function FinanceConfigPage() {
       toast.error('Xóa cấu hình thất bại', result.error.message);
       return;
     }
-    toast.success(`Đã xóa cấu hình của lớp ${deleteTarget.class_name || deleteTarget.class_id}`);
+    toast.success(`Đã xóa cấu hình của loại lớp ${deleteTarget.class_type}`);
     void loadConfigs();
   };
 
   const columns: TableColumn<ClassFinanceConfig>[] = [
     {
-      key: 'class_name',
-      label: 'Lớp học',
+      key: 'class_type',
+      label: 'Loại lớp',
       sortable: true,
       render: (_value, row) => (
         <div className="flex items-center gap-3">
           <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
             <Calculator className="w-4 h-4" />
           </div>
-          <span className="font-medium text-foreground">{row.class_name || `Lớp #${row.class_id}`}</span>
+          <span className="font-medium text-foreground">{row.class_type === 'Daycare' ? 'Bán trú' : 'Tối'}</span>
         </div>
-      ),
-    },
-    {
-      key: 'class_type',
-      label: 'Loại lớp',
-      sortable: true,
-      render: (_value, row) => (
-        <Badge variant={row.class_type === 'Daycare' ? 'primary' : 'secondary'} size="sm">
-          {row.class_type === 'Daycare' ? 'Bán trú' : 'Tối'}
-        </Badge>
       ),
     },
     {
@@ -306,7 +272,7 @@ export default function FinanceConfigPage() {
         <CardHeader title="Cấu hình Tài chính" subtitle="Quản lý các khoản khấu trừ theo lớp" />
         <div className="flex items-center gap-2">
           <Input
-            placeholder="Tìm lớp..."
+            placeholder="Tìm loại lớp..."
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             leftAddon={<Search className="w-4 h-4" />}
@@ -326,7 +292,7 @@ export default function FinanceConfigPage() {
       <Table
         columns={columns}
         data={items}
-        rowKey="class_id"
+        rowKey="class_type"
         loading={loading}
         sortState={sortState}
         onSort={(key) => setSortState({ key, direction: 'asc' })}
@@ -340,10 +306,7 @@ export default function FinanceConfigPage() {
                 <div className="p-1 rounded-lg bg-primary/10 text-primary">
                   <Calculator className="w-4 h-4" />
                 </div>
-                <span className="font-medium text-foreground">{r.class_name || `Lớp #${r.class_id}`}</span>
-                <Badge variant={r.class_type === 'Daycare' ? 'primary' : 'secondary'} size="sm">
-                  {r.class_type === 'Daycare' ? 'Bán trú' : 'Tối'}
-                </Badge>
+                <span className="font-medium text-foreground">{r.class_type === 'Daycare' ? 'Bán trú' : 'Tối'}</span>
               </div>
               <div className="flex flex-wrap gap-1">
                 {(r.deduction_rules || []).length === 0 ? (
@@ -366,7 +329,7 @@ export default function FinanceConfigPage() {
         onClose={() => { setShowDeleteConfirm(false); setDeleteTarget(null); }}
         onConfirm={handleDelete}
         title="Xóa cấu hình tài chính"
-        message={`Bạn có chắc chắn muốn xóa cấu hình của lớp "${deleteTarget?.class_name || deleteTarget?.class_id}"?`}
+        message={`Bạn có chắc chắn muốn xóa cấu hình của loại lớp "${deleteTarget?.class_type === 'Daycare' ? 'Bán trú' : 'Tối'}"?`}
         confirmLabel="Xóa"
         variant="danger"
         loading={saving}
@@ -375,20 +338,9 @@ export default function FinanceConfigPage() {
       <Modal
         open={isCreating || !!editTarget}
         onClose={() => { setEditTarget(null); setIsCreating(false); }}
-        title={isCreating ? 'Thêm cấu hình mới' : `Chỉnh sửa: ${editTarget?.class_name || editTarget?.class_id || ''}`}
+        title={isCreating ? 'Thêm cấu hình mới' : `Chỉnh sửa: ${editTarget?.class_type === 'Daycare' ? 'Bán trú' : 'Tối'}`}
       >
         <div className="space-y-4">
-          {isCreating && (
-            <Select
-              label="Lớp học"
-              value={editForm.class_id !== undefined ? String(editForm.class_id) : ''}
-              onChange={(v) => setEditForm(prev => ({ ...prev, class_id: Number(v) }))}
-              options={availableClassOptions}
-              placeholder="Chọn lớp học..."
-              fullWidth
-              required
-            />
-          )}
 
           <Select
             label="Loại lớp"

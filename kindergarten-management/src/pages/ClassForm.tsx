@@ -19,6 +19,7 @@ interface FormState {
   teacher_id: string;
   max_students: string;
   room: string;
+  class_type: 'Daycare' | 'Evening';
   description: string;
 }
 
@@ -51,6 +52,7 @@ export default function ClassForm() {
     teacher_id: '',
     max_students: '30',
     room: '',
+    class_type: 'Daycare',
     description: '',
   });
   const [studentCount, setStudentCount] = useState(0);
@@ -97,6 +99,7 @@ export default function ClassForm() {
         teacher_id: result.item.teacher_id || '',
         max_students: String(result.item.max_students),
         room: result.item.room || '',
+        class_type: result.item.class_type,
         description: result.item.description || '',
       });
       setClassTeachers(result.item.teachers || []);
@@ -125,6 +128,7 @@ export default function ClassForm() {
       teacher_id: form.teacher_id || null,
       max_students: Number(form.max_students),
       room: form.room.trim(),
+      class_type: form.class_type,
       description: form.description.trim() || null,
     };
 
@@ -135,14 +139,6 @@ export default function ClassForm() {
       toast.error(isEditMode ? 'Cập nhật lớp học thất bại' : 'Tạo lớp học thất bại', result.error.message);
       if (result.error.field === 'max_students') setErrors((prev) => ({ ...prev, max_students: result.error?.message }));
       return;
-    }
-
-    // Tự động tạo finance config mặc định khi tạo class mới
-    if (!isEditMode && result.item) {
-      const { error: configError } = await ensureFinanceConfigExists(result.item.id);
-      if (configError) {
-        console.warn('[ClassForm] Không thể tạo finance config mặc định:', configError.message);
-      }
     }
 
     toast.success(isEditMode ? 'Cập nhật lớp học thành công' : 'Tạo lớp học thành công');
@@ -235,6 +231,19 @@ export default function ClassForm() {
               disabled={!canCreate && isEditMode}
             />
           </div>
+
+          <Select
+            label="Loại lớp"
+            value={form.class_type}
+            onChange={(v) => setField('class_type', v as any)}
+            options={[
+              { value: 'Daycare', label: 'Bán trú (Daycare)' },
+              { value: 'Evening', label: 'Lớp tối (Evening)' },
+            ]}
+            required
+            fullWidth
+            disabled={!canCreate && isEditMode}
+          />
 
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-[#1E293B]">Mô tả</label>

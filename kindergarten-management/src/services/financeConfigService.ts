@@ -42,19 +42,18 @@ function mapFinanceConfigRow(row: FinanceConfigRow): ClassFinanceConfig {
 export async function listFinanceConfigs(
   query: FinanceConfigListQuery,
 ): Promise<{ data: ListEnvelope<ClassFinanceConfig>; error: AppError | null }> {
-  const { page, pageSize, search, sortBy = 'class_name', sortDirection = 'asc' } = query;
+  const { page, pageSize, search, sortBy = 'class_type', sortDirection = 'asc' } = query;
 
   let builder = supabase
     .from('class_finance_configs')
-    .select('*, classes!inner(name)', { count: 'exact' })
+    .select('*', { count: 'exact' })
     .eq('del_yn', false);
 
   if (search) {
-    builder = builder.ilike('classes.name', `%${search}%`);
+    builder = builder.ilike('class_type', `%${search}%`);
   }
 
-  const sortColumn = sortBy === 'class_name' ? 'classes(name)' : sortBy;
-  builder = builder.order(sortColumn, { ascending: sortDirection === 'asc' });
+  builder = builder.order(sortBy, { ascending: sortDirection === 'asc' });
 
   const from = (page - 1) * pageSize;
   builder = builder.range(from, from + pageSize - 1);
@@ -73,13 +72,13 @@ export async function listFinanceConfigs(
   };
 }
 
-export async function getFinanceConfigByClassId(
-  classId: number,
+export async function getFinanceConfigByType(
+  classType: 'Daycare' | 'Evening',
 ): Promise<{ item: ClassFinanceConfig | null; error: AppError | null }> {
   const { data, error } = await supabase
     .from('class_finance_configs')
-    .select('*, classes!inner(name)')
-    .eq('class_id', classId)
+    .select('*')
+    .eq('class_type', classType)
     .eq('del_yn', false)
     .maybeSingle();
 
@@ -94,6 +93,17 @@ export async function getFinanceConfigByClassId(
   return { item: mapFinanceConfigRow(data as unknown as FinanceConfigRow), error: null };
 }
 
+/** @deprecated Use getFinanceConfigByType */
+export async function getFinanceConfigByClassId(
+  classId: number,
+): Promise<{ item: ClassFinanceConfig | null; error: AppError | null }> {
+  const { data: classData } = await supabase.from('classes').select('class_type').eq('id', classId).single();
+  if (classData?.class_type) {
+    return getFinanceConfigByType(classData.class_type as any);
+  }
+  return { item: null, error: null };
+}
+
 export async function createFinanceConfig(
   input: CreateFinanceConfigInput,
 ): Promise<{ item: ClassFinanceConfig | null; error: AppError | null }> {
@@ -103,49 +113,59 @@ export async function createFinanceConfig(
   const { data, error } = await supabase
     .from('class_finance_configs')
     .upsert({
-      class_id: input.class_id,
       class_type: input.class_type,
       deduction_rules: input.deduction_rules || [],
       del_yn: false,
-    }, { onConflict: 'class_id', ignoreDuplicates: false })
-    .select('*, classes!inner(name)')
+    }, { onConflict: 'class_type', ignoreDuplicates: false })
+    .select('*')
     .single();
 
   if (error) {
     return { item: null, error: toAppError(error, 'Không tạo được cấu hình tài chính') };
   }
 
+  // Trigger background fee sync for the entire class
+  import('./feesService').then(({ bulkSyncFeesByFilter }) => {
+    bulkSyncFeesByFilter({ class_id: input.class_id })
+      .catch(e => console.error('[AutoSync] Failed to sync fees after config creation', e));
+  }).catch(e => console.error('[AutoSync] Failed to load feesService', e));
+
   return { item: mapFinanceConfigRow(data as unknown as FinanceConfigRow), error: null };
 }
 
 export async function updateFinanceConfig(
-  classId: number,
+  classType: string,
   input: UpdateFinanceConfigInput,
 ): Promise<{ item: ClassFinanceConfig | null; error: AppError | null }> {
   const guard = await ensureFinancialAccess(true);
   if (guard.error) return { item: null, error: guard.error };
 
   const updatePayload: any = {};
-  if (input.class_type !== undefined) updatePayload.class_type = input.class_type;
   if (input.deduction_rules !== undefined) updatePayload.deduction_rules = input.deduction_rules;
 
   const { data, error } = await supabase
     .from('class_finance_configs')
     .update(updatePayload)
-    .eq('class_id', classId)
+    .eq('class_type', classType)
     .eq('del_yn', false)
-    .select('*, classes!inner(name)')
+    .select('*')
     .single();
 
   if (error) {
     return { item: null, error: toAppError(error, 'Không cập nhật được cấu hình tài chính') };
   }
 
+  // Trigger background fee sync for the entire class
+  import('./feesService').then(({ bulkSyncFeesByFilter }) => {
+    bulkSyncFeesByFilter({ class_id: classId })
+      .catch(e => console.error('[AutoSync] Failed to sync fees after config update', e));
+  }).catch(e => console.error('[AutoSync] Failed to load feesService', e));
+
   return { item: mapFinanceConfigRow(data as unknown as FinanceConfigRow), error: null };
 }
 
 export async function deleteFinanceConfig(
-  classId: number,
+  classType: string,
 ): Promise<{ error: AppError | null }> {
   const guard = await ensureFinancialAccess(true);
   if (guard.error) return { error: guard.error };
@@ -153,7 +173,7 @@ export async function deleteFinanceConfig(
   const { error } = await supabase
     .from('class_finance_configs')
     .update({ del_yn: true })
-    .eq('class_id', classId)
+    .eq('class_type', classType)
     .eq('del_yn', false);
 
   if (error) {
@@ -164,14 +184,14 @@ export async function deleteFinanceConfig(
 }
 
 export async function ensureFinanceConfigExists(
-  classId: number,
+  classType: 'Daycare' | 'Evening',
 ): Promise<{ created: boolean; error: AppError | null }> {
-  const { item } = await getFinanceConfigByClassId(classId);
+  const { item } = await getFinanceConfigByType(classType);
   if (item) return { created: false, error: null };
 
   const defaultConfig: CreateFinanceConfigInput = {
-    class_id: classId,
-    class_type: 'Daycare',
+    class_id: 0, // No longer used but kept for type compatibility if needed
+    class_type: classType,
     deduction_rules: [],
   };
 

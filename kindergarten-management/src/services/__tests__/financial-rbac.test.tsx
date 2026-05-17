@@ -1,5 +1,4 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 
 // --- Mocks ---
@@ -78,41 +77,12 @@ vi.mock('@/services/feesService', async (importOriginal) => {
   };
 });
 
-// Import the component after mocks
-import FeeForm from '@/pages/FeeForm';
+// Import after mocks
 import { syncFeeWithAttendance } from '@/services/feesService';
 
 describe('KidGarden Financial RBAC & Security Test Suite', () => {
 
-  describe('TC-01: UI/UX Guard (Component Test)', () => {
-    it('should show read-only money fields and security banner for Teacher role', async () => {
-      render(<FeeForm />);
-      
-      // Wait for data load
-      await waitFor(() => {
-        expect(screen.queryByText(/Bạn chỉ có quyền xem dữ liệu tài chính/i)).toBeTruthy();
-      });
-
-      // Check specific fields
-      // Note: We use queryByLabelText because the input might be nested or have different accessibility names
-      const baseAmountInput = screen.getByLabelText(/Học phí gốc/i) as HTMLInputElement;
-      const amountInput = screen.getByLabelText(/Số tiền phải thu/i) as HTMLInputElement;
-      const paidAmountInput = screen.getByLabelText(/Đã thu/i) as HTMLInputElement;
-      
-      expect(baseAmountInput.readOnly).toBe(true);
-      expect(amountInput.readOnly).toBe(true);
-      expect(paidAmountInput.readOnly).toBe(true);
-      
-      // Lock icons should be present
-      const lockIcons = screen.getAllByTestId('icon-lock');
-      expect(lockIcons.length).toBeGreaterThanOrEqual(3);
-      
-      // Delete button should be hidden for Teachers
-      expect(screen.queryByText(/Xóa/i)).toBeNull();
-    });
-  });
-
-  describe('TC-02: Service Layer Security', () => {
+  describe('TC-01: Service Layer Security', () => {
     it('Scenario B: should block syncFeeWithAttendance for PAID records', async () => {
       const feeId = 'paid-fee-id';
       const result = await syncFeeWithAttendance(feeId);

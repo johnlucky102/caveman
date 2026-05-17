@@ -60,7 +60,11 @@ describe('Attendance UI Logic Tests', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText('Điểm danh')).toBeTruthy();
-    expect(screen.getByText('Điểm danh nhanh')).toBeTruthy();
+    // Wait for component to load
+    await waitFor(() => {
+      expect(screen.getByText('Điểm danh')).toBeTruthy();
+    });
+    // Check for view toggle buttons
+    expect(screen.getByText('Lịch sử')).toBeTruthy();
   });
 });

@@ -296,10 +296,10 @@ async function runInChunks<T>(
 }
 
 export async function bulkSyncFeesByFilter(params: {
-  classId?: number;
+  class_id?: number;
   month?: number;
-  schoolYear?: string;
-  ids?: string[];
+  school_year?: string;
+  fee_ids?: string[];
 }): Promise<{ synced: number; failed: number; error: AppError | null }> {
   const accessError = await ensureFinancialAccess(true);
   if (accessError.error) return { synced: 0, failed: 0, error: accessError.error };
@@ -311,12 +311,12 @@ export async function bulkSyncFeesByFilter(params: {
     .select(feeSelect)
     .eq('del_yn', false);
 
-  if (params.ids && params.ids.length > 0) {
-    feeQuery = feeQuery.in('id', params.ids);
+  if (params.fee_ids && params.fee_ids.length > 0) {
+    feeQuery = feeQuery.in('id', params.fee_ids);
   } else {
-    if (params.classId !== undefined) feeQuery = feeQuery.eq('class_id', params.classId);
+    if (params.class_id !== undefined) feeQuery = feeQuery.eq('class_id', params.class_id);
     if (params.month !== undefined) feeQuery = feeQuery.eq('month', params.month);
-    if (params.schoolYear) feeQuery = feeQuery.eq('school_year', params.schoolYear);
+    if (params.school_year) feeQuery = feeQuery.eq('school_year', params.school_year);
   }
 
   const { data: fees, error: feesError } = await feeQuery;
@@ -346,8 +346,12 @@ export async function bulkSyncFeesByFilter(params: {
     .filter(f => f.month && f.school_year)
     .map(f => {
       const calYear = calendarYearFromSchoolMonth(f.school_year!, f.month!);
-      const start = `${calYear}-${String(f.month).padStart(2, '0')}-01`;
-      const endObj = new Date(calYear, f.month!, 0);
+      // Calculate previous month for deduction
+      const pm = f.month! === 1 ? 12 : f.month! - 1;
+      const py = f.month! === 1 ? calYear - 1 : calYear;
+
+      const start = `${py}-${String(pm).padStart(2, '0')}-01`;
+      const endObj = new Date(py, pm, 0);
       const end = `${endObj.getFullYear()}-${String(endObj.getMonth() + 1).padStart(2, '0')}-${String(endObj.getDate()).padStart(2, '0')}`;
       return { start, end };
     });
@@ -387,7 +391,9 @@ export async function bulkSyncFeesByFilter(params: {
     let absentDays = 0;
     if (fee.month && fee.school_year) {
       const calYear = calendarYearFromSchoolMonth(fee.school_year, fee.month);
-      const ym = `${calYear}-${String(fee.month).padStart(2, '0')}`;
+      const pm = fee.month === 1 ? 12 : fee.month - 1;
+      const py = fee.month === 1 ? calYear - 1 : calYear;
+      const ym = `${py}-${String(pm).padStart(2, '0')}`;
       absentDays = attMap.get(`${fee.student_id}:${fee.class_id}:${ym}`) ?? 0;
     }
 
@@ -396,8 +402,8 @@ export async function bulkSyncFeesByFilter(params: {
     const finalAmount = Math.max(0, baseAmount - totalDeduction);
     const ruleNames = rules.map(r => `${r.name} ${r.amount.toLocaleString('vi-VN')}đ`).join(' + ');
     const note = absentDays > 0
-      ? `Trừ ${absentDays} ngày vắng x (${ruleNames}) = ${totalDeduction.toLocaleString('vi-VN')}đ`
-      : 'Đã đồng bộ chuyên cần';
+      ? `Khấu trừ ${absentDays} ngày vắng tháng trước x (${ruleNames}) = ${totalDeduction.toLocaleString('vi-VN')}đ`
+      : 'Đã đồng bộ chuyên cần (không có ngày vắng tháng trước)';
 
     const { error: updateErr } = await supabase
       .from('fee_records')
@@ -476,16 +482,27 @@ export async function syncFeeWithAttendance(feeId: string): Promise<{ item: FeeR
   }
   const fee = feeResult.data;
 
-  // 2. Load class finance config
+  // 2. Load class info to get class_type
+  const { data: classData, error: classError } = await supabase
+    .from('classes')
+    .select('class_type')
+    .eq('id', fee.class_id)
+    .single();
+
+  if (classError || !classData) {
+    return { item: null, error: toAppError(classError || { message: 'Class not found' }, 'Không tìm thấy thông tin lớp học.') };
+  }
+
+  // 3. Load finance config for that class_type
   const configResult = await supabase
     .from('class_finance_configs')
     .select('class_type, deduction_rules')
-    .eq('class_id', fee.class_id)
+    .eq('class_type', classData.class_type)
     .eq('del_yn', false)
     .maybeSingle();
 
   if (configResult.error || !configResult.data) {
-    return { item: null, error: toAppError(configResult.error || { message: 'Config not found', code: 'NOT_FOUND' }, 'Không tìm thấy cấu hình tài chính cho lớp này.') };
+    return { item: null, error: toAppError(configResult.error || { message: 'Config not found', code: 'NOT_FOUND' }, `Chưa có cấu hình tài chính cho loại lớp: ${classData.class_type}`) };
   }
   const classConfig = configResult.data;
 
@@ -514,8 +531,11 @@ export async function syncFeeWithAttendance(feeId: string): Promise<{ item: FeeR
     return { item: null, error: { code: 'VALIDATION', message: 'Học phí không có tháng để đồng bộ chuyên cần.' } };
   }
   const calendarYear = calendarYearFromSchoolMonth(school_year, month);
-  const startDate = `${calendarYear}-${String(month).padStart(2, '0')}-01`;
-  const endDateObj = new Date(calendarYear, month, 0);
+  const pm = month === 1 ? 12 : month - 1;
+  const py = month === 1 ? calendarYear - 1 : calendarYear;
+
+  const startDate = `${py}-${String(pm).padStart(2, '0')}-01`;
+  const endDateObj = new Date(py, pm, 0);
   const endDate = `${endDateObj.getFullYear()}-${String(endDateObj.getMonth() + 1).padStart(2, '0')}-${String(endDateObj.getDate()).padStart(2, '0')}`;
 
   const attendanceResult = await supabase
@@ -540,7 +560,7 @@ export async function syncFeeWithAttendance(feeId: string): Promise<{ item: FeeR
   // Build deduction note
   const ruleNames = rules.map(r => `${r.name} ${r.amount.toLocaleString('vi-VN')}đ`).join(' + ');
   const note = absentDays > 0
-    ? `Trừ ${absentDays} ngày vắng x (${ruleNames}) = ${totalDeduction.toLocaleString('vi-VN')}đ`
+    ? `Khấu trừ ${absentDays} ngày vắng tháng trước x (${ruleNames}) = ${totalDeduction.toLocaleString('vi-VN')}đ`
     : '';
 
   // 5. Update

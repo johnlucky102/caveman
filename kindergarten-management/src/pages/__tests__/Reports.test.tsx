@@ -1,9 +1,8 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import Reports from '../Reports';
 import { MemoryRouter } from 'react-router-dom';
 import * as dashboardService from '@/services/dashboardService';
-import { supabase } from '@/lib/supabase';
 
 // Mocking components to avoid complex rendering
 vi.mock('@/components/common/Card', () => ({
@@ -24,34 +23,13 @@ vi.mock('@/components/common/Card', () => ({
   ),
 }));
 
-vi.mock('@/components/common/Button', () => ({
-  default: ({ children, onClick, disabled }: any) => (
-    <button onClick={onClick} disabled={disabled}>{children}</button>
-  ),
-}));
-
-vi.mock('@/components/common/Badge', () => ({
-  default: ({ children }: any) => <span data-testid="badge">{children}</span>,
-}));
-
-vi.mock('@/components/common/Table', () => ({
-  default: ({ data, columns }: any) => (
-    <table data-testid="data-table">
-      <thead>
-        <tr>{columns.map((c: any) => <th key={c.key}>{c.label}</th>)}</tr>
-      </thead>
-      <tbody>
-        {data.map((row: any, i: number) => (
-          <tr key={i}>
-            {columns.map((c: any) => (
-              <td key={c.key}>
-                {c.render ? c.render(row[c.key], row) : row[c.key]}
-              </td>
-            ))}
-          </tr>
-        ))}
-      </tbody>
-    </table>
+vi.mock('@/components/common/Select', () => ({
+  default: ({ value, onChange, options }: any) => (
+    <select value={value} onChange={(e) => onChange?.(e.target.value)} data-testid="month-select">
+      {options.map((opt: any) => (
+        <option key={opt.value} value={opt.value}>{opt.label}</option>
+      ))}
+    </select>
   ),
 }));
 
@@ -62,35 +40,16 @@ vi.mock('@/components/common/Toast', () => ({
 // Mocking Auth Store
 const mockRole = vi.fn().mockReturnValue('Admin');
 vi.mock('@/stores/authStore', () => ({
-  useAuthStore: () => ({ role: mockRole() }),
-}));
-
-// Mocking Supabase
-const mockSupabaseResponse = {
-  data: [],
-  error: null,
-  select: vi.fn().mockReturnThis(),
-  eq: vi.fn().mockReturnThis(),
-  order: vi.fn().mockReturnThis(),
-  gte: vi.fn().mockReturnThis(),
-  lte: vi.fn().mockReturnThis(),
-  then: vi.fn().mockImplementation(function(this: any, cb) {
-    return Promise.resolve(cb({ data: this._data || [], error: null }));
-  }),
-};
-
-vi.mock('@/lib/supabase', () => ({
-  supabase: {
-    from: vi.fn().mockImplementation(() => {
-      const obj = { ...mockSupabaseResponse };
-      return obj;
-    }),
+  useAuthStore: (selector?: any) => {
+    const state = { role: mockRole() };
+    return selector ? selector(state) : state;
   },
 }));
 
 // Mocking dashboardService
 vi.mock('@/services/dashboardService', () => ({
   getFinancialSummary: vi.fn().mockResolvedValue({ data: null, error: null }),
+  getFinancialOverview: vi.fn().mockResolvedValue({ data: null, error: null }),
   getDashboardStats: vi.fn().mockResolvedValue({ stats: null, error: null }),
 }));
 
@@ -106,94 +65,69 @@ describe('Reports Page Suite', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockRole.mockReturnValue('Admin');
-    
-    // Default mock implementation
-    vi.mocked(dashboardService.getDashboardStats).mockResolvedValue({
-      stats: {
-        totalStudents: 0,
-        totalDebt: 0,
-        attendanceToday: { present: 0, absent: 0, total: 0 },
-        attendanceByClass: [],
-        studentsByGrade: [],
-        attentionCount: 0,
-      },
-      error: null
-    });
-  });
 
-  it('should render overview stats for Admin', async () => {
-    vi.mocked(dashboardService.getDashboardStats).mockResolvedValue({
-      stats: {
-        totalStudents: 120,
-        totalDebt: 15000000,
-        attendanceToday: { present: 100, absent: 10, total: 110 },
-        attendanceByClass: [],
-        studentsByGrade: [],
-        attentionCount: 5,
+    // Default mock implementation for financial summary
+    vi.mocked(dashboardService.getFinancialSummary).mockResolvedValue({
+      data: {
+        totalRevenue: 50000000,
+        totalExpected: 75000000,
+        paidCount: 25,
+        pendingCount: 15,
+        overdueCount: 5,
+        inTermDebt: 15000000,
+        overdueDebt: 10000000,
       },
       error: null,
     });
 
-    renderPage();
-
-    // Use findByText which has built-in waitFor
-    const statValue = await screen.findByText('120', {}, { timeout: 3000 });
-    expect(statValue).toBeDefined();
-    expect(await screen.findByText(/15.000.000/)).toBeDefined();
+    vi.mocked(dashboardService.getFinancialOverview).mockResolvedValue({
+      data: {
+        teacherCount: 10,
+        activeClassCount: 8,
+        totalStudentCount: 120,
+      },
+      error: null,
+    });
   });
 
-  it('should hide financial tab for Teacher', async () => {
+  it('should render header and month selector', async () => {
+    renderPage();
+
+    expect(await screen.findByText('Trung tâm Báo cáo')).toBeDefined();
+    expect(screen.getByTestId('month-select')).toBeDefined();
+  });
+
+  it('should show access denied for Teacher role', async () => {
     mockRole.mockReturnValue('Teacher');
     renderPage();
 
-    expect(screen.queryByText(/^Tài chính$/i)).toBeNull();
+    expect(await screen.findByText('Truy cập bị hạn chế')).toBeDefined();
+    expect(screen.getByText(/Bạn không có quyền xem báo cáo tài chính/i)).toBeDefined();
   });
 
-  it('should switch tabs and load student data', async () => {
-    const mockStudents = [
-      { id: '1', full_name: 'Nguyen Van A', gender: 'Male', classes: { name: 'Mam A' } }
-    ];
-    
-    vi.mocked(supabase.from).mockImplementation((table: string) => {
-      const obj: any = { ...mockSupabaseResponse };
-      if (table === 'students') {
-        obj.order = vi.fn().mockResolvedValue({ data: mockStudents, error: null });
-      }
-      return obj;
-    });
-
+  it('should render financial KPI cards for Admin', async () => {
     renderPage();
 
-    const studentTab = screen.getByText(/^Học sinh$/i);
-    fireEvent.click(studentTab);
-
-    expect(await screen.findByText('Nguyen Van A')).toBeDefined();
-  });
-
-  it('should handle attendance report loading', async () => {
-    const mockAttendance = [
-      { attendance_date: '2023-10-01', status: 'present' },
-    ];
-
-    vi.mocked(supabase.from).mockImplementation((table: string) => {
-      const obj: any = { ...mockSupabaseResponse };
-      if (table === 'attendance') {
-        obj.then = vi.fn().mockImplementation((cb) => Promise.resolve(cb({ data: mockAttendance, error: null })));
-      }
-      return obj;
-    });
-
-    renderPage();
-
-    const attendanceTab = screen.getByText(/^Điểm danh$/i);
-    fireEvent.click(attendanceTab);
-
-    // Be flexible with date format (1/10/2023, 10/1/2023, etc)
+    // Wait for loading to finish and cards to appear
     await waitFor(() => {
-      const table = screen.getByTestId('data-table');
-      expect(table.textContent).toContain('2023');
-      expect(table.textContent).toContain('10');
-      expect(table.textContent).toContain('1');
+      const statCards = screen.getAllByTestId('stat-card');
+      expect(statCards.length).toBeGreaterThanOrEqual(4);
+    });
+
+    // Check for expected labels in StatCards
+    const labels = screen.getAllByTestId('stat-label');
+    const labelTexts = labels.map(l => l.textContent);
+    expect(labelTexts).toContain('Tổng doanh thu dự kiến');
+    expect(labelTexts).toContain('Doanh thu thực tế');
+  });
+
+  it('should show financial data for Accountant role', async () => {
+    mockRole.mockReturnValue('Accountant');
+    renderPage();
+
+    await waitFor(() => {
+      const statCards = screen.getAllByTestId('stat-card');
+      expect(statCards.length).toBeGreaterThanOrEqual(4);
     });
   });
 });

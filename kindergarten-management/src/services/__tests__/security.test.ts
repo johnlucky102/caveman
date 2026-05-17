@@ -19,8 +19,8 @@ const createMockBuilder = (data: any, error: any = null) => {
     order: vi.fn().mockReturnThis(),
     range: vi.fn().mockReturnThis(),
     limit: vi.fn().mockReturnThis(),
-    maybeSingle: vi.fn().mockReturnThis(),
-    single: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockResolvedValue({ data, error }),
+    single: vi.fn().mockResolvedValue({ data, error }),
     upsert: vi.fn().mockReturnThis(),
     // Handle the .then() used by Supabase client
     then: vi.fn().mockImplementation((cb) => Promise.resolve(cb({ data, error }))),
@@ -88,7 +88,8 @@ describe('Security & Permission Controls (Post-Hardening)', () => {
 
     it('Teacher should REJECT bulk fee creation', async () => {
       setupContext('teacher-1', 'Teacher');
-      const result = await createClassFees({ classId: 1, month: 10, schoolYear: '2024-2025' }, 1, 3000000, []);
+      // Pass at least one student so createFeeRecord is called and triggers RBAC
+      const result = await createClassFees({ classId: 1, month: 10, schoolYear: '2024-2025' }, 1, 3000000, [{ studentId: 'std-1' }]);
       expect(result.error?.code).toBe('FORBIDDEN');
     });
 

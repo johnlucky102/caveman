@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Printer, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Printer, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { getSchoolSettings } from '@/services/settingsService';
 import Button from '@/components/common/Button';
@@ -27,30 +27,93 @@ interface FeeReceiptData {
 }
 
 const formatCurrency = (amount: number) =>
-  new Intl.NumberFormat('vi-VN').format(amount) + ' đ';
+  new Intl.NumberFormat('vi-VN').format(amount) + 'đ';
 
-const formatDate = (dateStr: string | null) => {
-  if (!dateStr) return '—';
-  return new Date(dateStr).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
-};
+const printYear = new Date().getFullYear();
 
-const paymentMethodLabel: Record<string, string> = {
-  cash: 'Tiền mặt',
-  bank_transfer: 'Chuyển khoản ngân hàng',
-};
+// ─── Chuyển số thành chữ Việt ─────────────────────────────────────────────
+function numberToVietnamese(n: number): string {
+  if (n === 0) return 'Không đồng';
 
-const printDate = new Date().toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const ones = ['', 'một', 'hai', 'ba', 'bốn', 'năm', 'sáu', 'bảy', 'tám', 'chín'];
 
+  function readTens(t: number, o: number, hasHundred: boolean): string {
+    if (t === 0) {
+      if (o === 0) return '';
+      return hasHundred ? 'lẻ ' + ones[o] : ones[o];
+    }
+    if (t === 1) {
+      if (o === 0) return 'mười';
+      if (o === 5) return 'mười lăm';
+      return 'mười ' + ones[o];
+    }
+    let s = ones[t] + ' mươi';
+    if (o === 1) s += ' mốt';
+    else if (o === 5) s += ' lăm';
+    else if (o > 0) s += ' ' + ones[o];
+    return s;
+  }
+
+  function readHundreds(num: number, isFirstGroup: boolean): string {
+    const h = Math.floor(num / 100);
+    const rest = num % 100;
+    let s = '';
+    
+    if (h > 0) {
+      s = ones[h] + ' trăm ';
+      s += readTens(Math.floor(rest / 10), rest % 10, true);
+    } else {
+      if (!isFirstGroup && num > 0) {
+        s = 'không trăm ';
+        s += readTens(Math.floor(rest / 10), rest % 10, true);
+      } else {
+        s += readTens(Math.floor(rest / 10), rest % 10, false);
+      }
+    }
+    return s.trim();
+  }
+
+  const billions  = Math.floor(n / 1_000_000_000);
+  const millions  = Math.floor((n % 1_000_000_000) / 1_000_000);
+  const thousands = Math.floor((n % 1_000_000) / 1_000);
+  const remainder = n % 1_000;
+
+  let result = '';
+  let hasPrefix = false;
+
+  if (billions > 0) {
+    result += readHundreds(billions, !hasPrefix) + ' tỷ ';
+    hasPrefix = true;
+  }
+  if (millions > 0) {
+    result += readHundreds(millions, !hasPrefix) + ' triệu ';
+    hasPrefix = true;
+  }
+  if (thousands > 0) {
+    result += readHundreds(thousands, !hasPrefix) + ' nghìn ';
+    hasPrefix = true;
+  }
+  if (remainder > 0) {
+    result += readHundreds(remainder, !hasPrefix) + ' ';
+  }
+
+  result = result.replace(/\s+/g, ' ').trim();
+  if (!result) return 'Không đồng';
+  return result.charAt(0).toUpperCase() + result.slice(1) + ' đồng';
+}
+
+// ─── Component ─────────────────────────────────────────────────────────────
 export default function BulkPrintFees() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const ids = searchParams.get('ids')?.split(',').filter(Boolean) || [];
+  const idsParam = searchParams.get('ids') || '';
   const [data, setData] = useState<FeeReceiptData[]>([]);
   const [school, setSchool] = useState<SchoolSettings | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
+      const ids = idsParam.split(',').filter(Boolean);
       if (ids.length === 0) { setLoading(false); return; }
 
       const [settingsRes, recordsRes] = await Promise.all([
@@ -60,8 +123,9 @@ export default function BulkPrintFees() {
           .select(`id, title, month, school_year, amount_vnd, base_amount_vnd,
             attendance_deduction_vnd, deduction_details, deduction_note,
             due_date, paid_date, payment_method, paid_amount_vnd, status,
-            students ( full_name, parent_name, classes ( name ) )`)
+            students ( full_name, parent_info, classes ( name, users ( full_name ) ) )`)
           .in('id', ids)
+          .eq('del_yn', false)
           .order('created_at', { ascending: true }),
       ]);
 
@@ -72,7 +136,7 @@ export default function BulkPrintFees() {
           id: r.id,
           student_name: r.students?.full_name || '—',
           class_name: r.students?.classes?.name || '—',
-          parent_name: r.students?.parent_name || '',
+          parent_name: (r.students?.parent_info as any)?.name || '',
           title: r.title || 'Học phí',
           month: r.month,
           school_year: r.school_year,
@@ -92,7 +156,19 @@ export default function BulkPrintFees() {
       setLoading(false);
     };
     void load();
-  }, [ids]);
+
+    // Clear title during print to hide it from browser header
+    const handleBeforePrint = () => { document.title = ''; };
+    const handleAfterPrint = () => { document.title = 'KidGarden - Quản lý Trường Mầm Non'; };
+    
+    window.addEventListener('beforeprint', handleBeforePrint);
+    window.addEventListener('afterprint', handleAfterPrint);
+    
+    return () => {
+      window.removeEventListener('beforeprint', handleBeforePrint);
+      window.removeEventListener('afterprint', handleAfterPrint);
+    };
+  }, [idsParam]);
 
   if (loading) {
     return (
@@ -117,9 +193,9 @@ export default function BulkPrintFees() {
     );
   }
 
-  const schoolName = school?.school_name || 'Trường Mầm Non';
+  const schoolName    = school?.school_name || 'Trường Mầm Non';
   const schoolAddress = school?.address || '';
-  const schoolPhone = school?.phone || '';
+  const schoolPhone   = school?.phone || '';
 
   return (
     <>
@@ -127,14 +203,55 @@ export default function BulkPrintFees() {
       <style>{`
         @media print {
           .no-print { display: none !important; }
-          body { background: white !important; margin: 0; padding: 0; }
-          .receipt-page { break-after: page; page-break-after: always; }
-          .receipt-page:last-child { break-after: avoid; page-break-after: avoid; }
-          @page { size: A4; margin: 12mm 14mm; }
+          
+          /* Hide everything in the body by default */
+          body * {
+            visibility: hidden;
+          }
+          
+          /* Make only the receipts visible and positioned at the top left */
+          .print-area, .print-area * {
+            visibility: visible;
+          }
+          .print-area {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+          }
+
+          html, body { 
+            background: white !important; 
+            margin: 0 !important; 
+            padding: 0 !important; 
+            font-family: 'Times New Roman', Times, serif; 
+          }
+          .receipt-page {
+            break-inside: avoid;
+            page-break-inside: avoid;
+            break-after: page;
+            page-break-after: always;
+            border: none !important;
+            box-shadow: none !important;
+            padding: 10mm 15mm !important;
+            margin: 0 !important;
+            box-sizing: border-box;
+          }
+          .receipt-page:last-child { 
+            break-after: auto; 
+            page-break-after: auto; 
+          }
+          @page { 
+            size: A5 landscape; 
+            margin: 0 !important; /* Hides browser headers and footers */
+          }
+        }
+        .receipt-page {
+          font-family: 'Times New Roman', Times, serif;
         }
       `}</style>
 
-      <div className="min-h-screen bg-gray-100 print:bg-white">
+      <div className="min-h-screen print:min-h-0 bg-gray-100 print:bg-white print-area">
         {/* Toolbar – hidden on print */}
         <div className="no-print sticky top-0 z-10 bg-white border-b border-gray-200 shadow-sm px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -152,195 +269,74 @@ export default function BulkPrintFees() {
         {/* Receipt pages */}
         <div className="py-8 px-4 print:p-0 space-y-8 print:space-y-0">
           {data.map((item) => {
-            const remaining = item.amount_vnd - item.paid_amount_vnd;
-            const isPaid = item.status === 'paid';
-            const isPartial = item.status === 'partial';
+            const deduction = item.base_amount_vnd - item.amount_vnd;
+            const remaining_debt = Math.max(0, item.amount_vnd - item.paid_amount_vnd);
 
             return (
               <div
                 key={item.id}
-                className="receipt-page max-w-[740px] mx-auto bg-white shadow-xl print:shadow-none border border-gray-200 print:border-0"
+                className="receipt-page max-w-[600px] mx-auto bg-white shadow-md print:shadow-none border border-gray-300 print:border-0 p-8"
               >
                 {/* ── Header ── */}
-                <div className="border-b-4 border-double border-gray-800 px-10 pt-8 pb-6">
-                  <div className="flex items-start justify-between gap-4">
-                    {/* School info */}
-                    <div className="flex items-center gap-4">
-                      <div className="w-14 h-14 rounded-xl bg-primary/10 border-2 border-primary/30 flex items-center justify-center shrink-0">
-                        {school?.logo_url ? (
-                          <img src={school.logo_url} alt="logo" className="w-12 h-12 object-contain rounded-lg" />
-                        ) : (
-                          <span className="text-2xl font-black text-primary">
-                            {schoolName.charAt(0)}
-                          </span>
-                        )}
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Đơn vị thu tiền</p>
-                        <h2 className="text-base font-black text-gray-900 uppercase leading-tight">{schoolName}</h2>
-                        {schoolAddress && <p className="text-[11px] text-gray-500 mt-0.5">{schoolAddress}</p>}
-                        {schoolPhone && <p className="text-[11px] text-gray-500">ĐT: {schoolPhone}</p>}
-                      </div>
-                    </div>
-                    {/* Receipt title */}
-                    <div className="text-right shrink-0">
-                      <h1 className="text-xl font-black text-primary uppercase tracking-tight">Phiếu Thu Học Phí</h1>
-                      <p className="text-[11px] text-gray-400 mt-1">
-                        Số: <span className="font-mono font-bold text-gray-700">#{item.id.slice(-8).toUpperCase()}</span>
-                      </p>
-                      <p className="text-[11px] text-gray-400 mt-0.5">Ngày in: <span className="font-semibold text-gray-700">{printDate}</span></p>
-                    </div>
-                  </div>
+                <div className="text-center mb-1">
+                  <p className="font-bold uppercase text-base leading-snug">{schoolName}</p>
+                  {(schoolAddress || schoolPhone) && (
+                    <p className="text-sm">
+                      {schoolAddress && `ĐC : ${schoolAddress}`}
+                      {schoolAddress && schoolPhone && ' / '}
+                      {schoolPhone}
+                    </p>
+                  )}
                 </div>
 
-                <div className="px-10 py-6 space-y-6">
-                  {/* ── Student & Fee Period Info ── */}
-                  <div className="grid grid-cols-2 gap-6">
-                    {/* Left: Student info */}
-                    <div className="space-y-1.5">
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Thông tin học sinh</p>
-                      <div className="flex gap-2 text-sm">
-                        <span className="text-gray-500 w-24 shrink-0">Họ và tên:</span>
-                        <span className="font-black text-gray-900 uppercase">{item.student_name}</span>
-                      </div>
-                      <div className="flex gap-2 text-sm">
-                        <span className="text-gray-500 w-24 shrink-0">Lớp:</span>
-                        <span className="font-semibold text-gray-800">{item.class_name}</span>
-                      </div>
-                      <div className="flex gap-2 text-sm">
-                        <span className="text-gray-500 w-24 shrink-0">Phụ huynh:</span>
-                        <span className="font-semibold text-gray-800">{item.parent_name || '—'}</span>
-                      </div>
-                    </div>
-                    {/* Right: Period info */}
-                    <div className="space-y-1.5">
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Kỳ thu phí</p>
-                      <div className="flex gap-2 text-sm">
-                        <span className="text-gray-500 w-24 shrink-0">Tháng / Năm:</span>
-                        <span className="font-bold text-gray-900">Tháng {item.month} / {item.school_year}</span>
-                      </div>
-                      <div className="flex gap-2 text-sm">
-                        <span className="text-gray-500 w-24 shrink-0">Hạn nộp:</span>
-                        <span className={`font-semibold ${item.due_date && new Date(item.due_date) < new Date() && !isPaid ? 'text-red-600' : 'text-gray-800'}`}>
-                          {formatDate(item.due_date)}
-                        </span>
-                      </div>
-                      <div className="flex gap-2 text-sm items-center">
-                        <span className="text-gray-500 w-24 shrink-0">Trạng thái:</span>
-                        <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full ${
-                          isPaid ? 'bg-emerald-100 text-emerald-700' :
-                          isPartial ? 'bg-amber-100 text-amber-700' :
-                          'bg-red-100 text-red-700'
-                        }`}>
-                          {isPaid ? <CheckCircle className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-                          {isPaid ? 'Đã thanh toán' : isPartial ? 'Thanh toán một phần' : 'Chưa thanh toán'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+                <div className="border-b border-gray-500 my-3" />
 
-                  {/* ── Fee Detail Table ── */}
-                  <div>
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Chi tiết khoản thu</p>
-                    <table className="w-full border-collapse text-sm">
-                      <thead>
-                        <tr className="bg-gray-800 text-white">
-                          <th className="px-4 py-2.5 text-left font-bold text-xs uppercase tracking-wide">STT</th>
-                          <th className="px-4 py-2.5 text-left font-bold text-xs uppercase tracking-wide">Nội dung</th>
-                          <th className="px-4 py-2.5 text-right font-bold text-xs uppercase tracking-wide w-40">Số tiền (VNĐ)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr className="border-b border-gray-200">
-                          <td className="px-4 py-3 text-gray-500">1</td>
-                          <td className="px-4 py-3 font-semibold text-gray-800">{item.title}</td>
-                          <td className="px-4 py-3 text-right font-bold text-gray-900">{formatCurrency(item.base_amount_vnd)}</td>
-                        </tr>
-                        {item.attendance_deduction_vnd > 0 && (
-                          <tr className="border-b border-gray-200 bg-red-50">
-                            <td className="px-4 py-3 text-gray-500">2</td>
-                            <td className="px-4 py-3">
-                              <span className="font-semibold text-red-700">(-) Khấu trừ vắng mặt</span>
-                              {item.deduction_note && (
-                                <p className="text-[11px] text-red-500 italic mt-0.5">{item.deduction_note}</p>
-                              )}
-                            </td>
-                            <td className="px-4 py-3 text-right font-bold text-red-600">
-                              -{formatCurrency(item.attendance_deduction_vnd)}
-                            </td>
-                          </tr>
-                        )}
-                        {/* Subtotal */}
-                        <tr className="bg-gray-50 border-t-2 border-gray-800">
-                          <td colSpan={2} className="px-4 py-3.5 text-right font-black text-gray-800 uppercase text-xs tracking-wide">
-                            Tổng cộng phải nộp
-                          </td>
-                          <td className="px-4 py-3.5 text-right text-lg font-black text-primary">
-                            {formatCurrency(item.amount_vnd)}
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
+                {/* ── Title ── */}
+                <p className="text-center font-bold uppercase text-sm my-3">
+                  THÔNG BÁO HỌC PHÍ THÁNG {item.month} NĂM {item.school_year}
+                  {' '}(Số phiếu {item.id.slice(-4).toUpperCase()})
+                </p>
 
-                  {/* ── Payment Summary ── */}
-                  <div className="grid grid-cols-2 gap-6">
-                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-2 text-sm">
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Tình trạng thanh toán</p>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Phải nộp:</span>
-                        <span className="font-bold text-gray-900">{formatCurrency(item.amount_vnd)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Đã nộp:</span>
-                        <span className="font-bold text-emerald-600">{formatCurrency(item.paid_amount_vnd)}</span>
-                      </div>
-                      <div className="flex justify-between border-t border-gray-200 pt-2">
-                        <span className="font-bold text-gray-700">Còn lại:</span>
-                        <span className={`font-black text-base ${remaining > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                          {remaining > 0 ? formatCurrency(remaining) : '0 đ'}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-2 text-sm">
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Phương thức thanh toán</p>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Hình thức:</span>
-                        <span className="font-bold text-gray-900">
-                          {item.payment_method ? paymentMethodLabel[item.payment_method] || item.payment_method : '—'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Ngày nộp:</span>
-                        <span className="font-bold text-gray-900">{formatDate(item.paid_date)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Hạn cuối:</span>
-                        <span className="font-bold text-gray-900">{formatDate(item.due_date)}</span>
-                      </div>
-                    </div>
-                  </div>
+                {/* ── Student info ── */}
+                <div className="flex justify-between text-sm mb-2">
+                  <span><strong>Học sinh :</strong>  {item.student_name}</span>
+                  <span><strong>Lớp :</strong> {item.class_name}</span>
+                </div>
 
-                  {/* ── Signature area ── */}
-                  <div className="grid grid-cols-2 gap-10 pt-2 border-t border-dashed border-gray-300 mt-2">
-                    <div className="text-center">
-                      <p className="text-[11px] font-bold text-gray-700 uppercase tracking-wide">Phụ huynh xác nhận</p>
-                      <p className="text-[10px] text-gray-400 italic mt-0.5">(Ký và ghi rõ họ tên)</p>
-                      <div className="h-14" />
-                      <div className="border-b border-gray-300 mx-4" />
-                    </div>
-                    <div className="text-center">
-                      <p className="text-[11px] font-bold text-gray-700 uppercase tracking-wide">Người lập phiếu</p>
-                      <p className="text-[10px] text-gray-400 italic mt-0.5">{schoolName}, ngày {printDate}</p>
-                      <div className="h-14" />
-                      <div className="border-b border-gray-300 mx-4" />
-                    </div>
-                  </div>
+                {/* ── Fee detail ── */}
+                <div className="text-sm space-y-0.5 mb-3">
+                  <p><strong>Học phí tháng này :</strong> {formatCurrency(item.base_amount_vnd)}</p>
+                  {deduction > 0 && (
+                    <p><strong>Khấu trừ tháng trước :</strong> -{formatCurrency(deduction)}</p>
+                  )}
+                  <p><strong>Tổng cộng :</strong> {formatCurrency(item.amount_vnd)}</p>
+                  {item.paid_amount_vnd > 0 && (
+                    <p><strong>Đã thanh toán :</strong> {formatCurrency(item.paid_amount_vnd)}</p>
+                  )}
+                </div>
 
-                  {/* ── Note ── */}
-                  <p className="text-[10px] text-gray-400 italic text-center pb-2">
-                    Phiếu thu này có giá trị xác nhận thanh toán học phí. Vui lòng giữ lại để đối chiếu khi cần.
-                  </p>
+                {/* ── Amount in words ── */}
+                <p className="font-bold italic text-sm mb-3">
+                  Số tiền cần nộp : {new Intl.NumberFormat('vi-VN').format(remaining_debt)} đ ({numberToVietnamese(remaining_debt)}).
+                </p>
+
+                {/* ── Payment instructions ── */}
+                <p className="text-sm mb-1">
+                  Phụ huynh nộp tiền học từ <u>ngày 01 tới ngày 10</u> hàng tháng bằng tiền mặt hoặc chuyển khoản
+                </p>
+                <p className="font-bold italic text-sm mb-3">
+                  Số tk : 118122283 ngân hàng VP Bank chủ tài khoản Phạm Thị Hiền
+                </p>
+
+                {/* ── Footer ── */}
+                <div className="flex justify-end text-sm mt-4">
+                  <div className="text-center">
+                    <p className="italic">
+                      {schoolAddress ? schoolAddress.split(',')[0].trim() : schoolName},
+                      {' '}ngày..........tháng..........năm {printYear}
+                    </p>
+                    <p className="font-bold mt-4">Người thu</p>
+                  </div>
                 </div>
               </div>
             );

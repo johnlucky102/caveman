@@ -282,7 +282,7 @@ export default function Classes() {
             }}
             onRowClick={(row) => navigate(`/classes/${(row as unknown as ClassRecord).id}`)}
             selectedKeys={selectedKeys}
-            onSelectionChange={(keys) => setSelectedKeys(keys.map(String))}
+            onSelectionChange={(keys) => setSelectedKeys(keys as string[])}
             emptyMessage="Không tìm thấy lớp học nào"
           
           renderMobileCard={(row) => {

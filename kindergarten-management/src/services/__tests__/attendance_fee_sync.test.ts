@@ -67,10 +67,10 @@ describe('Attendance to Fee Sync Integration', () => {
       base_amount_vnd: 2000000,
     };
 
-    // Mock finance config
+    // Mock finance config with deduction_rules array (new schema)
     const mockConfig = {
       class_type: 'Daycare',
-      meal_rate: 30000,
+      deduction_rules: [{ id: 'meal', name: 'Tiền cơm', amount: 30000 }],
     };
 
     // Mock attendance (3 days absent)
@@ -81,19 +81,15 @@ describe('Attendance to Fee Sync Integration', () => {
       { status: 'present', attendance_date: '2024-10-20' },
     ];
 
-    // Mock the ensureFeeModificationAccess calls:
-    // 1. getCurrentUser: supabase.from('users').select('role').single()
-    // 2. fee_records check: select('status, class_id').eq('id', feeId).eq('del_yn', false).maybeSingle()
-    mockQuery.single.mockResolvedValueOnce({ data: { role: 'Admin' }, error: null });
-    mockQuery.maybeSingle.mockResolvedValueOnce({ data: { status: 'unpaid', class_id: 1 }, error: null });
-
-    // Load fee: select('*, students(id, full_name)').eq('id', feeId).single()
+    // syncFeeWithAttendance flow:
+    // 1. supabase.auth.getUser() -> already mocked globally
+    // 2. Load fee: select(...).eq('id', feeId).single()
     mockQuery.single.mockResolvedValueOnce({ data: mockFee, error: null });
 
-    // Load class_finance_configs
+    // 3. Load class_finance_configs: select(...).eq().eq().maybeSingle()
     mockQuery.maybeSingle.mockResolvedValueOnce({ data: mockConfig, error: null });
 
-    // Attendance query: select('*').eq().gte().lte().eq()
+    // 4. Attendance query: select('*').eq().gte().lte()
     mockQuery.select.mockImplementation((...args: any[]) => {
       if (args[0] === '*') {
         return { ...mockQuery, then: (resolve: any) => resolve({ data: mockAttendance, error: null }) };
@@ -101,9 +97,9 @@ describe('Attendance to Fee Sync Integration', () => {
       return mockQuery;
     });
 
-    // Update result: select('id,...').single()
+    // 5. Update result: update().eq().select().single()
     mockQuery.single.mockResolvedValueOnce({
-      data: { ...mockFee, amount_vnd: 2000000 - 90000, meal_deduction_vnd: 90000 },
+      data: { ...mockFee, amount_vnd: 2000000 - 90000, attendance_deduction_vnd: 90000 },
       error: null,
     });
 

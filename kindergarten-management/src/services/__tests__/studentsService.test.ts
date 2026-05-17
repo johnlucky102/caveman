@@ -4,6 +4,9 @@ import { supabase } from '@/lib/supabase';
 
 vi.mock('@/lib/supabase', () => ({
   supabase: {
+    auth: {
+      getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'test-admin' } } }),
+    },
     from: vi.fn(() => ({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
@@ -22,14 +25,30 @@ describe('studentsService', () => {
 
   describe('createStudent', () => {
     it('should call insert with correct data', async () => {
-      const mockChain = {
-        select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: { id: 's1', full_name: 'Test Student' }, error: null }),
-      };
-      vi.mocked(supabase.from).mockReturnValue(mockChain as any);
+      // Mock chain for users table (RBAC check) and students table (insert)
+      vi.mocked(supabase.from).mockImplementation((table: string) => {
+        if (table === 'users') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({ data: { role: 'Admin' }, error: null }),
+          } as any;
+        }
+        if (table === 'students') {
+          return {
+            insert: vi.fn().mockReturnThis(),
+            select: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({
+              data: { id: 's1', full_name: 'Test Student', class_id: 1, student_code: 'HS001' },
+              error: null
+            }),
+          } as any;
+        }
+        return {} as any;
+      });
 
-      const result = await createStudent({ 
-        full_name: 'Test Student', 
+      const result = await createStudent({
+        full_name: 'Test Student',
         class_id: 1,
         date_of_birth: '2020-01-01',
         gender: 'Male',

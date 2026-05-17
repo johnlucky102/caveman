@@ -32,6 +32,7 @@ const createMockChain = (data: any, count: number | null = null, error: any = nu
   range: vi.fn().mockReturnThis(),
   insert: vi.fn().mockReturnThis(),
   update: vi.fn().mockReturnThis(),
+  upsert: vi.fn().mockReturnThis(),
   single: vi.fn().mockResolvedValue({ data, error }),
   maybeSingle: vi.fn().mockResolvedValue({ data, error }),
   then: vi.fn().mockImplementation((cb: any) => cb({ data, count, error })),

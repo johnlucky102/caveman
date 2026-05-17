@@ -175,10 +175,29 @@ export async function upsertAttendanceBulk(rows: UpsertAttendanceInput[]): Promi
   const error = result.error;
   if (error) return { error: toAppError(error, 'Lưu điểm danh thất bại.') };
 
-  // Invalidate cache for attendance and dashboard
-  invalidateSwCache(['attendance', 'dashboard']);
-  invalidateCache('dashboard');
-  invalidateCache('attendance');
+  // 3. Trigger background fee sync for the NEXT month (T+1)
+  const affectedClasses = Array.from(new Set(rows.map(r => r.class_id)));
+  const affectedMonths = Array.from(new Set(rows.map(r => r.attendance_date.slice(0, 7))));
+
+  import('./feesService').then(({ bulkSyncFeesByFilter }) => {
+    affectedMonths.forEach(ym => {
+      const [y, m] = ym.split('-').map(Number);
+      let targetM = m + 1;
+      let targetY = y;
+      if (targetM > 12) {
+        targetM = 1;
+        targetY++;
+      }
+
+      affectedClasses.forEach(cId => {
+        bulkSyncFeesByFilter({
+          class_id: cId,
+          month: targetM,
+          school_year: String(targetY)
+        }).catch(e => console.error('[AutoSync] Failed to sync fees for class', cId, e));
+      });
+    });
+  }).catch(e => console.error('[AutoSync] Failed to load feesService', e));
 
   return { error: null };
 }
