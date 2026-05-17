@@ -164,9 +164,12 @@ describe('Reports Audit - Logic & RBAC', () => {
       
       const mockFinancialSummary = {
         totalRevenue: 1000000,
+        totalExpected: 1000000,
         paidCount: 1,
         pendingCount: 1,
-        overdueCount: 0
+        overdueCount: 0,
+        inTermDebt: 0,
+        overdueDebt: 0
       };
 
       const mockFeeRecords = [
