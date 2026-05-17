@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { syncFeeWithAttendance, createClassFees, deleteFeeRecords } from '../feesService';
+import { syncFeeWithAttendance, createClassFees, deleteFeeRecords, bulkSyncFeesByFilter } from '../feesService';
 import { supabase } from '@/lib/supabase';
 import * as serviceGuards from '../serviceGuards';
+import { TEST_FINANCE_CONFIGS, TEST_CLASSES } from '@/test/utils/testData';
 
 // Mock Supabase
 vi.mock('@/lib/supabase', () => ({
@@ -40,88 +41,197 @@ const createMockSupabaseChain = (data: any, error: any = null) => {
   return chain;
 };
 
-describe('syncFeeWithAttendance', () => {
+describe('syncFeeWithAttendance - class_type refactor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('should calculate deductions correctly using deduction_rules', async () => {
+  it('should query classes table to get class_type', async () => {
     const mockFee = {
       id: 'fee-1',
       student_id: 'std-1',
       class_id: 1,
-      amount_vnd: 3000000,
-      base_amount_vnd: 3000000,
-      month: 10,
+      amount_vnd: 2000000,
+      base_amount_vnd: 2000000,
+      month: 9,
       school_year: '2024-2025',
     };
 
-    const mockConfig = {
-      class_type: 'Daycare',
-      deduction_rules: [
-        { name: 'Tiền ăn', amount: 20000 },
-        { name: 'Phí dịch vụ', amount: 5000 },
-      ],
+    const fromMock = vi.mocked(supabase.from);
+    
+    // Call 1: Load fee
+    fromMock.mockReturnValueOnce(createMockSupabaseChain(mockFee) as any);
+    // Call 2: Load class to get class_type
+    const classChain = createMockSupabaseChain({ class_type: 'Evening' }) as any;
+    fromMock.mockReturnValueOnce(classChain);
+    // Call 3: Load finance config by class_type
+    const configChain = createMockSupabaseChain(TEST_FINANCE_CONFIGS.evening) as any;
+    fromMock.mockReturnValueOnce(configChain);
+    // Call 4: Load attendance
+    fromMock.mockReturnValueOnce(createMockSupabaseChain([]) as any);
+    // Call 5: Update
+    fromMock.mockReturnValueOnce(createMockSupabaseChain(mockFee) as any);
+
+    await syncFeeWithAttendance('fee-1');
+
+    expect(classChain.eq).toHaveBeenCalledWith('id', 1);
+    expect(configChain.eq).toHaveBeenCalledWith('class_type', 'Evening');
+  });
+
+  it('should query class_finance_configs by class_type', async () => {
+    const mockFee = {
+      id: 'fee-1',
+      student_id: 'std-1',
+      class_id: 2,
+      amount_vnd: 2000000,
+      base_amount_vnd: 2000000,
+      month: 9,
+      school_year: '2024-2025',
+    };
+
+    const fromMock = vi.mocked(supabase.from);
+    
+    fromMock.mockReturnValueOnce(createMockSupabaseChain(mockFee) as any);
+    fromMock.mockReturnValueOnce(createMockSupabaseChain({ class_type: 'Daycare' }) as any);
+    
+    const configChain = createMockSupabaseChain(TEST_FINANCE_CONFIGS.daycare) as any;
+    fromMock.mockReturnValueOnce(configChain);
+    
+    fromMock.mockReturnValueOnce(createMockSupabaseChain([]) as any);
+    fromMock.mockReturnValueOnce(createMockSupabaseChain(mockFee) as any);
+
+    await syncFeeWithAttendance('fee-1');
+
+    expect(configChain.eq).toHaveBeenCalledWith('class_type', 'Daycare');
+    expect(configChain.eq).toHaveBeenCalledWith('del_yn', false);
+  });
+
+  it('should calculate deductions correctly using Evening config', async () => {
+    const mockFee = {
+      id: 'fee-1',
+      student_id: 'std-1',
+      class_id: 2,
+      amount_vnd: 2000000,
+      base_amount_vnd: 2000000,
+      month: 9,
+      school_year: '2024-2025',
     };
 
     const mockAttendance = [
       { status: 'absent' },
       { status: 'absent' },
-      { status: 'present' },
       { status: 'absent' },
       { status: 'present' },
     ];
 
     const fromMock = vi.mocked(supabase.from);
     
-    // Call 1: Load fee
     fromMock.mockReturnValueOnce(createMockSupabaseChain(mockFee) as any);
-    // Call 2: Load finance config
-    fromMock.mockReturnValueOnce(createMockSupabaseChain(mockConfig) as any);
-    // Call 3: Load attendance
+    fromMock.mockReturnValueOnce(createMockSupabaseChain({ class_type: 'Evening' }) as any);
+    fromMock.mockReturnValueOnce(createMockSupabaseChain(TEST_FINANCE_CONFIGS.evening) as any);
     fromMock.mockReturnValueOnce(createMockSupabaseChain(mockAttendance) as any);
-    // Call 4: Update
-    const updateChain = createMockSupabaseChain({ ...mockFee, amount_vnd: 2925000 });
+    
+    const updateChain = createMockSupabaseChain({ ...mockFee, amount_vnd: 1880000 }) as any;
     fromMock.mockReturnValueOnce(updateChain as any);
 
     const result = await syncFeeWithAttendance('fee-1');
 
     expect(result.error).toBeNull();
-    // 3 absent days * (20000 + 5000) = 75000 deduction
-    // 3000000 - 75000 = 2925000
+    // 3 absent days * 40,000 (Tiền cơm tối) = 120,000 deduction
+    // 2,000,000 - 120,000 = 1,880,000
     expect(updateChain.update).toHaveBeenCalledWith(expect.objectContaining({
-      amount_vnd: 2925000,
-      attendance_deduction_vnd: 75000,
+      amount_vnd: 1880000,
+      attendance_deduction_vnd: 120000,
     }));
   });
 
-  it('should not calculate deduction if rules are empty', async () => {
+  it('should return error when finance config missing for class_type', async () => {
     const mockFee = {
       id: 'fee-1',
       student_id: 'std-1',
       class_id: 1,
-      amount_vnd: 1200000,
-      base_amount_vnd: 1200000,
-      month: 10,
+      amount_vnd: 2000000,
+      base_amount_vnd: 2000000,
+      month: 9,
       school_year: '2024-2025',
-    };
-    const mockConfig = {
-      class_type: 'Evening',
-      deduction_rules: []
     };
 
     const fromMock = vi.mocked(supabase.from);
+    
     fromMock.mockReturnValueOnce(createMockSupabaseChain(mockFee) as any);
-    fromMock.mockReturnValueOnce(createMockSupabaseChain(mockConfig) as any);
-    const updateChain = createMockSupabaseChain({});
+    fromMock.mockReturnValueOnce(createMockSupabaseChain({ class_type: 'Daycare' }) as any);
+    // Config not found
+    fromMock.mockReturnValueOnce(createMockSupabaseChain(null) as any);
+
+    const result = await syncFeeWithAttendance('fee-1');
+
+    expect(result.error).not.toBeNull();
+    expect(result.error?.message).toContain('Config not found');
+  });
+
+  it('should format deduction note correctly with Vietnamese text', async () => {
+    const mockFee = {
+      id: 'fee-1',
+      student_id: 'std-1',
+      class_id: 1,
+      amount_vnd: 2000000,
+      base_amount_vnd: 2000000,
+      month: 9,
+      school_year: '2024-2025',
+    };
+
+    const mockAttendance = [
+      { status: 'absent' },
+      { status: 'present' },
+    ];
+
+    const fromMock = vi.mocked(supabase.from);
+    
+    fromMock.mockReturnValueOnce(createMockSupabaseChain(mockFee) as any);
+    fromMock.mockReturnValueOnce(createMockSupabaseChain({ class_type: 'Daycare' }) as any);
+    fromMock.mockReturnValueOnce(createMockSupabaseChain(TEST_FINANCE_CONFIGS.daycare) as any);
+    fromMock.mockReturnValueOnce(createMockSupabaseChain(mockAttendance) as any);
+    
+    const updateChain = createMockSupabaseChain(mockFee) as any;
     fromMock.mockReturnValueOnce(updateChain as any);
 
     await syncFeeWithAttendance('fee-1');
 
     expect(updateChain.update).toHaveBeenCalledWith(expect.objectContaining({
-      amount_vnd: 1200000,
-      attendance_deduction_vnd: 0
+      deduction_note: expect.stringContaining('Khấu trừ 1 ngày vắng tháng trước'),
     }));
+  });
+});
+
+describe('bulkSyncFeesByFilter', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should fetch fees by class_id and determine class_types', async () => {
+    vi.spyOn(serviceGuards, 'ensureFinancialAccess').mockResolvedValue({ error: null });
+
+    const mockFees = [
+      { id: 'fee-1', student_id: 's1', class_id: 1, amount_vnd: 2000000, base_amount_vnd: 2000000, month: 9, school_year: '2024-2025', status: 'unpaid' },
+      { id: 'fee-2', student_id: 's2', class_id: 2, amount_vnd: 1500000, base_amount_vnd: 1500000, month: 9, school_year: '2024-2025', status: 'unpaid' },
+    ];
+
+    const fromMock = vi.mocked(supabase.from);
+    
+    // Call 1: Fetch fees
+    fromMock.mockReturnValueOnce(createMockSupabaseChain(mockFees) as any);
+    // Call 2: Fetch configs (currently uses class_id, will need class_type refactor)
+    fromMock.mockReturnValueOnce(createMockSupabaseChain([]) as any);
+    // Call 3: Fetch attendance
+    fromMock.mockReturnValueOnce(createMockSupabaseChain([]) as any);
+    // Call 4: Updates
+    fromMock.mockReturnValueOnce(createMockSupabaseChain({}) as any);
+    fromMock.mockReturnValueOnce(createMockSupabaseChain({}) as any);
+
+    const result = await bulkSyncFeesByFilter({ class_id: 1 });
+
+    expect(result.error).toBeNull();
+    expect(fromMock).toHaveBeenCalledWith('fee_records');
   });
 });
 
@@ -131,7 +241,6 @@ describe('createClassFees', () => {
   });
 
   it('should create fees for multiple students', async () => {
-    // Mock guards to bypass permission check
     vi.spyOn(serviceGuards, 'ensureFinancialAccess').mockResolvedValue({ error: null });
 
     const fromMock = vi.mocked(supabase.from);

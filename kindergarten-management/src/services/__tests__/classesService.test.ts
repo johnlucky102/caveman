@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { listClasses, getClassById, updateClass, deleteClass } from '../classesService';
+import { listClasses, getClassById, updateClass, deleteClass, createClass } from '../classesService';
 import { supabase } from '@/lib/supabase';
+import * as financeConfigService from '../financeConfigService';
 
 // Mock Supabase
 vi.mock('@/lib/supabase', () => ({
@@ -27,6 +28,11 @@ vi.mock('@/lib/supabase', () => ({
 // Mock Timeout utility
 vi.mock('@/lib/timeout', () => ({
   withSupabaseTimeout: vi.fn((promise) => promise),
+}));
+
+// Mock financeConfigService
+vi.mock('../financeConfigService', () => ({
+  ensureFinanceConfigExists: vi.fn(),
 }));
 
 describe('classesService', () => {
@@ -114,6 +120,52 @@ describe('classesService', () => {
 
       expect(deleteChain.update).toHaveBeenCalledWith({ del_yn: true });
       expect(result.error).toBeNull();
+    });
+  });
+
+  describe('createClass - class_type refactor', () => {
+    it('should NOT auto-create finance config', async () => {
+      const fromMock = vi.mocked(supabase.from);
+      // 1. users RBAC check (ensureRole)
+      fromMock.mockReturnValueOnce(createMockChain({ role: 'Admin' }) as any);
+      // 2. Insert class
+      const mockClass = { id: 1, name: 'Mầm 1', teacher_id: 't1', room: 'A1', max_students: 20, class_type: 'Daycare', description: null, created_at: '2024-01-01', updated_at: '2024-01-01', users: { id: 't1', full_name: 'Cô Lan' } };
+      fromMock.mockReturnValueOnce(createMockChain(mockClass) as any);
+
+      const result = await createClass({
+        name: 'Mầm 1',
+        teacher_id: 't1',
+        room: 'A1',
+        max_students: 20,
+        class_type: 'Daycare',
+        description: null,
+      });
+
+      expect(result.error).toBeNull();
+      expect(financeConfigService.ensureFinanceConfigExists).not.toHaveBeenCalled();
+    });
+
+    it('should include class_type field in payload', async () => {
+      const fromMock = vi.mocked(supabase.from);
+      // 1. users RBAC check (ensureRole)
+      fromMock.mockReturnValueOnce(createMockChain({ role: 'Admin' }) as any);
+      // 2. Insert class
+      const mockClass = { id: 1, name: 'Tối 1', teacher_id: 't2', room: 'B1', max_students: 15, class_type: 'Evening', description: null, created_at: '2024-01-01', updated_at: '2024-01-01', users: { id: 't2', full_name: 'Cô Hoa' } };
+      const insertChain = createMockChain(mockClass) as any;
+      fromMock.mockReturnValueOnce(insertChain);
+
+      await createClass({
+        name: 'Tối 1',
+        teacher_id: 't2',
+        room: 'B1',
+        max_students: 15,
+        class_type: 'Evening',
+        description: null,
+      });
+
+      expect(insertChain.insert).toHaveBeenCalledWith(expect.objectContaining({
+        class_type: 'Evening',
+      }));
     });
   });
 });
