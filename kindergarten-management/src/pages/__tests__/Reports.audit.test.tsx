@@ -155,12 +155,25 @@ describe('Reports Audit - Logic & RBAC', () => {
       });
     });
 
-    it('TC_LOGIC_02: should show correct access control for roles', async () => {
-      // Test Accountant can see financial data
-      mockRole.mockReturnValue('Accountant');
-      vi.mocked(dashboardService.getFinancialSummary).mockResolvedValue({
-        data: { totalRevenue: 50000000, totalExpected: 70000000, paidCount: 20, pendingCount: 10, overdueCount: 5, inTermDebt: 10000000, overdueDebt: 5000000 },
-        error: null,
+    it('TC_LOGIC_02: should calculate total financial deductions correctly', async () => {
+      mockRole.mockReturnValue('Admin');
+
+      const mockFinancialSummary = {
+        totalRevenue: 1000000,
+        paidCount: 1,
+        pendingCount: 1,
+        overdueCount: 0
+      };
+
+      const mockFeeRecords = [
+        { id: 'f1', meal_deduction_vnd: 200000, tuition_deduction_vnd: 50000, students: { full_name: 'A', classes: { name: 'L1' } } },
+        { id: 'f2', meal_deduction_vnd: 100000, tuition_deduction_vnd: 0, students: { full_name: 'B', classes: { name: 'L2' } } }
+      ];
+
+      vi.mocked(dashboardService.getFinancialSummary).mockResolvedValue({ data: mockFinancialSummary, error: null });
+      vi.mocked(supabase.from).mockImplementation((table: string) => {
+        if (table === 'fee_records') return mockSupabaseResponse(mockFeeRecords);
+        return mockSupabaseResponse([]);
       });
 
       renderPage();
