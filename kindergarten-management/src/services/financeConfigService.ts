@@ -157,7 +157,7 @@ export async function updateFinanceConfig(
 
   // Trigger background fee sync for the entire class
   import('./feesService').then(({ bulkSyncFeesByFilter }) => {
-    bulkSyncFeesByFilter({ class_id: classId })
+    bulkSyncFeesByFilter({})
       .catch(e => console.error('[AutoSync] Failed to sync fees after config update', e));
   }).catch(e => console.error('[AutoSync] Failed to load feesService', e));
 

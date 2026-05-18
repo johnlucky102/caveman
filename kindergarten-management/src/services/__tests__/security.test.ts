@@ -82,7 +82,7 @@ describe('Security & Permission Controls (Post-Hardening)', () => {
   describe('Financial Controls', () => {
     it('Teacher should REJECT financial config updates', async () => {
       setupContext('teacher-1', 'Teacher');
-      const result = await updateFinanceConfig(1, { deduction_rules: [{ id: 'meal', name: 'Tiền cơm', amount: 50000 }] });
+      const result = await updateFinanceConfig('Daycare', { deduction_rules: [{ id: 'meal', name: 'Tiền cơm', amount: 50000 }] });
       expect(result.error?.code).toBe('FORBIDDEN');
     });
 
@@ -95,7 +95,7 @@ describe('Security & Permission Controls (Post-Hardening)', () => {
 
     it('Admin should ALLOW financial config updates', async () => {
       setupContext('admin-1', 'Admin');
-      const result = await updateFinanceConfig(1, { deduction_rules: [{ id: 'meal', name: 'Tiền cơm', amount: 50000 }] });
+      const result = await updateFinanceConfig('Daycare', { deduction_rules: [{ id: 'meal', name: 'Tiền cơm', amount: 50000 }] });
       expect(result.error).toBeNull();
     });
   });

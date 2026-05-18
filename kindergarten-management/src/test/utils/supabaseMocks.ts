@@ -18,8 +18,8 @@ export interface MockQueryBuilder {
   upsert: (data: any, options?: any) => MockQueryBuilder;
   order: (column: string, options?: any) => MockQueryBuilder;
   range: (from: number, to: number) => MockQueryBuilder;
-  single: () => Promise<{ data: any; error: null }>;
-  maybeSingle: () => Promise<{ data: any; error: null }>;
+  single: () => Promise<{ data: any; error: any }>;
+  maybeSingle: () => Promise<{ data: any; error: any }>;
   then: (resolve: (value: any) => void) => Promise<any>;
 }
 

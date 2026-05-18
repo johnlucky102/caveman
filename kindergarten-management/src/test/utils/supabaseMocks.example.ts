@@ -25,7 +25,7 @@ describe('Example: Service with Supabase mock', () => {
 
     // Set up specific return data for this test
     const mockChain = mockQueryChain(TEST_FINANCE_CONFIGS.daycare);
-    vi.mocked(supabase.from).mockReturnValue(mockChain);
+    vi.mocked(supabase.from).mockReturnValue(mockChain as any);
 
     // Execute query
     const result = await supabase
@@ -46,7 +46,7 @@ describe('Example: Service with Supabase mock', () => {
 
     const mockData = { id: 1, class_type: 'Evening' };
     const mockChain = mockQueryChain(mockData);
-    vi.mocked(supabase.from).mockReturnValue(mockChain);
+    vi.mocked(supabase.from).mockReturnValue(mockChain as any);
 
     const result = await supabase
       .from('class_finance_configs')
@@ -66,7 +66,7 @@ describe('Example: Service with Supabase mock', () => {
 
     const mockData = { id: 1, class_type: 'Daycare', updated: true };
     const mockChain = mockQueryChain(mockData);
-    vi.mocked(supabase.from).mockReturnValue(mockChain);
+    vi.mocked(supabase.from).mockReturnValue(mockChain as any);
 
     const result = await supabase
       .from('class_finance_configs')
@@ -86,7 +86,7 @@ describe('Example: Service with Supabase mock', () => {
 
     const mockData = [TEST_FINANCE_CONFIGS.daycare, TEST_FINANCE_CONFIGS.evening];
     const mockChain = mockQueryChain(mockData);
-    vi.mocked(supabase.from).mockReturnValue(mockChain);
+    vi.mocked(supabase.from).mockReturnValue(mockChain as any);
 
     const result = await supabase
       .from('class_finance_configs')
@@ -109,7 +109,7 @@ describe('Example: Service with Supabase mock', () => {
       data: null,
       error: MOCK_ERRORS.notFound,
     });
-    vi.mocked(supabase.from).mockReturnValue(mockChain);
+    vi.mocked(supabase.from).mockReturnValue(mockChain as any);
 
     const result = await supabase
       .from('class_finance_configs')
@@ -154,7 +154,7 @@ describe('Example: Verify query calls', () => {
     const { supabase } = await import('@/lib/supabase');
 
     const mockChain = mockQueryChain(TEST_FINANCE_CONFIGS.daycare);
-    vi.mocked(supabase.from).mockReturnValue(mockChain);
+    vi.mocked(supabase.from).mockReturnValue(mockChain as any);
 
     await supabase
       .from('class_finance_configs')

@@ -594,6 +594,20 @@ export async function createClassFees(
   const fees: FeeRecordP2[] = [];
 
   for (const student of students) {
+    // Check if fee already exists for this student, month, school_year
+    const { data: existingFee } = await supabase
+      .from('fee_records')
+      .select('id')
+      .eq('student_id', student.studentId)
+      .eq('month', config.month)
+      .eq('school_year', config.schoolYear)
+      .maybeSingle();
+
+    if (existingFee) {
+      // Skip creating duplicate fee
+      continue;
+    }
+
     const { item, error } = await createFeeRecord({
       student_id: student.studentId,
       class_id: config.classId,

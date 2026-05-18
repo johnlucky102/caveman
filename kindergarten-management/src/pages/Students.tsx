@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Download, Eye, Pencil, Search, Trash2, UserPlus } from 'lucide-react';
+import { Eye, Pencil, Search, Trash2, UserPlus } from 'lucide-react';
 import Card, { CardHeader } from '@/components/common/Card';
 import Button from '@/components/common/Button';
 import Input from '@/components/common/Input';
@@ -138,35 +138,6 @@ export default function Students() {
     else void loadStudents();
   };
 
-  const handleExport = () => {
-    if (!students.length) return;
-    
-    const headers = ['Mã HS', 'Họ tên', 'Lớp', 'Ngày sinh', 'Giới tính', 'Địa chỉ'];
-    const rows = students.map(s => [
-      s.student_code,
-      s.full_name,
-      s.class_name,
-      s.date_of_birth ? new Date(s.date_of_birth).toLocaleDateString('vi-VN') : '',
-      s.gender === 'Male' ? 'Nam' : 'Nữ',
-      s.address || ''
-    ]);
-    
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(r => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-    ].join('\n');
-    
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `danh_sach_hoc_sinh_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success('Đã tải xuống danh sách học sinh');
-  };
-
   const columns: TableColumn<StudentRecord>[] = [
     {
       key: 'full_name',
@@ -250,11 +221,6 @@ export default function Students() {
           <p className="text-sm text-muted-foreground">{total} học sinh tổng cộng</p>
         </div>
         <div className="flex gap-2">
-          {!isTeacher(role) && (
-            <Button variant="outline" size="sm" leftIcon={<Download className="w-4 h-4" />} onClick={handleExport}>
-              Xuất dữ liệu
-            </Button>
-          )}
           {canAddDelete && selectedKeys.length > 0 && (
             <Button
               variant="outline"
