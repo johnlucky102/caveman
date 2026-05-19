@@ -519,7 +519,7 @@ export default function FeeForm() {
             <Input
               label="Tiêu đề"
               value={formData.title}
-              onChange={(v) => updateField('title', String(v))}
+              onChange={(e) => updateField('title', e.target.value)}
               placeholder="VD: Học phí tháng 10"
               readOnly={isLocked}
               disabled={isLocked}
