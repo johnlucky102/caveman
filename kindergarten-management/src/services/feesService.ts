@@ -31,6 +31,7 @@ type FeeRow = {
   updated_at: string;
   base_amount_vnd: number | null;
   attendance_deduction_vnd: number | null;
+  other_deduction_vnd: number | null;
   deduction_details: any;
   deduction_note: string | null;
   students: { id: string; full_name: string; classes: { id: number; name: string } | null } | null;
@@ -60,6 +61,7 @@ function mapFeeRow(row: FeeRow): FeeRecordP2 {
     status: row.status,
     base_amount_vnd: row.base_amount_vnd || row.amount_vnd,
     attendance_deduction_vnd: row.attendance_deduction_vnd || 0,
+    other_deduction_vnd: row.other_deduction_vnd || 0,
     deduction_details: parseDetails(row.deduction_details),
     deduction_note: row.deduction_note,
     created_at: row.created_at,
@@ -101,7 +103,7 @@ export async function listFees(query: FeeListQuery): Promise<{ data: ListEnvelop
   let dataQuery = supabase
     .from('fee_records')
     .select(
-      'id, student_id, class_id, title, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, base_amount_vnd, attendance_deduction_vnd, deduction_details, deduction_note, created_at, updated_at, students!inner(id, full_name, classes(id, name))',
+      'id, student_id, class_id, title, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, base_amount_vnd, attendance_deduction_vnd, other_deduction_vnd, deduction_details, deduction_note, created_at, updated_at, students!inner(id, full_name, classes(id, name))',
       { count: 'exact' }
     )
     .eq('del_yn', false);
@@ -188,7 +190,7 @@ export async function getFeeById(id: string): Promise<{ item: FeeRecordP2 | null
   const result = await withSupabaseTimeout(
     supabase
       .from('fee_records')
-      .select('id, student_id, class_id, title, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, base_amount_vnd, attendance_deduction_vnd, deduction_details, deduction_note, created_at, updated_at, students(id, full_name, classes(id, name))')
+      .select('id, student_id, class_id, title, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, base_amount_vnd, attendance_deduction_vnd, other_deduction_vnd, deduction_details, deduction_note, created_at, updated_at, students(id, full_name, classes(id, name))')
       .eq('id', id)
       .eq('del_yn', false)
       .maybeSingle(),
@@ -222,10 +224,11 @@ export async function createFeeRecord(input: CreateFeeInput): Promise<{ item: Fe
       status: input.status,
       base_amount_vnd: input.base_amount_vnd,
       attendance_deduction_vnd: input.attendance_deduction_vnd,
+      other_deduction_vnd: input.other_deduction_vnd || 0,
       deduction_details: input.deduction_details || [],
       deduction_note: input.deduction_note,
     })
-    .select('id, student_id, class_id, title, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, base_amount_vnd, attendance_deduction_vnd, deduction_details, deduction_note, created_at, updated_at, students(id, full_name, classes(id, name))')
+    .select('id, student_id, class_id, title, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, base_amount_vnd, attendance_deduction_vnd, other_deduction_vnd, deduction_details, deduction_note, created_at, updated_at, students(id, full_name, classes(id, name))')
     .single();
 
   if (error) {
@@ -262,7 +265,7 @@ export async function updateFeeRecord(
     .update(updatePayload)
     .eq('id', id)
     .eq('del_yn', false)
-    .select('id, student_id, class_id, title, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, base_amount_vnd, attendance_deduction_vnd, deduction_details, deduction_note, created_at, updated_at, students(id, full_name, classes(id, name))')
+    .select('id, student_id, class_id, title, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, base_amount_vnd, attendance_deduction_vnd, other_deduction_vnd, deduction_details, deduction_note, created_at, updated_at, students(id, full_name, classes(id, name))')
     .single();
 
   if (error) {
@@ -305,7 +308,7 @@ export async function bulkSyncFeesByFilter(params: {
   if (accessError.error) return { synced: 0, failed: 0, error: accessError.error };
 
   // Step 1: Fetch all fee records in one query
-  const feeSelect = 'id, student_id, class_id, school_year, month, amount_vnd, base_amount_vnd, status';
+  const feeSelect = 'id, student_id, class_id, school_year, month, amount_vnd, base_amount_vnd, other_deduction_vnd, status';
   let feeQuery = supabase
     .from('fee_records')
     .select(feeSelect)
@@ -399,7 +402,8 @@ export async function bulkSyncFeesByFilter(params: {
 
     const ruleTotal = rules.reduce((sum, r) => sum + r.amount, 0);
     const totalDeduction = absentDays * ruleTotal;
-    const finalAmount = Math.max(0, baseAmount - totalDeduction);
+    const otherDed = (fee as any).other_deduction_vnd || 0;
+    const finalAmount = Math.max(0, baseAmount - totalDeduction - otherDed);
     const ruleNames = rules.map(r => `${r.name} ${r.amount.toLocaleString('vi-VN')}đ`).join(' + ');
     const note = absentDays > 0
       ? `Khấu trừ ${absentDays} ngày vắng tháng trước x (${ruleNames}) = ${totalDeduction.toLocaleString('vi-VN')}đ`
@@ -473,7 +477,7 @@ export async function syncFeeWithAttendance(feeId: string): Promise<{ item: FeeR
   // 1. Load the fee record
   const feeResult = await supabase
     .from('fee_records')
-    .select('id, student_id, class_id, title, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, base_amount_vnd, attendance_deduction_vnd, deduction_details, deduction_note, created_at, updated_at, students(id, full_name, classes(id, name))')
+    .select('id, student_id, class_id, title, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, base_amount_vnd, attendance_deduction_vnd, other_deduction_vnd, deduction_details, deduction_note, created_at, updated_at, students(id, full_name, classes(id, name))')
     .eq('id', feeId)
     .single();
 
@@ -482,43 +486,33 @@ export async function syncFeeWithAttendance(feeId: string): Promise<{ item: FeeR
   }
   const fee = feeResult.data;
 
-  // 2. Load class info to get class_type
-  const { data: classData, error: classError } = await supabase
-    .from('classes')
-    .select('class_type')
-    .eq('id', fee.class_id)
-    .single();
-
-  if (classError || !classData) {
-    return { item: null, error: toAppError(classError || { message: 'Class not found' }, 'Không tìm thấy thông tin lớp học.') };
-  }
-
-  // 3. Load finance config for that class_type
+  // 2. Load finance config by class_id (unique key)
   const configResult = await supabase
     .from('class_finance_configs')
     .select('class_type, deduction_rules')
-    .eq('class_type', classData.class_type)
+    .eq('class_id', fee.class_id)
     .eq('del_yn', false)
     .maybeSingle();
 
   if (configResult.error || !configResult.data) {
-    return { item: null, error: toAppError(configResult.error || { message: 'Config not found', code: 'NOT_FOUND' }, `Chưa có cấu hình tài chính cho loại lớp: ${classData.class_type}`) };
+    return { item: null, error: toAppError(configResult.error || { message: 'Config not found', code: 'NOT_FOUND' }, `Chưa có cấu hình tài chính cho lớp này.`) };
   }
   const classConfig = configResult.data;
 
   const rules: DeductionRule[] = (classConfig.deduction_rules || []);
   if (rules.length === 0) {
-    // No rules — no deduction
+    // No rules — no attendance deduction, but preserve other_deduction_vnd
+    const otherDed = fee.other_deduction_vnd || 0;
     const updateResult = await supabase
       .from('fee_records')
       .update({
-        amount_vnd: fee.base_amount_vnd || fee.amount_vnd,
+        amount_vnd: Math.max(0, (fee.base_amount_vnd || fee.amount_vnd) - otherDed),
         attendance_deduction_vnd: 0,
         deduction_details: [],
         deduction_note: '',
       })
       .eq('id', feeId)
-      .select('id, student_id, class_id, title, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, base_amount_vnd, attendance_deduction_vnd, deduction_details, deduction_note, created_at, updated_at, students(id, full_name, classes(id, name))')
+      .select('id, student_id, class_id, title, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, base_amount_vnd, attendance_deduction_vnd, other_deduction_vnd, deduction_details, deduction_note, created_at, updated_at, students(id, full_name, classes(id, name))')
       .single();
 
     if (updateResult.error) return { item: null, error: toAppError(updateResult.error, 'Lỗi khi cập nhật học phí.') };
@@ -555,7 +549,8 @@ export async function syncFeeWithAttendance(feeId: string): Promise<{ item: FeeR
   const ruleTotal = rules.reduce((sum, r) => sum + r.amount, 0);
   const totalDeduction = absentDays * ruleTotal;
   const baseAmount = fee.base_amount_vnd || fee.amount_vnd;
-  const finalAmount = Math.max(0, baseAmount - totalDeduction);
+  const otherDeduction = fee.other_deduction_vnd || 0;
+  const finalAmount = Math.max(0, baseAmount - totalDeduction - otherDeduction);
 
   // Build deduction note
   const ruleNames = rules.map(r => `${r.name} ${r.amount.toLocaleString('vi-VN')}đ`).join(' + ');
@@ -577,7 +572,7 @@ export async function syncFeeWithAttendance(feeId: string): Promise<{ item: FeeR
       deduction_note: note || 'Đã đồng bộ chuyên cần',
     })
     .eq('id', feeId)
-    .select('id, student_id, class_id, title, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, base_amount_vnd, attendance_deduction_vnd, deduction_details, deduction_note, created_at, updated_at, students(id, full_name, classes(id, name))')
+    .select('id, student_id, class_id, title, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, base_amount_vnd, attendance_deduction_vnd, other_deduction_vnd, deduction_details, deduction_note, created_at, updated_at, students(id, full_name, classes(id, name))')
     .single();
 
   if (updateResult.error) return { item: null, error: toAppError(updateResult.error, 'Lỗi khi cập nhật học phí sau khấu trừ.') };
@@ -590,6 +585,7 @@ export async function createClassFees(
   feeTypeId: number,
   baseAmount: number,
   students: { studentId: string }[],
+  title?: string,
 ): Promise<{ items: FeeRecordP2[]; error: AppError | null }> {
   const fees: FeeRecordP2[] = [];
 
@@ -611,6 +607,7 @@ export async function createClassFees(
     const { item, error } = await createFeeRecord({
       student_id: student.studentId,
       class_id: config.classId,
+      title: title || `Học phí tháng ${config.month}`,
       school_year: config.schoolYear,
       month: config.month,
       amount_vnd: baseAmount,
@@ -669,7 +666,7 @@ export async function updateFeeRecordStatus(
     })
     .eq('id', id)
     .eq('del_yn', false)
-    .select('id, student_id, class_id, title, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, base_amount_vnd, attendance_deduction_vnd, deduction_details, deduction_note, created_at, updated_at, students(id, full_name, classes(id, name))')
+    .select('id, student_id, class_id, title, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, base_amount_vnd, attendance_deduction_vnd, other_deduction_vnd, deduction_details, deduction_note, created_at, updated_at, students(id, full_name, classes(id, name))')
     .single();
 
   if (error) return { item: null, error: toAppError(error, 'Không thể cập nhật trạng thái học phí.') };

@@ -108,6 +108,7 @@ export function createMockFee(
     status: 'unpaid',
     base_amount_vnd: 2000000,
     attendance_deduction_vnd: 0,
+    other_deduction_vnd: 0,
     deduction_details: [],
     deduction_note: null,
     created_at: '2024-01-01T00:00:00Z',

@@ -56,7 +56,7 @@ export default function Fees() {
   const [bulkMonth, setBulkMonth] = useState(new Date().getMonth() + 1);
   const [bulkSchoolYear, setBulkSchoolYear] = useState(getCurrentSchoolYear());
   const [bulkBaseAmount, setBulkBaseAmount] = useState(3000000);
-  const [bulkTitle, setBulkTitle] = useState('Học phí tháng');
+  const [bulkTitle, setBulkTitle] = useState(`Học phí tháng ${new Date().getMonth() + 1}`);
   const [classOptions, setClassOptions] = useState<SelectOption[]>([]);
   const [bulkCreating, setBulkCreating] = useState(false);
   const [syncingId, setSyncingId] = useState<string | null>(null);
@@ -220,7 +220,8 @@ export default function Fees() {
       { classId: Number(bulkClassId), month: bulkMonth, schoolYear: bulkSchoolYear },
       1,
       bulkBaseAmount,
-      studentsList
+      studentsList,
+      bulkTitle || `Học phí tháng ${bulkMonth}`,
     );
     setBulkCreating(false);
     if (result.error) {
@@ -556,7 +557,7 @@ export default function Fees() {
             <Select
               label="Tháng"
               value={String(bulkMonth)}
-              onChange={(v) => setBulkMonth(Number(v))}
+              onChange={(v) => { setBulkMonth(Number(v)); setBulkTitle(`Học phí tháng ${v}`); }}
               options={monthOptions.filter(o => o.value !== '')}
               required
               fullWidth

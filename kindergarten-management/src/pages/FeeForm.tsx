@@ -98,7 +98,7 @@ export default function FeeForm() {
     
     return {
       studentId: '',
-      title: '',
+      title: `Học phí tháng ${new Date().getMonth() + 1}`,
       amount: '',
       month: String(new Date().getMonth() + 1),
       schoolYear: getCurrentSchoolYear(),
@@ -163,7 +163,7 @@ export default function FeeForm() {
               paidDate: item.paid_date || '',
               baseAmount: String(item.base_amount_vnd || item.amount_vnd),
               attendanceDeduction: String(item.attendance_deduction_vnd || 0),
-              otherDeduction: String((item.base_amount_vnd || 0) - (item.attendance_deduction_vnd || 0) - (item.amount_vnd || 0)),
+              otherDeduction: String(item.other_deduction_vnd || 0),
               deductionDetails: JSON.stringify(item.deduction_details || []),
               deductionNote: item.deduction_note || '',
             });
@@ -298,6 +298,12 @@ export default function FeeForm() {
           next.baseAmount = value;
         }
       }
+      if (field === 'month') {
+        const autoPattern = /^(Học phí tháng \d{1,2})?$/;
+        if (!prev.title || autoPattern.test(prev.title)) {
+          next.title = `Học phí tháng ${value}`;
+        }
+      }
       return next;
     });
     if (errors[field as keyof FormErrors]) {
@@ -320,7 +326,7 @@ export default function FeeForm() {
         ...prev,
         amount: String(item.amount_vnd),
         attendanceDeduction: String(item.attendance_deduction_vnd),
-        otherDeduction: String((item.base_amount_vnd || 0) - (item.attendance_deduction_vnd || 0) - (item.amount_vnd || 0)),
+        otherDeduction: String(item.other_deduction_vnd || 0),
         deductionDetails: JSON.stringify(item.deduction_details || []),
         deductionNote: item.deduction_note || '',
       }));
@@ -394,6 +400,7 @@ export default function FeeForm() {
         status,
         base_amount_vnd: Number(formData.baseAmount || formData.amount),
         attendance_deduction_vnd: Number(formData.attendanceDeduction),
+        other_deduction_vnd: Number(formData.otherDeduction),
         amount_vnd: finalAmount,
         deduction_note: formData.deductionNote,
       };

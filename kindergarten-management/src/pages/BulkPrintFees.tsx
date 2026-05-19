@@ -222,9 +222,15 @@ export default function BulkPrintFees() {
 
           html, body { 
             background: white !important; 
+            color: black !important;
             margin: 0 !important; 
             padding: 0 !important; 
             font-family: 'Times New Roman', Times, serif; 
+          }
+          .receipt-page, .receipt-page * {
+            color: black !important;
+            background: white !important;
+            -webkit-print-color-adjust: exact;
           }
           .receipt-page {
             break-inside: avoid;
@@ -246,7 +252,8 @@ export default function BulkPrintFees() {
             margin: 0 !important; /* Hides browser headers and footers */
           }
         }
-        .receipt-page {
+        .receipt-page, .receipt-page * {
+          color: black;
           font-family: 'Times New Roman', Times, serif;
         }
       `}</style>

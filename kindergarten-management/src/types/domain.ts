@@ -235,6 +235,7 @@ export interface FeeRecordP2 {
   status: FeeStatusValue;
   base_amount_vnd: number;
   attendance_deduction_vnd: number;
+  other_deduction_vnd: number;
   deduction_details: DeductionRule[];
   deduction_note: string | null;
   created_at: string;
@@ -266,6 +267,7 @@ export interface CreateFeeInput {
   status: FeeStatusValue;
   base_amount_vnd?: number;
   attendance_deduction_vnd?: number;
+  other_deduction_vnd?: number;
   deduction_details?: DeductionRule[];
   deduction_note?: string | null;
 }
