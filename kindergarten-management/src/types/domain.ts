@@ -60,6 +60,12 @@ export interface DeductionRule {
   amount: number;
 }
 
+export interface FeeDeductionDetail extends DeductionRule {
+  absent_days?: number;
+  subtotal?: number;
+  note?: string | null;
+}
+
 export interface ClassFinanceConfig {
   id: number;
   class_id?: number | null;
@@ -236,7 +242,7 @@ export interface FeeRecordP2 {
   base_amount_vnd: number;
   attendance_deduction_vnd: number;
   other_deduction_vnd: number;
-  deduction_details: DeductionRule[];
+  deduction_details: FeeDeductionDetail[];
   deduction_note: string | null;
   created_at: string;
   updated_at: string;
@@ -268,7 +274,7 @@ export interface CreateFeeInput {
   base_amount_vnd?: number;
   attendance_deduction_vnd?: number;
   other_deduction_vnd?: number;
-  deduction_details?: DeductionRule[];
+  deduction_details?: FeeDeductionDetail[];
   deduction_note?: string | null;
 }
 

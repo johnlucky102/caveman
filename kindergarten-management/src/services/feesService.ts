@@ -7,6 +7,7 @@ import type {
   FeeRecordP2,
   ListEnvelope,
   DeductionRule,
+  FeeDeductionDetail,
 } from '@/types/domain';
 import { toAppError } from './supabaseErrors';
 import { invalidateSwCache } from '@/utils/swCacheInvalidate';
@@ -37,7 +38,7 @@ type FeeRow = {
   students: { id: string; full_name: string; classes: { id: number; name: string } | null } | null;
 };
 
-function parseDetails(raw: any): DeductionRule[] {
+function parseDetails(raw: any): FeeDeductionDetail[] {
   if (!raw) return [];
   if (Array.isArray(raw)) return raw;
   try { return JSON.parse(raw); } catch { return []; }
@@ -414,10 +415,13 @@ export async function bulkSyncFeesByFilter(params: {
       .update({
         amount_vnd: finalAmount,
         attendance_deduction_vnd: totalDeduction,
-        deduction_details: rules.map(r => ({
+        deduction_details: rules.map((r): FeeDeductionDetail => ({
           ...r,
           absent_days: absentDays,
           subtotal: absentDays * r.amount,
+          note: absentDays > 0
+            ? `${absentDays} ngày × ${r.amount.toLocaleString('vi-VN')}đ`
+            : null,
         })),
         deduction_note: note,
       })
@@ -564,10 +568,13 @@ export async function syncFeeWithAttendance(feeId: string): Promise<{ item: FeeR
     .update({
       amount_vnd: finalAmount,
       attendance_deduction_vnd: totalDeduction,
-      deduction_details: rules.map(r => ({
+      deduction_details: rules.map((r): FeeDeductionDetail => ({
         ...r,
         absent_days: absentDays,
         subtotal: absentDays * r.amount,
+        note: absentDays > 0
+          ? `${absentDays} ngày × ${r.amount.toLocaleString('vi-VN')}đ`
+          : null,
       })),
       deduction_note: note || 'Đã đồng bộ chuyên cần',
     })

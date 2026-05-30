@@ -53,6 +53,7 @@ interface DeductionDetailItem {
   amount: number;
   absent_days: number;
   subtotal: number;
+  note?: string | null;
 }
 
 const currentYear = new Date().getFullYear();
@@ -604,12 +605,21 @@ export default function FeeForm() {
                   </thead>
                   <tbody>
                     {parsedDeductionDetails.map((detail) => (
-                      <tr key={detail.id} className="border-t border-border/40">
-                        <td className="px-4 py-2">{detail.name}</td>
-                        <td className="px-4 py-2 text-right text-muted-foreground">{formatCurrency(detail.amount)}</td>
-                        <td className="px-4 py-2 text-right">{detail.absent_days} ngày</td>
-                        <td className="px-4 py-2 text-right font-semibold text-red-500">-{formatCurrency(detail.subtotal)}</td>
-                      </tr>
+                      <>
+                        <tr key={`${detail.id}-row`} className="border-t border-border/40">
+                          <td className="px-4 py-2">{detail.name}</td>
+                          <td className="px-4 py-2 text-right text-muted-foreground">{formatCurrency(detail.amount)}</td>
+                          <td className="px-4 py-2 text-right">{detail.absent_days} ngày</td>
+                          <td className="px-4 py-2 text-right font-semibold text-red-500">-{formatCurrency(detail.subtotal)}</td>
+                        </tr>
+                        {detail.note && (
+                          <tr key={`${detail.id}-note`} className="border-t border-border/20">
+                            <td className="px-4 py-1 text-xs text-muted-foreground italic" colSpan={4}>
+                              {detail.note}
+                            </td>
+                          </tr>
+                        )}
+                      </>
                     ))}
                     <tr className="border-t-2 border-red-200/60 bg-red-50/30 font-semibold">
                       <td className="px-4 py-2 text-red-600" colSpan={3}>Tổng khấu trừ chuyên cần</td>
@@ -683,9 +693,16 @@ export default function FeeForm() {
                   <span>-{formatCurrency(summary.deduction)}</span>
                 </div>
                 {parsedDeductionDetails.map((detail) => (
-                  <div key={detail.id} className="flex justify-between text-xs text-red-400/70 pl-3">
-                    <span>• {detail.name}: {detail.absent_days} ngày × {formatCurrency(detail.amount)}</span>
-                    <span>-{formatCurrency(detail.subtotal)}</span>
+                  <div key={detail.id}>
+                    <div className="flex justify-between text-xs text-red-400/70 pl-3">
+                      <span>• {detail.name}: {detail.absent_days} ngày × {formatCurrency(detail.amount)}</span>
+                      <span>-{formatCurrency(detail.subtotal)}</span>
+                    </div>
+                    {detail.note && (
+                      <div className="text-xs text-muted-foreground italic pl-5">
+                        {detail.note}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

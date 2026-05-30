@@ -1,180 +1,225 @@
 /**
- * Print a fee receipt using a new window with print-specific styling.
+ * Print a fee receipt (THÔNG BÁO HỌC PHÍ) using a new window with print-specific styling.
  */
 
 interface ReceiptData {
   schoolName: string;
   studentName: string;
   className: string;
-  feeTypeName: string;
-  amount: number;
-  paidAmount: number;
+  baseAmount: number;
+  deductionAmount: number;
   month: number | null;
   schoolYear: string;
-  paymentMethod: string | null;
-  paidDate: string | null;
   receiptId: string;
+  address?: string;
+  phone?: string;
+  receiptCode?: string | null;
+  bankAccount?: string | null;
+  bankName?: string | null;
+  accountHolder?: string | null;
+  note?: string | null;
+  issueDate?: string | null;
 }
 
-const formatCurrency = (amount: number): string =>
-  new Intl.NumberFormat('vi-VN').format(amount) + ' đ';
+const units = ['', 'một', 'hai', 'ba', 'bốn', 'năm', 'sáu', 'bảy', 'tám', 'chín'];
+const tens = ['', 'mười', 'hai mươi', 'ba mươi', 'bốn mươi', 'năm mươi', 'sáu mươi', 'bảy mươi', 'tám mươi', 'chín mươi'];
+const scaleWords = ['', 'nghìn', 'triệu', 'tỷ'];
 
-const formatDate = (dateStr: string | null): string => {
-  if (!dateStr) return '—';
-  return new Date(dateStr).toLocaleDateString('vi-VN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
-};
+function readThreeDigits(n: number): string {
+  const h = Math.floor(n / 100);
+  const du = n % 100;
+  const t = Math.floor(du / 10);
+  const u = du % 10;
+  let s = '';
 
-const paymentMethodLabel: Record<string, string> = {
-  cash: 'Tiền mặt',
-  bank_transfer: 'Chuyển khoản',
-};
+  if (h > 0) s += units[h] + ' trăm ';
+
+  if (du > 0) {
+    if (t >= 2) {
+      s += tens[t] + ' ';
+      if (u === 5) s += 'lăm ';
+      else if (u > 0) s += units[u] + ' ';
+    } else if (t === 1) {
+      s += 'mười ';
+      if (u === 5) s += 'lăm ';
+      else if (u > 0) s += units[u] + ' ';
+    } else {
+      if (h > 0) s += 'lẻ ';
+      s += units[u] + ' ';
+    }
+  }
+
+  return s.trim();
+}
+
+export function numberToVietnameseWords(num: number): string {
+  if (num === 0) return 'Không đồng';
+
+  let result = '';
+  let scaleIdx = 0;
+  let remaining = num;
+
+  while (remaining > 0 && scaleIdx < scaleWords.length) {
+    const group = remaining % 1000;
+    if (group > 0) {
+      const groupStr = readThreeDigits(group);
+      result = groupStr + ' ' + scaleWords[scaleIdx] + ' ' + result;
+    }
+    remaining = Math.floor(remaining / 1000);
+    scaleIdx++;
+  }
+
+  const words = result.trim().replace(/\s+/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1) + ' đồng';
+}
+
+const fmtVnd = (amount: number): string =>
+  new Intl.NumberFormat('vi-VN').format(amount);
+
+function getCalendarYear(schoolYear: string, month: number | null): number {
+  const [startYearStr] = schoolYear.split('-');
+  const startYear = parseInt(startYearStr, 10);
+  if (!month || Number.isNaN(startYear)) return startYear;
+  return month >= 8 ? startYear : startYear + 1;
+}
 
 export function printReceipt(data: ReceiptData): void {
+  const totalAmount = Math.max(0, data.baseAmount - data.deductionAmount);
+  const amountText = numberToVietnameseWords(totalAmount);
+  const issueDate = data.issueDate ? new Date(data.issueDate) : new Date();
+  const receiptYear = getCalendarYear(data.schoolYear, data.month);
+  const address = data.address?.trim() || '';
+  const phone = data.phone?.trim() || '';
+  const receiptCode = data.receiptCode || data.receiptId;
+  const note = data.note?.trim() || null;
+  const bankAccount = data.bankAccount?.trim() || null;
+  const bankName = data.bankName?.trim() || null;
+  const accountHolder = data.accountHolder?.trim() || null;
+
   const html = `
 <!DOCTYPE html>
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>Biên nhận học phí</title>
+  <title>Thông báo học phí</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
-      font-size: 14px;
-      color: #1E293B;
-      padding: 40px;
-      max-width: 600px;
+      font-family: 'Times New Roman', Times, serif;
+      font-size: 15px;
+      color: #000;
+      padding: 32px 40px;
+      max-width: 580px;
       margin: 0 auto;
+      line-height: 1.7;
     }
+    .center { text-align: center; }
     .header {
       text-align: center;
-      margin-bottom: 24px;
-      border-bottom: 2px solid #FF6B6B;
-      padding-bottom: 16px;
+      margin-bottom: 8px;
     }
     .header h1 {
-      font-size: 20px;
-      color: #FF6B6B;
+      font-size: 16px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
       margin-bottom: 4px;
     }
-    .header p {
-      font-size: 12px;
-      color: #64748B;
+    .header .contact {
+      font-size: 14px;
     }
     .title {
       text-align: center;
-      font-size: 18px;
-      font-weight: 700;
-      margin: 20px 0;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-    .info-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 16px 0;
-    }
-    .info-table td {
-      padding: 8px 12px;
-      border: 1px solid #E2E8F0;
-    }
-    .info-table td:first-child {
-      font-weight: 600;
-      width: 40%;
-      background: #F8FAFC;
-    }
-    .amount-row td {
       font-size: 16px;
       font-weight: 700;
-      color: #FF6B6B;
+      text-transform: uppercase;
+      margin: 20px 0 16px;
+      letter-spacing: 0.5px;
     }
-    .footer {
-      margin-top: 40px;
-      display: flex;
-      justify-content: space-between;
+    .info p {
+      margin: 4px 0;
+      font-size: 15px;
     }
-    .footer div {
-      text-align: center;
-    }
-    .footer .label {
-      font-weight: 600;
-      margin-bottom: 60px;
-    }
-    .footer .sign {
-      font-style: italic;
-      color: #64748B;
-      font-size: 12px;
-    }
-    .receipt-id {
-      text-align: right;
-      font-size: 11px;
-      color: #94A3B8;
+    .info .total {
+      font-weight: 700;
       margin-top: 8px;
     }
+    .amount-words {
+      margin: 4px 0;
+      font-size: 15px;
+    }
+    .amount-words .amount-num {
+      font-weight: 700;
+    }
+    .note-block {
+      margin: 12px 0;
+      font-size: 15px;
+      font-style: italic;
+    }
+    .bank-info {
+      margin: 8px 0;
+      font-size: 15px;
+    }
+    .signature-line {
+      margin-top: 28px;
+      text-align: right;
+      font-size: 15px;
+      padding-right: 12px;
+    }
+    .signature {
+      margin-top: 48px;
+      text-align: center;
+      font-size: 15px;
+      font-weight: 600;
+    }
+    .underline {
+      display: inline-block;
+      min-width: 48px;
+      border-bottom: 1px solid #000;
+    }
     @media print {
-      body { padding: 20px; }
+      body { padding: 20px 28px; }
     }
   </style>
 </head>
 <body>
   <div class="header">
     <h1>${escapeHtml(data.schoolName)}</h1>
-    <p>BIÊN NHẬN THU HỌC PHÍ</p>
+    <p class="contact">
+      ${address ? `ĐC : ${escapeHtml(address)}` : ''}${address && phone ? ' / ' : ''}${phone ? escapeHtml(phone) : ''}
+    </p>
   </div>
 
-  <div class="title">Biên nhận thanh toán</div>
-
-  <table class="info-table">
-    <tr>
-      <td>Học sinh</td>
-      <td>${escapeHtml(data.studentName)}</td>
-    </tr>
-    <tr>
-      <td>Lớp</td>
-      <td>${escapeHtml(data.className)}</td>
-    </tr>
-    <tr>
-      <td>Loại phí</td>
-      <td>${escapeHtml(data.feeTypeName)}</td>
-    </tr>
-    <tr>
-      <td>Tháng / Năm học</td>
-      <td>${data.month ? `Tháng ${data.month}` : '—'} / ${escapeHtml(data.schoolYear)}</td>
-    </tr>
-    <tr>
-      <td>Số tiền phải đóng</td>
-      <td>${formatCurrency(data.amount)}</td>
-    </tr>
-    <tr class="amount-row">
-      <td>Số tiền đã đóng</td>
-      <td>${formatCurrency(data.paidAmount)}</td>
-    </tr>
-    <tr>
-      <td>Phương thức</td>
-      <td>${paymentMethodLabel[data.paymentMethod || ''] || '—'}</td>
-    </tr>
-    <tr>
-      <td>Ngày thanh toán</td>
-      <td>${formatDate(data.paidDate)}</td>
-    </tr>
-  </table>
-
-  <div class="footer">
-    <div>
-      <div class="label">Người nộp</div>
-      <div class="sign">(Ký, ghi rõ họ tên)</div>
-    </div>
-    <div>
-      <div class="label">Người thu</div>
-      <div class="sign">(Ký, ghi rõ họ tên)</div>
-    </div>
+  <div class="title">
+    Thông báo học phí tháng ${data.month ?? '—'} năm ${receiptYear} (Số phiếu ${escapeHtml(receiptCode)})
   </div>
 
-  <div class="receipt-id">Mã: ${escapeHtml(data.receiptId)}</div>
+  <div class="info">
+    <p><strong>Học sinh :</strong> ${escapeHtml(data.studentName)}</p>
+    <p><strong>Lớp :</strong> ${escapeHtml(data.className)}</p>
+    <p><strong>Học phí tháng này :</strong> ${fmtVnd(data.baseAmount)}đ</p>
+    <p><strong>Khấu trừ tháng trước :</strong> -${fmtVnd(data.deductionAmount)}đ</p>
+    <p class="total"><strong>Tổng cộng :</strong> ${fmtVnd(totalAmount)}đ</p>
+    <p class="amount-words">
+      <strong>Số tiền cần nộp :</strong>
+      <span class="amount-num">${fmtVnd(totalAmount)} đ</span>
+      (${amountText}).
+    </p>
+  </div>
+
+  ${note ? `<div class="note-block">${escapeHtml(note)}</div>` : ''}
+
+  ${bankAccount && bankName && accountHolder ? `
+  <div class="bank-info">
+    <strong>Số tk :</strong> ${escapeHtml(bankAccount)} ngân hàng ${escapeHtml(bankName)} chủ tài khoản ${escapeHtml(accountHolder)}
+  </div>
+  ` : ''}
+
+  <div class="signature-line">
+    ${address ? `${escapeHtml(address)}, ` : ''}ngày<span class="underline">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>tháng<span class="underline">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>năm ${issueDate.getFullYear()}
+  </div>
+
+  <div class="signature">Người thu</div>
 
   <script>window.onload = function() { window.print(); }</script>
 </body>

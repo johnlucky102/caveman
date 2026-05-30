@@ -17,7 +17,15 @@ interface FeeReceiptData {
   amount_vnd: number;
   base_amount_vnd: number;
   attendance_deduction_vnd: number;
-  deduction_details: any[];
+  other_deduction_vnd: number;
+  deduction_details: Array<{
+    id: string;
+    name: string;
+    amount: number;
+    absent_days?: number;
+    subtotal?: number;
+    note?: string | null;
+  }>;
   deduction_note: string | null;
   due_date: string | null;
   paid_date: string | null;
@@ -121,7 +129,7 @@ export default function BulkPrintFees() {
         supabase
           .from('fee_records')
           .select(`id, title, month, school_year, amount_vnd, base_amount_vnd,
-            attendance_deduction_vnd, deduction_details, deduction_note,
+            attendance_deduction_vnd, other_deduction_vnd, deduction_details, deduction_note,
             due_date, paid_date, payment_method, paid_amount_vnd, status,
             students ( full_name, parent_info, classes ( name, users ( full_name ) ) )`)
           .in('id', ids)
@@ -143,6 +151,7 @@ export default function BulkPrintFees() {
           amount_vnd: r.amount_vnd,
           base_amount_vnd: r.base_amount_vnd || r.amount_vnd,
           attendance_deduction_vnd: r.attendance_deduction_vnd || 0,
+          other_deduction_vnd: r.other_deduction_vnd || 0,
           deduction_details: Array.isArray(r.deduction_details) ? r.deduction_details : [],
           deduction_note: r.deduction_note,
           due_date: r.due_date,
@@ -276,7 +285,9 @@ export default function BulkPrintFees() {
         {/* Receipt pages */}
         <div className="py-8 px-4 print:p-0 space-y-8 print:space-y-0">
           {data.map((item) => {
-            const deduction = item.base_amount_vnd - item.amount_vnd;
+            const attendanceDeduction = item.attendance_deduction_vnd || 0;
+            const otherDeduction = item.other_deduction_vnd || 0;
+            const hasDeductionDetails = item.deduction_details.some(d => (d.subtotal ?? 0) > 0);
             const remaining_debt = Math.max(0, item.amount_vnd - item.paid_amount_vnd);
 
             return (
@@ -313,8 +324,28 @@ export default function BulkPrintFees() {
                 {/* ── Fee detail ── */}
                 <div className="text-sm space-y-0.5 mb-3">
                   <p><strong>Học phí tháng này :</strong> {formatCurrency(item.base_amount_vnd)}</p>
-                  {deduction > 0 && (
-                    <p><strong>Khấu trừ tháng trước :</strong> -{formatCurrency(deduction)}</p>
+                  {attendanceDeduction > 0 && (
+                    <>
+                      <p><strong>Khấu trừ tháng trước :</strong> -{formatCurrency(attendanceDeduction)}</p>
+                      {hasDeductionDetails && (
+                        <div className="pl-4 text-xs space-y-0.5 text-gray-600 italic">
+                          {item.deduction_details
+                            .filter(d => (d.subtotal ?? 0) > 0)
+                            .map(d => (
+                              <p key={d.id}>
+                                – {d.name}: {d.absent_days ?? 0} ngày × {new Intl.NumberFormat('vi-VN').format(d.amount)}đ = -{new Intl.NumberFormat('vi-VN').format(d.subtotal ?? 0)}đ
+                                {d.note ? ` (${d.note})` : ''}
+                              </p>
+                            ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                  {otherDeduction > 0 && (
+                    <p><strong>Khấu trừ khác :</strong> -{formatCurrency(otherDeduction)}</p>
+                  )}
+                  {item.deduction_note && attendanceDeduction > 0 && !hasDeductionDetails && (
+                    <p className="pl-4 text-xs italic text-gray-500">{item.deduction_note}</p>
                   )}
                   <p><strong>Tổng cộng :</strong> {formatCurrency(item.amount_vnd)}</p>
                   {item.paid_amount_vnd > 0 && (
