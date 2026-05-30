@@ -205,23 +205,37 @@ export default function FeeForm() {
       setIsSyncing(true);
       setSyncError('');
       try {
-        // Query finance config directly by class_id (unique key) — avoids maybeSingle error
-        // when multiple classes share the same class_type
+        // 1. Resolve class_type from classes
+        const { data: classData, error: classError } = await supabase
+          .from('classes')
+          .select('class_type')
+          .eq('id', student.class_id)
+          .eq('del_yn', false)
+          .single();
+
+        if (classError || !classData?.class_type) {
+          console.error('Failed to fetch class type:', classError);
+          setSyncError('Không tìm thấy thông tin lớp học.');
+          return;
+        }
+        const classType = classData.class_type;
+
+        // 2. Query finance config by class_type
         const { data: configData, error: configError } = await supabase
           .from('class_finance_configs')
           .select('deduction_rules, class_type')
-          .eq('class_id', student.class_id)
+          .eq('class_type', classType)
           .eq('del_yn', false)
           .maybeSingle();
 
         if (configError) {
-          console.error('Failed to fetch finance config by class_id:', configError);
+          console.error('Failed to fetch finance config by class_type:', configError);
           setSyncError('Lỗi tải cấu hình tài chính.');
           return;
         }
         if (!configData) {
-          console.error('No finance config found for class_id:', student.class_id);
-          setSyncError('Chưa có cấu hình tài chính cho lớp này. Vui lòng thiết lập tài chính trước.');
+          console.error('No finance config found for class_type:', classType);
+          setSyncError(`Chưa có cấu hình tài chính cho loại lớp "${classType}". Vui lòng thiết lập tài chính trước.`);
           return;
         }
 

@@ -329,20 +329,40 @@ export async function bulkSyncFeesByFilter(params: {
     return { synced: 0, failed: 0, error: null };
   }
 
-  // Step 2: Fetch all class finance configs in one query
+  // Step 2: Resolve class_type from classes, then fetch finance configs by class_type
   const uniqueClassIds = [...new Set(fees.map(f => f.class_id))];
+  const { data: classData, error: classError } = await supabase
+    .from('classes')
+    .select('id, class_type')
+    .in('id', uniqueClassIds)
+    .eq('del_yn', false);
+
+  if (classError) {
+    return { synced: 0, failed: 0, error: toAppError(classError, 'Không tải được thông tin lớp học.') };
+  }
+
+  const classTypeMap = new Map<number, string>();
+  for (const c of (classData || [])) {
+    if (c.class_type) classTypeMap.set(c.id, c.class_type);
+  }
+
+  const uniqueClassTypes = [...new Set(classTypeMap.values())];
   const { data: configs, error: configsError } = await supabase
     .from('class_finance_configs')
-    .select('class_id, deduction_rules')
-    .in('class_id', uniqueClassIds)
+    .select('class_type, deduction_rules')
+    .in('class_type', uniqueClassTypes)
     .eq('del_yn', false);
 
   if (configsError) {
     return { synced: 0, failed: 0, error: toAppError(configsError, 'Không tải được cấu hình tài chính.') };
   }
-  const configMap = new Map<number, DeductionRule[]>(
-    (configs || []).map(c => [c.class_id as number, (c.deduction_rules || []) as DeductionRule[]])
+  const configByType = new Map<string, DeductionRule[]>(
+    (configs || []).map(c => [c.class_type as string, (c.deduction_rules || []) as DeductionRule[]])
   );
+  const configMap = new Map<number, DeductionRule[]>();
+  for (const [classId, classType] of classTypeMap) {
+    configMap.set(classId, configByType.get(classType) ?? []);
+  }
 
   // Step 3: Fetch all attendance in one query (cover full date span)
   const uniqueStudentIds = [...new Set(fees.map(f => f.student_id))];
@@ -490,16 +510,29 @@ export async function syncFeeWithAttendance(feeId: string): Promise<{ item: FeeR
   }
   const fee = feeResult.data;
 
-  // 2. Load finance config by class_id (unique key)
+  // 2a. Resolve class_type from class_id
+  const classResult = await supabase
+    .from('classes')
+    .select('class_type')
+    .eq('id', fee.class_id)
+    .eq('del_yn', false)
+    .single();
+
+  if (classResult.error || !classResult.data?.class_type) {
+    return { item: null, error: toAppError(classResult.error || { message: 'Class not found', code: 'NOT_FOUND' }, 'Không tìm thấy thông tin lớp học.') };
+  }
+  const classType = classResult.data.class_type;
+
+  // 2b. Load finance config by class_type
   const configResult = await supabase
     .from('class_finance_configs')
     .select('class_type, deduction_rules')
-    .eq('class_id', fee.class_id)
+    .eq('class_type', classType)
     .eq('del_yn', false)
     .maybeSingle();
 
   if (configResult.error || !configResult.data) {
-    return { item: null, error: toAppError(configResult.error || { message: 'Config not found', code: 'NOT_FOUND' }, `Chưa có cấu hình tài chính cho lớp này.`) };
+    return { item: null, error: toAppError(configResult.error || { message: 'Config not found', code: 'NOT_FOUND' }, `Chưa có cấu hình tài chính cho loại lớp "${classType}".`) };
   }
   const classConfig = configResult.data;
 
