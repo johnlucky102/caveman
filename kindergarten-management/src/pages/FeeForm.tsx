@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Info, Printer, Receipt, Save, Trash2, Wallet, RefreshCw, Lock, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Info, Printer, Receipt, Save, Trash2, Wallet, RefreshCw, Lock, AlertCircle, Plus, ChevronDown } from 'lucide-react';
 import Card from '@/components/common/Card';
 import Button from '@/components/common/Button';
 import Input from '@/components/common/Input';
@@ -15,10 +15,11 @@ import { listAttendanceByClassAndDate } from '@/services/attendanceService';
 import { calendarYearFromSchoolMonth, getCurrentSchoolYear } from '@/utils/schoolYearCalendar';
 import { ConfirmModal } from '@/components/common/Modal';
 import { supabase } from '@/lib/supabase';
+import { cn } from '@/lib/utils';
 
 import { useAuthStore } from '@/stores/authStore';
 import type { SelectOption } from '@/types';
-import type { CreateFeeInput, FeeRecordP2, FeeStatusValue, StudentRecord } from '@/types/domain';
+import type { CreateFeeInput, FeeRecordP2, FeeStatusValue, StudentRecord, AdditionalChargeDetail, OtherDeductionDetail } from '@/types/domain';
 
 interface FeeFormState {
   studentId: string;
@@ -32,9 +33,10 @@ interface FeeFormState {
   paidDate: string;
   baseAmount: string;
   attendanceDeduction: string;
-  otherDeduction: string;
+  otherDeductionDetails: OtherDeductionDetail[];
   deductionDetails: string;
   deductionNote: string;
+  additionalChargeDetails: AdditionalChargeDetail[];
 }
 
 interface FormErrors {
@@ -93,6 +95,8 @@ export default function FeeForm() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncError, setSyncError] = useState('');
   const [classFilter, setClassFilter] = useState('');
+  const [showOtherDeductionDetails, setShowOtherDeductionDetails] = useState(false);
+  const [showAdditionalChargeDetails, setShowAdditionalChargeDetails] = useState(false);
   const [formData, setFormData] = useState<FeeFormState>(() => {
     const today = new Date().toISOString().split('T')[0];
     const lastDayOfMonth = new Date(currentYear, currentMonth, 0).toISOString().split('T')[0];
@@ -109,9 +113,10 @@ export default function FeeForm() {
       paidDate: today,
       baseAmount: '',
       attendanceDeduction: '0',
-      otherDeduction: '0',
+      otherDeductionDetails: [],
       deductionDetails: '',
       deductionNote: '',
+      additionalChargeDetails: [],
     };
   });
 
@@ -152,6 +157,34 @@ export default function FeeForm() {
               dueDate = new Date(year, item.month, 0).toISOString().split('T')[0];
             }
 
+            // Parse additional charge details with backward compatibility
+            let additionalDetails: AdditionalChargeDetail[] = [];
+            if (item.additional_charge_details && item.additional_charge_details.length > 0) {
+              additionalDetails = item.additional_charge_details;
+            } else if (item.additional_charge_vnd > 0) {
+              // Convert old format to new format
+              additionalDetails = [{
+                id: crypto.randomUUID(),
+                name: item.additional_charge_note || 'Phụ thu',
+                amount: item.additional_charge_vnd,
+                note: null,
+              }];
+            }
+
+            // Parse other deduction details with backward compatibility
+            let otherDeductionDetails: OtherDeductionDetail[] = [];
+            if (item.other_deduction_details && item.other_deduction_details.length > 0) {
+              otherDeductionDetails = item.other_deduction_details;
+            } else if (item.other_deduction_vnd > 0) {
+              // Convert old format to new format
+              otherDeductionDetails = [{
+                id: crypto.randomUUID(),
+                name: 'Khấu trừ khác',
+                amount: item.other_deduction_vnd,
+                note: null,
+              }];
+            }
+
             setFormData({
               studentId: item.student_id,
               title: item.title || '',
@@ -164,9 +197,10 @@ export default function FeeForm() {
               paidDate: item.paid_date || '',
               baseAmount: String(item.base_amount_vnd || item.amount_vnd),
               attendanceDeduction: String(item.attendance_deduction_vnd || 0),
-              otherDeduction: String(item.other_deduction_vnd || 0),
+              otherDeductionDetails: otherDeductionDetails,
               deductionDetails: JSON.stringify(item.deduction_details || []),
               deductionNote: item.deduction_note || '',
+              additionalChargeDetails: additionalDetails,
             });
           }
         }
@@ -177,6 +211,19 @@ export default function FeeForm() {
     };
     void loadOptions();
   }, [id]);
+
+  // Auto-open toggles when items exist
+  useEffect(() => {
+    if (formData.otherDeductionDetails.length > 0) {
+      setShowOtherDeductionDetails(true);
+    }
+  }, [formData.otherDeductionDetails.length]);
+
+  useEffect(() => {
+    if (formData.additionalChargeDetails.length > 0) {
+      setShowAdditionalChargeDetails(true);
+    }
+  }, [formData.additionalChargeDetails.length]);
 
   const studentOptions: SelectOption[] = useMemo(
     () => {
@@ -305,15 +352,15 @@ export default function FeeForm() {
     void autoSyncFinance();
   }, [formData.studentId, formData.month, formData.schoolYear, isEdit, students]);
 
-  const updateField = (field: keyof FeeFormState, value: string) => {
+  const updateField = (field: keyof FeeFormState, value: string | AdditionalChargeDetail[] | OtherDeductionDetail[]) => {
     setFormData((prev) => {
       const next = { ...prev, [field]: value };
-      if (field === 'amount' && !isEdit) {
+      if (field === 'amount' && !isEdit && typeof value === 'string') {
         if (!prev.baseAmount || prev.baseAmount === prev.amount) {
           next.baseAmount = value;
         }
       }
-      if (field === 'month') {
+      if (field === 'month' && typeof value === 'string') {
         const autoPattern = /^(Học phí tháng \d{1,2})?$/;
         if (!prev.title || autoPattern.test(prev.title)) {
           next.title = `Học phí tháng ${value}`;
@@ -341,9 +388,10 @@ export default function FeeForm() {
         ...prev,
         amount: String(item.amount_vnd),
         attendanceDeduction: String(item.attendance_deduction_vnd),
-        otherDeduction: String(item.other_deduction_vnd || 0),
+        otherDeductionDetails: item.other_deduction_details || prev.otherDeductionDetails,
         deductionDetails: JSON.stringify(item.deduction_details || []),
         deductionNote: item.deduction_note || '',
+        additionalChargeDetails: item.additional_charge_details || prev.additionalChargeDetails,
       }));
       toast.success('Đã đồng bộ chuyên cần');
     }
@@ -351,7 +399,7 @@ export default function FeeForm() {
 
   const validate = (): boolean => {
     const nextErrors: FormErrors = {};
-    const finalAmount = Number(formData.baseAmount || 0) - Number(formData.attendanceDeduction) - Number(formData.otherDeduction);
+    const finalAmount = Number(formData.baseAmount || 0) - Number(formData.attendanceDeduction) - otherDeductionTotal + additionalChargeTotal;
     if (Number(formData.paidAmount || '0') > finalAmount) nextErrors.paidAmount = 'Số tiền đã thu không được vượt quá số tiền phải thu';
     if (!formData.studentId) nextErrors.studentId = 'Vui lòng chọn học sinh';
     if (!formData.baseAmount || Number(formData.baseAmount) <= 0) nextErrors.amount = 'Số tiền không hợp lệ';
@@ -378,7 +426,7 @@ export default function FeeForm() {
 
     setSaving(true);
 
-    const finalAmount = Number(formData.baseAmount || 0) - Number(formData.attendanceDeduction) - Number(formData.otherDeduction);
+    const finalAmount = Number(formData.baseAmount || 0) - Number(formData.attendanceDeduction) - otherDeductionTotal + additionalChargeTotal;
     const status: FeeStatusValue = Number(formData.paidAmount) >= finalAmount
       ? 'paid'
       : Number(formData.paidAmount) > 0
@@ -415,9 +463,12 @@ export default function FeeForm() {
         status,
         base_amount_vnd: Number(formData.baseAmount || formData.amount),
         attendance_deduction_vnd: Number(formData.attendanceDeduction),
-        other_deduction_vnd: Number(formData.otherDeduction),
+        other_deduction_vnd: otherDeductionTotal,
+        other_deduction_details: formData.otherDeductionDetails,
         amount_vnd: finalAmount,
         deduction_note: formData.deductionNote,
+        additional_charge_vnd: additionalChargeTotal,
+        additional_charge_note: JSON.stringify(formData.additionalChargeDetails),
       };
 
       if (isEdit && id) {
@@ -460,15 +511,24 @@ export default function FeeForm() {
     }
   };
 
+  const otherDeductionTotal = useMemo(() => {
+    return formData.otherDeductionDetails.reduce((sum, item) => sum + item.amount, 0);
+  }, [formData.otherDeductionDetails]);
+
+  const additionalChargeTotal = useMemo(() => {
+    return formData.additionalChargeDetails.reduce((sum, item) => sum + item.amount, 0);
+  }, [formData.additionalChargeDetails]);
+
   const summary = useMemo(() => {
     const base = Number(formData.baseAmount || formData.amount);
     const deduction = Number(formData.attendanceDeduction);
-    const other = Number(formData.otherDeduction);
-    const finalAmount = Math.max(0, base - deduction - other);
+    const other = otherDeductionTotal;
+    const additional = additionalChargeTotal;
+    const finalAmount = Math.max(0, base - deduction - other + additional);
     const paid = Number(formData.paidAmount);
     const due = Math.max(0, finalAmount - paid);
-    return { base, deduction, other, finalAmount, paid, due };
-  }, [formData]);
+    return { base, deduction, other, additional, finalAmount, paid, due };
+  }, [formData, otherDeductionTotal, additionalChargeTotal]);
 
   const parsedDeductionDetails = useMemo<DeductionDetailItem[]>(() => {
     if (!formData.deductionDetails) return [];
@@ -520,7 +580,14 @@ export default function FeeForm() {
 
       {/* Form */}
       <Card>
-        <div className="p-5 space-y-5">
+        <div className="p-5 space-y-6">
+
+          {/* ===== SECTION 1: THÔNG TIN CƠ BẢN ===== */}
+          <div className="space-y-4 pb-6 border-b border-border">
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              Thông tin cơ bản
+            </h3>
+
           {/* Class Filter + Title row */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:hidden">
             <Select
@@ -575,112 +642,259 @@ export default function FeeForm() {
               error={errors.dueDate}
             />
           </div>
-
-          {/* Amounts */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <CurrencyInput
-              label="Học phí gốc"
-              value={formData.baseAmount || formData.amount}
-              onChange={(val) => updateField('baseAmount', val)}
-              required
-            />
-            <CurrencyInput
-              label="Khấu trừ khác"
-              value={formData.otherDeduction}
-              onChange={(val) => updateField('otherDeduction', val)}
-            />
           </div>
 
-          {/* Deduction Breakdown Card */}
-          {(!isEdit || parsedDeductionDetails.length > 0 || isSyncing) && (
-            <div className="border border-red-200/60 rounded-xl overflow-hidden">
-              <div className="flex items-center gap-2 px-4 py-2.5 bg-red-50/50">
-                <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
-                <p className="text-xs font-semibold text-red-600">Chi tiết khấu trừ chuyên cần</p>
-                {deductionPeriodLabel && (
-                  <span className="ml-auto text-xs text-muted-foreground">{deductionPeriodLabel}</span>
+          {/* ===== SECTION 2: TIỀN BẠC ===== */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              Tiền bạc
+            </h3>
+
+          {/* Học phí gốc */}
+          <CurrencyInput
+            label="Học phí gốc"
+            value={formData.baseAmount || formData.amount}
+            onChange={(val) => updateField('baseAmount', val)}
+            required
+          />
+
+          {/* Chi tiết khấu trừ khác - Collapsible */}
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={() => setShowOtherDeductionDetails(!showOtherDeductionDetails)}
+              className="flex items-center justify-between w-full text-left p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <ChevronDown
+                  className={cn(
+                    "w-4 h-4 transition-transform text-muted-foreground",
+                    showOtherDeductionDetails && "rotate-180"
+                  )}
+                />
+                <label className="text-sm font-medium text-foreground cursor-pointer">
+                  Chi tiết khấu trừ khác
+                  {formData.otherDeductionDetails.length > 0 && (
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      ({formData.otherDeductionDetails.length} khoản)
+                    </span>
+                  )}
+                </label>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const newItem: OtherDeductionDetail = {
+                    id: crypto.randomUUID(),
+                    name: '',
+                    amount: 0,
+                    note: null,
+                  };
+                  updateField('otherDeductionDetails', [...formData.otherDeductionDetails, newItem]);
+                  setShowOtherDeductionDetails(true);
+                }}
+                leftIcon={<Plus className="w-3 h-3" />}
+              >
+                Thêm khoản
+              </Button>
+            </button>
+
+            {showOtherDeductionDetails && (
+              <div className="space-y-2 pl-6">
+                {formData.otherDeductionDetails.length === 0 ? (
+                  <div className="border border-dashed border-border rounded-lg p-4 text-center text-sm text-muted-foreground">
+                    Chưa có khoản khấu trừ. Nhấn "Thêm khoản" để thêm.
+                  </div>
+                ) : (
+                  <>
+                    {formData.otherDeductionDetails.map((item, index) => (
+                      <div key={item.id} className="border border-border rounded-lg p-3 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Input
+                            placeholder="Tên khoản khấu trừ"
+                            value={item.name}
+                            onChange={(e) => {
+                              const newDetails = [...formData.otherDeductionDetails];
+                              newDetails[index] = { ...item, name: e.target.value };
+                              updateField('otherDeductionDetails', newDetails);
+                            }}
+                            className="flex-1"
+                          />
+                          <CurrencyInput
+                            value={String(item.amount)}
+                            onChange={(val) => {
+                              const newDetails = [...formData.otherDeductionDetails];
+                              newDetails[index] = { ...item, amount: Number(val) };
+                              updateField('otherDeductionDetails', newDetails);
+                            }}
+                            className="w-40"
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            type="button"
+                            onClick={() => {
+                              const newDetails = formData.otherDeductionDetails.filter((_, i) => i !== index);
+                              updateField('otherDeductionDetails', newDetails);
+                            }}
+                            leftIcon={<Trash2 className="w-3 h-3 text-red-500" />}
+                          />
+                        </div>
+                        <Input
+                          placeholder="Ghi chú (tùy chọn)"
+                          value={item.note || ''}
+                          onChange={(e) => {
+                            const newDetails = [...formData.otherDeductionDetails];
+                            newDetails[index] = { ...item, note: e.target.value };
+                            updateField('otherDeductionDetails', newDetails);
+                          }}
+                        />
+                      </div>
+                    ))}
+
+                    {/* Tổng khấu trừ khác */}
+                    <div className="border-t border-red-200/60 pt-2 flex justify-between items-center font-semibold text-red-600">
+                      <span>Tổng khấu trừ khác</span>
+                      <span>-{formatCurrency(otherDeductionTotal)}</span>
+                    </div>
+                  </>
                 )}
               </div>
-              {isSyncing ? (
-                <div className="p-4 space-y-2">
-                  <div className="h-3 bg-muted/40 rounded animate-pulse w-full" />
-                  <div className="h-3 bg-muted/40 rounded animate-pulse w-4/5" />
-                  <div className="h-3 bg-muted/40 rounded animate-pulse w-2/3" />
-                </div>
-              ) : parsedDeductionDetails.length > 0 ? (
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="bg-muted/20 text-muted-foreground border-t border-red-200/40">
-                      <th className="px-4 py-2 text-left font-medium">Khoản khấu trừ</th>
-                      <th className="px-4 py-2 text-right font-medium">Đơn giá/ngày</th>
-                      <th className="px-4 py-2 text-right font-medium">Ngày vắng</th>
-                      <th className="px-4 py-2 text-right font-medium">Thành tiền</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {parsedDeductionDetails.map((detail) => (
-                      <>
-                        <tr key={`${detail.id}-row`} className="border-t border-border/40">
-                          <td className="px-4 py-2">{detail.name}</td>
-                          <td className="px-4 py-2 text-right text-muted-foreground">{formatCurrency(detail.amount)}</td>
-                          <td className="px-4 py-2 text-right">{detail.absent_days} ngày</td>
-                          <td className="px-4 py-2 text-right font-semibold text-red-500">-{formatCurrency(detail.subtotal)}</td>
-                        </tr>
-                        {detail.note && (
-                          <tr key={`${detail.id}-note`} className="border-t border-border/20">
-                            <td className="px-4 py-1 text-xs text-muted-foreground italic" colSpan={4}>
-                              {detail.note}
-                            </td>
-                          </tr>
-                        )}
-                      </>
-                    ))}
-                    <tr className="border-t-2 border-red-200/60 bg-red-50/30 font-semibold">
-                      <td className="px-4 py-2 text-red-600" colSpan={3}>Tổng khấu trừ chuyên cần</td>
-                      <td className="px-4 py-2 text-right text-red-500">-{formatCurrency(summary.deduction)}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              ) : syncError ? (
-                <div className="px-4 py-3 flex items-start gap-2 text-xs text-red-500">
-                  <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                  <span>{syncError}</span>
-                </div>
-              ) : (
-                <p className="px-4 py-3 text-xs text-muted-foreground italic">
-                  {formData.deductionNote
-                    ? 'Không có ngày vắng tháng trước — không khấu trừ chuyên cần.'
-                    : formData.studentId && formData.month
-                      ? 'Đang tính toán dữ liệu khấu trừ...'
-                      : 'Chọn học sinh và tháng để tính khấu trừ tự động.'}
-                </p>
-              )}
-            </div>
-          )}
+            )}
+          </div>
 
-          {/* Payment */}
+          {/* Chi tiết phụ thu - Collapsible */}
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={() => setShowAdditionalChargeDetails(!showAdditionalChargeDetails)}
+              className="flex items-center justify-between w-full text-left p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <ChevronDown
+                  className={cn(
+                    "w-4 h-4 transition-transform text-muted-foreground",
+                    showAdditionalChargeDetails && "rotate-180"
+                  )}
+                />
+                <label className="text-sm font-medium text-foreground cursor-pointer">
+                  Chi tiết phụ thu
+                  {formData.additionalChargeDetails.length > 0 && (
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      ({formData.additionalChargeDetails.length} khoản)
+                    </span>
+                  )}
+                </label>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const newItem: AdditionalChargeDetail = {
+                    id: crypto.randomUUID(),
+                    name: '',
+                    amount: 0,
+                    note: null,
+                  };
+                  updateField('additionalChargeDetails', [...formData.additionalChargeDetails, newItem]);
+                  setShowAdditionalChargeDetails(true);
+                }}
+                leftIcon={<Plus className="w-3 h-3" />}
+              >
+                Thêm khoản
+              </Button>
+            </button>
+
+            {showAdditionalChargeDetails && (
+              <div className="space-y-2 pl-6">
+            {formData.additionalChargeDetails.length === 0 ? (
+              <div className="border border-dashed border-border rounded-lg p-4 text-center text-sm text-muted-foreground">
+                Chưa có khoản phụ thu. Nhấn "Thêm khoản" để thêm.
+              </div>
+            ) : (
+              <>
+                {formData.additionalChargeDetails.map((item, index) => (
+                  <div key={item.id} className="border border-border rounded-lg p-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Input
+                        placeholder="Tên khoản phụ thu"
+                        value={item.name}
+                        onChange={(e) => {
+                          const newDetails = [...formData.additionalChargeDetails];
+                          newDetails[index] = { ...item, name: e.target.value };
+                          updateField('additionalChargeDetails', newDetails);
+                        }}
+                        className="flex-1"
+                      />
+                      <CurrencyInput
+                        value={String(item.amount)}
+                        onChange={(val) => {
+                          const newDetails = [...formData.additionalChargeDetails];
+                          newDetails[index] = { ...item, amount: Number(val) };
+                          updateField('additionalChargeDetails', newDetails);
+                        }}
+                        className="w-40"
+                      />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        type="button"
+                        onClick={() => {
+                          const newDetails = formData.additionalChargeDetails.filter((_, i) => i !== index);
+                          updateField('additionalChargeDetails', newDetails);
+                        }}
+                        leftIcon={<Trash2 className="w-3 h-3 text-red-500" />}
+                      />
+                    </div>
+                    <Input
+                      placeholder="Ghi chú (tùy chọn)"
+                      value={item.note || ''}
+                      onChange={(e) => {
+                        const newDetails = [...formData.additionalChargeDetails];
+                        newDetails[index] = { ...item, note: e.target.value };
+                        updateField('additionalChargeDetails', newDetails);
+                      }}
+                    />
+                  </div>
+                ))}
+
+                {/* Tổng phụ thu */}
+                <div className="border-t border-primary/20 pt-2 flex justify-between items-center font-semibold text-green-600">
+                  <span>Tổng phụ thu</span>
+                  <span>+{formatCurrency(additionalChargeTotal)}</span>
+                </div>
+              </>
+            )}
+              </div>
+            )}
+          </div>
+
+          {/* Thanh toán */}
+          <CurrencyInput
+            label="Đã thanh toán"
+            value={formData.paidAmount}
+            onChange={(val) => updateField('paidAmount', val)}
+            error={errors.paidAmount}
+            disabled={isFinancialReadOnly}
+          />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:hidden">
-            <CurrencyInput
-              label="Đã thanh toán"
-              value={formData.paidAmount}
-              onChange={(val) => updateField('paidAmount', val)}
-              error={errors.paidAmount}
-            />
             <Select
               label="Phương thức"
               value={formData.paymentMethod}
               onChange={(v) => updateField('paymentMethod', v)}
               options={paymentOptions}
+              disabled={isFinancialReadOnly}
               fullWidth
             />
-          </div>
-
-          {/* Dates */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:hidden">
             <DatePicker
               label="Ngày thanh toán"
               date={formData.paidDate}
-              setDate={(v) => updateField('paidDate', v)}
+              setDate={(v) => { updateField('paidDate', v); }}
             />
           </div>
 
@@ -722,9 +936,53 @@ export default function FeeForm() {
               </div>
             )}
             {summary.other > 0 && (
-              <div className="flex justify-between text-sm text-red-500">
-                <span>Khấu trừ khác</span>
-                <span>-{formatCurrency(summary.other)}</span>
+              <div className="space-y-0.5">
+                <div className="flex justify-between text-sm text-red-500">
+                  <span>Khấu trừ khác</span>
+                  <span>-{formatCurrency(summary.other)}</span>
+                </div>
+                {/* Chi tiết inline */}
+                {formData.otherDeductionDetails.map((item) => (
+                  <div key={item.id} className="flex justify-between text-xs text-red-400/70 pl-3">
+                    <span className="flex items-center gap-1">
+                      • {item.name || 'Chưa đặt tên'}
+                      {item.note && (
+                        <span className="relative group cursor-help">
+                          <Info className="w-2.5 h-2.5" />
+                          <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 w-48 bg-gray-800 text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                            {item.note}
+                          </span>
+                        </span>
+                      )}
+                    </span>
+                    <span>-{formatCurrency(item.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {summary.additional > 0 && (
+              <div className="space-y-1">
+                <div className="flex justify-between text-sm text-green-600 font-semibold">
+                  <span>Phụ thu</span>
+                  <span>+{formatCurrency(summary.additional)}</span>
+                </div>
+                {/* Chi tiết từng khoản */}
+                {formData.additionalChargeDetails.map((item) => (
+                  <div key={item.id} className="flex justify-between text-xs text-green-500/70 pl-3">
+                    <span className="flex items-center gap-1">
+                      • {item.name || 'Chưa đặt tên'}
+                      {item.note && (
+                        <span className="relative group cursor-help">
+                          <Info className="w-2.5 h-2.5" />
+                          <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 w-48 bg-gray-800 text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                            {item.note}
+                          </span>
+                        </span>
+                      )}
+                    </span>
+                    <span>+{formatCurrency(item.amount)}</span>
+                  </div>
+                ))}
               </div>
             )}
             <div className="flex justify-between text-lg font-black border-t border-primary/20 pt-2">
@@ -741,6 +999,7 @@ export default function FeeForm() {
                 {summary.due <= 0 ? 'Đã hoàn tất' : formatCurrency(summary.due)}
               </span>
             </div>
+          </div>
           </div>
 
           {/* Save button */}

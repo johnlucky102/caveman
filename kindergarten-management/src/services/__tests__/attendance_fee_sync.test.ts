@@ -86,6 +86,9 @@ describe('Attendance to Fee Sync Integration', () => {
     // 2. Load fee: select(...).eq('id', feeId).single()
     mockQuery.single.mockResolvedValueOnce({ data: mockFee, error: null });
 
+    // 2a. Load class: select('class_type').eq('id', fee.class_id).single()
+    mockQuery.single.mockResolvedValueOnce({ data: { class_type: 'Daycare' }, error: null });
+
     // 3. Load class_finance_configs: select(...).eq().eq().maybeSingle()
     mockQuery.maybeSingle.mockResolvedValueOnce({ data: mockConfig, error: null });
 

@@ -5,6 +5,12 @@ import { supabase } from '@/lib/supabase';
 import { getSchoolSettings } from '@/services/settingsService';
 import Button from '@/components/common/Button';
 import type { SchoolSettings } from '@/types/domain';
+import type {
+  FeeDeductionDetail,
+  OtherDeductionDetail,
+  AdditionalChargeDetail,
+} from '../types/domain';
+import { parseJsonArray, numberToVietnamese } from '@/utils/bulkPrintUtils';
 
 interface FeeReceiptData {
   id: string;
@@ -32,83 +38,19 @@ interface FeeReceiptData {
   payment_method: string | null;
   paid_amount_vnd: number;
   status: 'unpaid' | 'partial' | 'paid';
+  additional_charge_vnd: number;
+  other_deduction_details: OtherDeductionDetail[];
+  additional_charge_details: AdditionalChargeDetail[];
 }
+
+const parseAdditionalChargeDetails = (
+  value: string | null
+): AdditionalChargeDetail[] => parseJsonArray<AdditionalChargeDetail>(value);
 
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat('vi-VN').format(amount) + 'đ';
 
 const printYear = new Date().getFullYear();
-
-// ─── Chuyển số thành chữ Việt ─────────────────────────────────────────────
-function numberToVietnamese(n: number): string {
-  if (n === 0) return 'Không đồng';
-
-  const ones = ['', 'một', 'hai', 'ba', 'bốn', 'năm', 'sáu', 'bảy', 'tám', 'chín'];
-
-  function readTens(t: number, o: number, hasHundred: boolean): string {
-    if (t === 0) {
-      if (o === 0) return '';
-      return hasHundred ? 'lẻ ' + ones[o] : ones[o];
-    }
-    if (t === 1) {
-      if (o === 0) return 'mười';
-      if (o === 5) return 'mười lăm';
-      return 'mười ' + ones[o];
-    }
-    let s = ones[t] + ' mươi';
-    if (o === 1) s += ' mốt';
-    else if (o === 5) s += ' lăm';
-    else if (o > 0) s += ' ' + ones[o];
-    return s;
-  }
-
-  function readHundreds(num: number, isFirstGroup: boolean): string {
-    const h = Math.floor(num / 100);
-    const rest = num % 100;
-    let s = '';
-    
-    if (h > 0) {
-      s = ones[h] + ' trăm ';
-      s += readTens(Math.floor(rest / 10), rest % 10, true);
-    } else {
-      if (!isFirstGroup && num > 0) {
-        s = 'không trăm ';
-        s += readTens(Math.floor(rest / 10), rest % 10, true);
-      } else {
-        s += readTens(Math.floor(rest / 10), rest % 10, false);
-      }
-    }
-    return s.trim();
-  }
-
-  const billions  = Math.floor(n / 1_000_000_000);
-  const millions  = Math.floor((n % 1_000_000_000) / 1_000_000);
-  const thousands = Math.floor((n % 1_000_000) / 1_000);
-  const remainder = n % 1_000;
-
-  let result = '';
-  let hasPrefix = false;
-
-  if (billions > 0) {
-    result += readHundreds(billions, !hasPrefix) + ' tỷ ';
-    hasPrefix = true;
-  }
-  if (millions > 0) {
-    result += readHundreds(millions, !hasPrefix) + ' triệu ';
-    hasPrefix = true;
-  }
-  if (thousands > 0) {
-    result += readHundreds(thousands, !hasPrefix) + ' nghìn ';
-    hasPrefix = true;
-  }
-  if (remainder > 0) {
-    result += readHundreds(remainder, !hasPrefix) + ' ';
-  }
-
-  result = result.replace(/\s+/g, ' ').trim();
-  if (!result) return 'Không đồng';
-  return result.charAt(0).toUpperCase() + result.slice(1) + ' đồng';
-}
 
 // ─── Component ─────────────────────────────────────────────────────────────
 export default function BulkPrintFees() {
@@ -129,7 +71,9 @@ export default function BulkPrintFees() {
         supabase
           .from('fee_records')
           .select(`id, title, month, school_year, amount_vnd, base_amount_vnd,
-            attendance_deduction_vnd, other_deduction_vnd, deduction_details, deduction_note,
+            attendance_deduction_vnd, other_deduction_vnd, other_deduction_details,
+            additional_charge_vnd, additional_charge_note,
+            deduction_details, deduction_note,
             due_date, paid_date, payment_method, paid_amount_vnd, status,
             students ( full_name, parent_info, classes ( name, users ( full_name ) ) )`)
           .in('id', ids)
@@ -140,25 +84,28 @@ export default function BulkPrintFees() {
       if (settingsRes.settings) setSchool(settingsRes.settings);
 
       if (!recordsRes.error && recordsRes.data) {
-        setData(recordsRes.data.map((r: any) => ({
-          id: r.id,
-          student_name: r.students?.full_name || '—',
-          class_name: r.students?.classes?.name || '—',
-          parent_name: (r.students?.parent_info as any)?.name || '',
-          title: r.title || 'Học phí',
-          month: r.month,
-          school_year: r.school_year,
-          amount_vnd: r.amount_vnd,
-          base_amount_vnd: r.base_amount_vnd || r.amount_vnd,
-          attendance_deduction_vnd: r.attendance_deduction_vnd || 0,
-          other_deduction_vnd: r.other_deduction_vnd || 0,
-          deduction_details: Array.isArray(r.deduction_details) ? r.deduction_details : [],
-          deduction_note: r.deduction_note,
-          due_date: r.due_date,
-          paid_date: r.paid_date,
-          payment_method: r.payment_method,
-          paid_amount_vnd: r.paid_amount_vnd || 0,
-          status: r.status || 'unpaid',
+        setData(recordsRes.data.map((row: any) => ({
+          id: row.id,
+          student_name: row.students?.full_name || '—',
+          class_name: row.students?.classes?.name || '—',
+          parent_name: (row.students?.parent_info as any)?.name || '',
+          title: row.title || 'Học phí',
+          month: row.month,
+          school_year: row.school_year,
+          amount_vnd: row.amount_vnd || 0,
+          base_amount_vnd: row.base_amount_vnd || 0,
+          attendance_deduction_vnd: row.attendance_deduction_vnd || 0,
+          other_deduction_vnd: row.other_deduction_vnd || 0,
+          additional_charge_vnd: row.additional_charge_vnd || 0,
+          deduction_details: parseJsonArray(row.deduction_details),
+          other_deduction_details: parseJsonArray(row.other_deduction_details),
+          additional_charge_details: parseAdditionalChargeDetails(row.additional_charge_note),
+          deduction_note: row.deduction_note,
+          due_date: row.due_date,
+          paid_date: row.paid_date,
+          payment_method: row.payment_method,
+          paid_amount_vnd: row.paid_amount_vnd || 0,
+          status: row.status || 'unpaid',
         })));
       }
 
@@ -169,10 +116,10 @@ export default function BulkPrintFees() {
     // Clear title during print to hide it from browser header
     const handleBeforePrint = () => { document.title = ''; };
     const handleAfterPrint = () => { document.title = 'KidGarden - Quản lý Trường Mầm Non'; };
-    
+
     window.addEventListener('beforeprint', handleBeforePrint);
     window.addEventListener('afterprint', handleAfterPrint);
-    
+
     return () => {
       window.removeEventListener('beforeprint', handleBeforePrint);
       window.removeEventListener('afterprint', handleAfterPrint);
@@ -286,7 +233,6 @@ export default function BulkPrintFees() {
         <div className="py-8 px-4 print:p-0 space-y-8 print:space-y-0">
           {data.map((item) => {
             const attendanceDeduction = item.attendance_deduction_vnd || 0;
-            const otherDeduction = item.other_deduction_vnd || 0;
             const hasDeductionDetails = item.deduction_details.some(d => (d.subtotal ?? 0) > 0);
             const remaining_debt = Math.max(0, item.amount_vnd - item.paid_amount_vnd);
 
@@ -324,6 +270,7 @@ export default function BulkPrintFees() {
                 {/* ── Fee detail ── */}
                 <div className="text-sm space-y-0.5 mb-3">
                   <p><strong>Học phí tháng này :</strong> {formatCurrency(item.base_amount_vnd)}</p>
+
                   {attendanceDeduction > 0 && (
                     <>
                       <p><strong>Khấu trừ tháng trước :</strong> -{formatCurrency(attendanceDeduction)}</p>
@@ -341,16 +288,39 @@ export default function BulkPrintFees() {
                       )}
                     </>
                   )}
-                  {otherDeduction > 0 && (
-                    <p><strong>Khấu trừ khác :</strong> -{formatCurrency(otherDeduction)}</p>
+
+                  {item.other_deduction_vnd > 0 && (
+                    <>
+                      <p><strong>Khấu trừ khác :</strong> -{formatCurrency(item.other_deduction_vnd)}</p>
+                      {item.other_deduction_details.length > 0 && (
+                        <div className="pl-4 text-xs space-y-0.5 text-gray-600 italic">
+                          {item.other_deduction_details.map((detail) => (
+                            <p key={detail.id}>– {detail.name}: -{formatCurrency(detail.amount)}</p>
+                          ))}
+                        </div>
+                      )}
+                    </>
                   )}
+
                   {item.deduction_note && attendanceDeduction > 0 && !hasDeductionDetails && (
                     <p className="pl-4 text-xs italic text-gray-500">{item.deduction_note}</p>
                   )}
-                  <p><strong>Tổng cộng :</strong> {formatCurrency(item.amount_vnd)}</p>
-                  {item.paid_amount_vnd > 0 && (
-                    <p><strong>Đã thanh toán :</strong> {formatCurrency(item.paid_amount_vnd)}</p>
+
+                  {item.additional_charge_vnd > 0 && (
+                    <>
+                      <p><strong>Phụ thu :</strong> +{formatCurrency(item.additional_charge_vnd)}</p>
+                      {item.additional_charge_details.length > 0 && (
+                        <div className="pl-4 text-xs space-y-0.5 text-gray-600 italic">
+                          {item.additional_charge_details.map((detail) => (
+                            <p key={detail.id}>– {detail.name}: +{formatCurrency(detail.amount)}</p>
+                          ))}
+                        </div>
+                      )}
+                    </>
                   )}
+
+                  <p><strong>Tổng cộng :</strong> {formatCurrency(item.amount_vnd)}</p>
+                  <p><strong>Đã thanh toán :</strong> {formatCurrency(item.paid_amount_vnd)}</p>
                 </div>
 
                 {/* ── Amount in words ── */}

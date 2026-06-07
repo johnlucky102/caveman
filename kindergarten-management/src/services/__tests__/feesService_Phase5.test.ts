@@ -64,18 +64,18 @@ describe('Fees Service - Phase 5 Business Logic (Integer Currency)', () => {
     const feeData = { 
       id: 'f1', student_id: 's1', class_id: 1, base_amount_vnd: 3000000, amount_vnd: 3000000, school_year: '2024-2025', month: 10,
     };
-    const configData = { class_type: 'Daycare', meal_rate: 20000 };
+    const configData = { class_type: 'Daycare', deduction_rules: [] };
     
     // syncFeeWithAttendance calls:
     // 1. feeResult = supabase.from('fee_records').select().eq().single()
+    // 1a. classResult = supabase.from('classes').select().eq().single()
     // 2. configResult = supabase.from('class_finance_configs').select().eq().eq().maybeSingle()
     // 3. attendanceResult = supabase.from('attendance').select().eq().gte().lte().eq()
     // 4. updateResult = supabase.from('fee_records').update().eq().select().single()
 
-    primeAdminFeeGuard();
-
     mockQuery.single
       .mockResolvedValueOnce({ data: feeData, error: null }) // feeResult
+      .mockResolvedValueOnce({ data: { class_type: 'Daycare' }, error: null }) // classResult
       .mockResolvedValueOnce({ data: { ...feeData, amount_vnd: 3000000 }, error: null }); // updateResult
 
     mockQuery.maybeSingle
@@ -89,7 +89,7 @@ describe('Fees Service - Phase 5 Business Logic (Integer Currency)', () => {
          return builder;
        }
        return mockQuery;
-    });
+     });
 
     const { item } = await syncFeeWithAttendance('f1');
     expect(item?.amount_vnd).toBe(3000000);
@@ -107,9 +107,14 @@ describe('Fees Service - Phase 5 Business Logic (Integer Currency)', () => {
       { status: 'absent' }, { status: 'absent' }
     ];
 
-    // syncFeeWithAttendance: auth.getUser() -> load fee -> load config -> attendance -> update
-    mockQuery.single.mockResolvedValueOnce({ data: feeData, error: null });
-    mockQuery.maybeSingle.mockResolvedValueOnce({ data: configData, error: null });
+    // syncFeeWithAttendance: auth.getUser() -> load fee -> load class -> load config -> attendance -> update
+    mockQuery.single
+      .mockResolvedValueOnce({ data: feeData, error: null }) // feeResult
+      .mockResolvedValueOnce({ data: { class_type: 'Daycare' }, error: null }) // classResult
+      .mockResolvedValueOnce({ data: { ...feeData, amount_vnd: 2900000, attendance_deduction_vnd: 100000 }, error: null }); // updateResult
+
+    mockQuery.maybeSingle
+      .mockResolvedValueOnce({ data: configData, error: null });
 
     mockQuery.select.mockImplementation((...args: any[]) => {
        if (args[0] === '*') {
@@ -117,8 +122,6 @@ describe('Fees Service - Phase 5 Business Logic (Integer Currency)', () => {
        }
        return mockQuery;
     });
-
-    mockQuery.single.mockResolvedValueOnce({ data: { ...feeData, amount_vnd: 2900000, attendance_deduction_vnd: 100000 }, error: null });
 
     const { item } = await syncFeeWithAttendance('f1');
     expect(item?.attendance_deduction_vnd).toBe(100000);
@@ -129,12 +132,14 @@ describe('Fees Service - Phase 5 Business Logic (Integer Currency)', () => {
     // updateFeeRecordStatus flow:
     // 1. Calls syncFeeWithAttendance:
     //    - load fee: single
+    //    - load class: single
     //    - load class_finance_configs: maybeSingle
     //    - attendance: select('*') then()
     //    - update: select().single()
     // 2. Then updateFeeRecordStatus does its own update: update().eq().eq().select().single()
 
     mockQuery.single.mockResolvedValueOnce({ data: { id: 'f1', amount_vnd: 1000000, base_amount_vnd: 1000000, class_id: 1, month: 10, school_year: '2024-2025' }, error: null });
+    mockQuery.single.mockResolvedValueOnce({ data: { class_type: 'Daycare' }, error: null });
     mockQuery.maybeSingle.mockResolvedValueOnce({ data: { class_type: 'Daycare', deduction_rules: [{ id: 'meal', name: 'Tiền cơm', amount: 20000 }] }, error: null });
 
     mockQuery.select.mockImplementation((...args: any[]) => {

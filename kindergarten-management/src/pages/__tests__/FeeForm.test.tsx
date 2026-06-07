@@ -4,6 +4,7 @@ import FeeForm from '../FeeForm';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import * as studentsService from '@/services/studentsService';
 import * as feesService from '@/services/feesService';
+import * as classesService from '@/services/classesService';
 
 // Mocking components
 vi.mock('@/components/common/Toast', () => ({
@@ -33,6 +34,7 @@ describe('FeeForm', () => {
   it('should render and handle sync', async () => {
     // Mocking services
     vi.spyOn(studentsService, 'listStudents').mockResolvedValue({ data: { items: [] } as any, error: null });
+    vi.spyOn(classesService, 'listClasses').mockResolvedValue({ data: { items: [] } as any, error: null });
     vi.spyOn(feesService, 'getFeeById').mockResolvedValue({ 
       item: { id: '1', student_id: 's1', amount_vnd: 1000, status: 'unpaid', month: 10, school_year: '2024' } as any, 
       error: null 

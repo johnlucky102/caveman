@@ -220,11 +220,19 @@ describe('bulkSyncFeesByFilter', () => {
     
     // Call 1: Fetch fees
     fromMock.mockReturnValueOnce(createMockSupabaseChain(mockFees) as any);
-    // Call 2: Fetch configs (currently uses class_id, will need class_type refactor)
+    // Call 2: Fetch classes to determine class_type
+    fromMock.mockReturnValueOnce(createMockSupabaseChain([
+      { id: 1, class_type: 'Daycare' },
+      { id: 2, class_type: 'Evening' },
+    ]) as any);
+    // Call 3: Fetch configs
+    fromMock.mockReturnValueOnce(createMockSupabaseChain([
+      { class_type: 'Daycare', deduction_rules: TEST_FINANCE_CONFIGS.daycare.deduction_rules },
+      { class_type: 'Evening', deduction_rules: TEST_FINANCE_CONFIGS.evening.deduction_rules },
+    ]) as any);
+    // Call 4: Fetch attendance
     fromMock.mockReturnValueOnce(createMockSupabaseChain([]) as any);
-    // Call 3: Fetch attendance
-    fromMock.mockReturnValueOnce(createMockSupabaseChain([]) as any);
-    // Call 4: Updates
+    // Call 5: Updates
     fromMock.mockReturnValueOnce(createMockSupabaseChain({}) as any);
     fromMock.mockReturnValueOnce(createMockSupabaseChain({}) as any);
 
@@ -244,8 +252,35 @@ describe('createClassFees', () => {
     vi.spyOn(serviceGuards, 'ensureFinancialAccess').mockResolvedValue({ error: null });
 
     const fromMock = vi.mocked(supabase.from);
-    const mockChain = createMockSupabaseChain({ id: 'fee-1' });
-    fromMock.mockReturnValue(mockChain as any);
+    const mockFee = {
+      id: 'fee-1',
+      student_id: 's1',
+      class_id: 1,
+      amount_vnd: 3000000,
+      base_amount_vnd: 3000000,
+      month: 10,
+      school_year: '2024-2025',
+    };
+
+    fromMock.mockImplementation((table: string) => {
+      if (table === 'fee_records') {
+        return {
+          select: vi.fn().mockReturnThis(),
+          insert: vi.fn().mockReturnThis(),
+          update: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+          single: vi.fn().mockResolvedValue({ data: mockFee, error: null }),
+        } as any;
+      }
+      if (table === 'classes') {
+        return createMockSupabaseChain({ class_type: 'Daycare' }) as any;
+      }
+      if (table === 'class_finance_configs') {
+        return createMockSupabaseChain(TEST_FINANCE_CONFIGS.daycare) as any;
+      }
+      return createMockSupabaseChain([]) as any;
+    });
 
     const result = await createClassFees(
       { classId: 1, month: 10, schoolYear: '2024-2025' },

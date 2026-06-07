@@ -8,6 +8,8 @@ import type {
   ListEnvelope,
   DeductionRule,
   FeeDeductionDetail,
+  AdditionalChargeDetail,
+  OtherDeductionDetail,
 } from '@/types/domain';
 import { toAppError } from './supabaseErrors';
 import { invalidateSwCache } from '@/utils/swCacheInvalidate';
@@ -33,8 +35,11 @@ type FeeRow = {
   base_amount_vnd: number | null;
   attendance_deduction_vnd: number | null;
   other_deduction_vnd: number | null;
+  other_deduction_details: string | null;
   deduction_details: any;
   deduction_note: string | null;
+  additional_charge_vnd: number | null;
+  additional_charge_note: string | null;
   students: { id: string; full_name: string; classes: { id: number; name: string } | null } | null;
 };
 
@@ -42,6 +47,49 @@ function parseDetails(raw: any): FeeDeductionDetail[] {
   if (!raw) return [];
   if (Array.isArray(raw)) return raw;
   try { return JSON.parse(raw); } catch { return []; }
+}
+
+function parseAdditionalChargeDetails(raw: any): AdditionalChargeDetail[] {
+  if (!raw) return [];
+  if (typeof raw !== 'string') return [];
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      // Validate structure
+      return parsed.filter(item =>
+        item &&
+        typeof item.id === 'string' &&
+        typeof item.name === 'string' &&
+        typeof item.amount === 'number'
+      );
+    }
+  } catch {
+    // Parse fail → string ghi chú cũ, return []
+  }
+
+  return [];
+}
+
+function parseOtherDeductionDetails(raw: any): OtherDeductionDetail[] {
+  if (!raw) return [];
+  if (typeof raw !== 'string') return [];
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed.filter(item =>
+        item &&
+        typeof item.id === 'string' &&
+        typeof item.name === 'string' &&
+        typeof item.amount === 'number'
+      );
+    }
+  } catch {
+    // Parse fail → return []
+  }
+
+  return [];
 }
 
 function mapFeeRow(row: FeeRow): FeeRecordP2 {
@@ -63,8 +111,12 @@ function mapFeeRow(row: FeeRow): FeeRecordP2 {
     base_amount_vnd: row.base_amount_vnd || row.amount_vnd,
     attendance_deduction_vnd: row.attendance_deduction_vnd || 0,
     other_deduction_vnd: row.other_deduction_vnd || 0,
+    other_deduction_details: parseOtherDeductionDetails(row.other_deduction_details),
     deduction_details: parseDetails(row.deduction_details),
     deduction_note: row.deduction_note,
+    additional_charge_vnd: row.additional_charge_vnd || 0,
+    additional_charge_note: row.additional_charge_note,
+    additional_charge_details: parseAdditionalChargeDetails(row.additional_charge_note),
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -104,7 +156,7 @@ export async function listFees(query: FeeListQuery): Promise<{ data: ListEnvelop
   let dataQuery = supabase
     .from('fee_records')
     .select(
-      'id, student_id, class_id, title, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, base_amount_vnd, attendance_deduction_vnd, other_deduction_vnd, deduction_details, deduction_note, created_at, updated_at, students!inner(id, full_name, classes(id, name))',
+      'id, student_id, class_id, title, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, base_amount_vnd, attendance_deduction_vnd, additional_charge_vnd, other_deduction_vnd, other_deduction_details, deduction_details, deduction_note, additional_charge_vnd, additional_charge_note, created_at, updated_at, students!inner(id, full_name, classes(id, name))',
       { count: 'exact' }
     )
     .eq('del_yn', false);
@@ -191,7 +243,7 @@ export async function getFeeById(id: string): Promise<{ item: FeeRecordP2 | null
   const result = await withSupabaseTimeout(
     supabase
       .from('fee_records')
-      .select('id, student_id, class_id, title, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, base_amount_vnd, attendance_deduction_vnd, other_deduction_vnd, deduction_details, deduction_note, created_at, updated_at, students(id, full_name, classes(id, name))')
+      .select('id, student_id, class_id, title, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, base_amount_vnd, attendance_deduction_vnd, other_deduction_vnd, other_deduction_details, deduction_details, deduction_note, additional_charge_vnd, additional_charge_note, created_at, updated_at, students(id, full_name, classes(id, name))')
       .eq('id', id)
       .eq('del_yn', false)
       .maybeSingle(),
@@ -266,8 +318,10 @@ export async function updateFeeRecord(
     .update(updatePayload)
     .eq('id', id)
     .eq('del_yn', false)
-    .select('id, student_id, class_id, title, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, base_amount_vnd, attendance_deduction_vnd, other_deduction_vnd, deduction_details, deduction_note, created_at, updated_at, students(id, full_name, classes(id, name))')
+    .select('id, student_id, class_id, title, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, base_amount_vnd, attendance_deduction_vnd, other_deduction_vnd, deduction_details, deduction_note, other_deduction_details, additional_charge_note, created_at, updated_at, students(id, full_name, classes(id, name))')
     .single();
+
+
 
   if (error) {
     return { item: null, error: toAppError(error, 'Không thể cập nhật học phí.') };
@@ -501,7 +555,7 @@ export async function syncFeeWithAttendance(feeId: string): Promise<{ item: FeeR
   // 1. Load the fee record
   const feeResult = await supabase
     .from('fee_records')
-    .select('id, student_id, class_id, title, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, base_amount_vnd, attendance_deduction_vnd, other_deduction_vnd, deduction_details, deduction_note, created_at, updated_at, students(id, full_name, classes(id, name))')
+    .select('id, student_id, class_id, title, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, base_amount_vnd, attendance_deduction_vnd, other_deduction_vnd, deduction_details, deduction_note, other_deduction_details, additional_charge_note, created_at, updated_at, students(id, full_name, classes(id, name))')
     .eq('id', feeId)
     .single();
 
@@ -549,7 +603,7 @@ export async function syncFeeWithAttendance(feeId: string): Promise<{ item: FeeR
         deduction_note: '',
       })
       .eq('id', feeId)
-      .select('id, student_id, class_id, title, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, base_amount_vnd, attendance_deduction_vnd, other_deduction_vnd, deduction_details, deduction_note, created_at, updated_at, students(id, full_name, classes(id, name))')
+      .select('id, student_id, class_id, title, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, base_amount_vnd, attendance_deduction_vnd, other_deduction_vnd, other_deduction_details, deduction_details, deduction_note, additional_charge_vnd, additional_charge_note, other_deduction_details, created_at, updated_at, students(id, full_name, classes(id, name))')
       .single();
 
     if (updateResult.error) return { item: null, error: toAppError(updateResult.error, 'Lỗi khi cập nhật học phí.') };
@@ -706,7 +760,7 @@ export async function updateFeeRecordStatus(
     })
     .eq('id', id)
     .eq('del_yn', false)
-    .select('id, student_id, class_id, title, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, base_amount_vnd, attendance_deduction_vnd, other_deduction_vnd, deduction_details, deduction_note, created_at, updated_at, students(id, full_name, classes(id, name))')
+    .select('id, student_id, class_id, title, school_year, month, amount_vnd, paid_amount_vnd, paid_date, due_date, payment_method, status, base_amount_vnd, attendance_deduction_vnd, other_deduction_vnd, deduction_details, deduction_note, other_deduction_details,additional_charge_vnd,additional_charge_note , created_at, updated_at, students(id, full_name, classes(id, name))')
     .single();
 
   if (error) return { item: null, error: toAppError(error, 'Không thể cập nhật trạng thái học phí.') };
