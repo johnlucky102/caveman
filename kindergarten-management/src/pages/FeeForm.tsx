@@ -549,8 +549,10 @@ export default function FeeForm() {
     return `Vắng tháng ${pm}/${py}`;
   }, [formData.month, formData.schoolYear]);
 
+  // Lock cấu trúc học phí khi đã partial/paid (để tránh thay đổi gốc)
   const isLocked = isEdit && feeStatus !== 'unpaid';
-  const isFinancialReadOnly = isLocked;
+  // Đã thanh toán và Phương thức luôn cho phép sửa khi edit
+  const isFinancialReadOnly = false;
 
   return (
     <div className="max-w-4xl mx-auto space-y-4 print:space-y-2">

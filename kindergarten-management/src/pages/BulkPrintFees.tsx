@@ -234,7 +234,15 @@ export default function BulkPrintFees() {
           {data.map((item) => {
             const attendanceDeduction = item.attendance_deduction_vnd || 0;
             const hasDeductionDetails = item.deduction_details.some(d => (d.subtotal ?? 0) > 0);
-            const remaining_debt = Math.max(0, item.amount_vnd - item.paid_amount_vnd);
+            // Tính lại tổng on-the-fly để đảm bảo đúng khi có phụ thu
+            const totalAmount = Math.max(
+              0,
+              item.base_amount_vnd
+              - attendanceDeduction
+              - (item.other_deduction_vnd || 0)
+              + (item.additional_charge_vnd || 0)
+            );
+            const remaining_debt = Math.max(0, totalAmount - item.paid_amount_vnd);
 
             return (
               <div
@@ -319,14 +327,16 @@ export default function BulkPrintFees() {
                     </>
                   )}
 
-                  <p><strong>Tổng cộng :</strong> {formatCurrency(item.amount_vnd)}</p>
+                  <p><strong>Tổng cộng :</strong> {formatCurrency(totalAmount)}</p>
                   <p><strong>Đã thanh toán :</strong> {formatCurrency(item.paid_amount_vnd)}</p>
                 </div>
 
                 {/* ── Amount in words ── */}
-                <p className="font-bold italic text-sm mb-3">
-                  Số tiền cần nộp : {new Intl.NumberFormat('vi-VN').format(remaining_debt)} đ ({numberToVietnamese(remaining_debt)}).
-                </p>
+                {remaining_debt > 0 && (
+                  <p className="font-bold italic text-sm mb-3">
+                    Số tiền cần nộp : {new Intl.NumberFormat('vi-VN').format(remaining_debt)} đ ({numberToVietnamese(remaining_debt)}).
+                  </p>
+                )}
 
                 {/* ── Payment instructions ── */}
                 <p className="text-sm mb-1">

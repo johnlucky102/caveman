@@ -20,13 +20,24 @@ import type { PaginationMeta, SelectOption, TableColumn } from '@/types';
 import type { FeeRecordP2, FeeStatusValue } from '@/types/domain';
 
 function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('vi-VN').format(value) + ' d';
+  return new Intl.NumberFormat('vi-VN').format(value) + ' đ';
 }
 
 function formatCompactCurrency(value: number): string {
   if (value >= 1_000_000_000) return (value / 1_000_000_000).toFixed(1) + ' ty';
   if (value >= 1_000_000) return (value / 1_000_000).toFixed(0) + ' tr';
   return formatCurrency(value);
+}
+
+/** Tính lại tổng thực tế từ các thành phần để tránh trường hợp amount_vnd trong DB lưu cũ */
+function calcTotal(row: FeeRecordP2): number {
+  return Math.max(
+    0,
+    (row.base_amount_vnd || row.amount_vnd)
+    - (row.attendance_deduction_vnd || 0)
+    - (row.other_deduction_vnd || 0)
+    + (row.additional_charge_vnd || 0)
+  );
 }
 
 function pagination(page: number, pageSize: number, total: number): PaginationMeta {
@@ -275,17 +286,23 @@ export default function Fees() {
     },
     {
       key: 'amount_vnd',
-      label: 'Số tiền',
-      render: (value, row) => (
-        <div className="text-right">
-          <p className="font-medium">{formatCurrency(Number(value))}</p>
-          {row.base_amount_vnd > Number(value) && (
-            <p className="text-xs text-red-500">
-              Đã giảm {formatCurrency(row.base_amount_vnd - Number(value))}
+      label: 'Còn lại',
+      render: (_value, row) => {
+        const total = calcTotal(row);
+        const paid = row.paid_amount_vnd || 0;
+        const remaining = Math.max(0, total - paid);
+        const isPaid = paid >= total;
+        return (
+          <div className="text-right">
+            <p className={isPaid ? 'font-medium text-emerald-500' : 'font-medium'}>
+              {isPaid ? '0 d' : formatCurrency(remaining)}
             </p>
-          )}
-        </div>
-      ),
+            <p className="text-xs text-muted-foreground">
+              / {formatCurrency(total)}
+            </p>
+          </div>
+        );
+      },
     },
     {
       key: 'attendance_deduction_vnd',
@@ -299,18 +316,22 @@ export default function Fees() {
     {
       key: 'paid_amount_vnd',
       label: 'Đã thu',
-      render: (value, row) => (
-        <div className="text-right">
-          <p className={row.paid_amount_vnd >= row.amount_vnd ? 'text-emerald-500 font-medium' : ''}>
-            {formatCurrency(Number(value))}
-          </p>
-          {row.paid_amount_vnd < row.amount_vnd && row.paid_amount_vnd > 0 && (
-            <p className="text-xs text-amber-500">
-              Con {formatCurrency(row.amount_vnd - row.paid_amount_vnd)}
+      render: (value, row) => {
+        const total = calcTotal(row);
+        const paid = Number(value);
+        return (
+          <div className="text-right">
+            <p className={paid >= total ? 'text-emerald-500 font-medium' : ''}>
+              {formatCurrency(paid)}
             </p>
-          )}
-        </div>
-      ),
+            {paid < total && paid > 0 && (
+              <p className="text-xs text-amber-500">
+                Con {formatCurrency(total - paid)}
+              </p>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: 'status',
@@ -477,26 +498,30 @@ export default function Fees() {
         emptyMessage="Không có phiếu thu nào"
         renderMobileCard={(row) => {
           const f = row as FeeRecordP2;
+          const total = calcTotal(f);
+          const paid = f.paid_amount_vnd || 0;
+          const remaining = Math.max(0, total - paid);
+          const isPaid = paid >= total;
           const statusColor = f.status === 'paid' ? 'text-emerald-500' : f.status === 'partial' ? 'text-amber-500' : 'text-red-500';
           return (
             <div className="bg-card p-4 space-y-2">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-foreground truncate">{f.student_name}</p>
-                  <p className="text-xs text-muted-foreground">{f.class_name} · {f.title || 'Học phí'}</p>
+                  <p className="text-xs text-muted-foreground">{f.class_name} · {f.title || 'Học phí'} · tháng {f.month}</p>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="font-medium">{formatCurrency(Number(f.amount_vnd))}</p>
-                  <span className={'text-xs font-medium ' + statusColor}>
-                    {f.status === 'paid' ? 'Hoàn tất' : f.status === 'partial' ? 'Còn nợ' : 'Chưa đóng'}
-                  </span>
+                  <p className={`font-medium ${isPaid ? 'text-emerald-500' : statusColor}`}>
+                    {isPaid ? 'Đã đóng đủ' : formatCurrency(remaining)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">/ {formatCurrency(total)}</p>
                 </div>
               </div>
               <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>Đã thu: {formatCurrency(Number(f.paid_amount_vnd))}</span>
-                {Number(f.attendance_deduction_vnd) > 0 && (
-                  <span className="text-red-500">-Điều chỉnh: {formatCurrency(Number(f.attendance_deduction_vnd))}</span>
-                )}
+                <span>Đã thu: {formatCurrency(paid)}</span>
+                <span className={statusColor + ' font-medium'}>
+                  {f.status === 'paid' ? 'Hoàn tất' : f.status === 'partial' ? 'Còn nợ' : 'Chưa đóng'}
+                </span>
               </div>
             </div>
           );
